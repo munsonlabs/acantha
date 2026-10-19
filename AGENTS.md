@@ -22,7 +22,6 @@
 - Markdown previews render in the app's webview, which can call Tauri commands, so their HTML always goes through DOMPurify.
 - Terminals stay mounted (`v-show`) while hidden or in a background tab: unmounting a `TerminalView` kills its shell.
 - Theme tokens in `src/styles/main.css` mirror Terax's default theme, including the ANSI palette the terminal reads.
-
 - Every app action is a command in `src/composables/commands.ts`. The native menu (`src-tauri/src/menu.rs`), keyboard shortcuts, palette and shortcuts sheet all use that list, so add new actions there. A shortcut can reach both the page and the menu; `runCommand` drops the duplicate.
 - Mutating git commands go through `run_action`, which only allows the subcommands in `ACTIONS`. Add the subcommand there when a new action needs one.
 - `*` (`UNCOMMITTED`) is the pseudo-hash for the working tree, on both sides of the bridge.
@@ -32,7 +31,8 @@
 ## Checks
 
 ```bash
-npm run check                 # vp check + vue-tsc
+npm run check                 # vp check, vue-tsc and a build
+npm test                      # vitest
 cd src-tauri && cargo test    # builds a temp repo and exercises the commands
 cd src-tauri && cargo clippy
 ```
