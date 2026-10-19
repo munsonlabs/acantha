@@ -128,6 +128,81 @@ pub async fn write_file(repo: String, path: String, contents: String) -> Result<
     std::fs::write(worktree_path(&repo, &path)?, contents).map_err(|e| format!("{path}: {e}"))
 }
 
+/// A repo-relative path that stays inside the repository: no absolute paths and no `..`.
+fn safe_relative(path: &str) -> Result<&Path, String> {
+    let p = Path::new(path);
+    if p.is_absolute() || p.components().any(|c| !matches!(c, std::path::Component::Normal(_))) {
+        return Err(format!("{path} is outside the repository"));
+    }
+    Ok(p)
+}
+
+fn backups_root() -> PathBuf {
+    std::env::temp_dir().join("acantha-backups")
+}
+
+#[derive(Serialize, serde::Deserialize, Default)]
+struct BackupManifest {
+    /// Files that existed, copied into the backup.
+    present: Vec<String>,
+    /// Files that didn't exist, so restoring removes them again.
+    missing: Vec<String>,
+}
+
+/// Copies files from the working tree aside before they're discarded, so Undo can put them back. Returns the backup's id.
+#[tauri::command]
+pub async fn backup_files(repo: String, paths: Vec<String>) -> Result<String, String> {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let id = format!("{}-{nanos}", std::process::id());
+    let dir = backups_root().join(&id);
+    let mut manifest = BackupManifest::default();
+    for path in paths {
+        let rel = safe_relative(&path)?;
+        let src = Path::new(&repo).join(rel);
+        if src.is_file() {
+            let dest = dir.join("files").join(rel);
+            std::fs::create_dir_all(dest.parent().unwrap()).map_err(|e| e.to_string())?;
+            std::fs::copy(&src, &dest).map_err(|e| format!("{path}: {e}"))?;
+            manifest.present.push(path);
+        } else {
+            manifest.missing.push(path);
+        }
+    }
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join("manifest.json"), serde_json::to_string(&manifest).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    Ok(id)
+}
+
+/// Puts backed-up files back exactly as they were, removing any that didn't exist at the time.
+#[tauri::command]
+pub async fn restore_files(repo: String, backup: String) -> Result<(), String> {
+    if backup.contains(['/', '\\']) || backup.contains("..") {
+        return Err("Invalid backup".into());
+    }
+    let dir = backups_root().join(&backup);
+    let manifest: BackupManifest =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("manifest.json")).map_err(|_| "That backup no longer exists".to_string())?)
+            .map_err(|e| e.to_string())?;
+    for path in &manifest.present {
+        let rel = safe_relative(path)?;
+        let dest = Path::new(&repo).join(rel);
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        std::fs::copy(dir.join("files").join(rel), &dest).map_err(|e| format!("{path}: {e}"))?;
+    }
+    for path in &manifest.missing {
+        let dest = Path::new(&repo).join(safe_relative(path)?);
+        if dest.is_file() {
+            std::fs::remove_file(&dest).map_err(|e| format!("{path}: {e}"))?;
+        }
+    }
+    Ok(())
+}
+
 /// Commits that touched a file, following renames.
 #[tauri::command]
 pub async fn file_history(repo: String, rev: Option<String>, path: String) -> Result<Vec<Commit>, String> {
@@ -200,6 +275,31 @@ mod tests {
         assert_eq!(blame.lines[1].hash, a);
         assert_eq!(blame.commits[&b].author, "Bob");
         assert_eq!(blame.commits[&a].summary, "first");
+    }
+
+    #[test]
+    fn backs_up_and_restores_discarded_files() {
+        let dir = std::env::temp_dir().join(format!("acantha-backup-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        let repo = dir.to_string_lossy().into_owned();
+        std::fs::write(dir.join("src/a.txt"), "changed").unwrap();
+        std::fs::write(dir.join("new.bin"), [0u8, 1, 2]).unwrap();
+
+        let id = tauri::async_runtime::block_on(backup_files(repo.clone(), vec!["src/a.txt".into(), "new.bin".into(), "gone.txt".into()])).unwrap();
+        // The discard: one file reverted, one deleted, and one that was deleted gets recreated by git.
+        std::fs::write(dir.join("src/a.txt"), "original").unwrap();
+        std::fs::remove_file(dir.join("new.bin")).unwrap();
+        std::fs::write(dir.join("gone.txt"), "restored by discard").unwrap();
+
+        tauri::async_runtime::block_on(restore_files(repo.clone(), id)).unwrap();
+        assert_eq!(std::fs::read_to_string(dir.join("src/a.txt")).unwrap(), "changed");
+        assert_eq!(std::fs::read(dir.join("new.bin")).unwrap(), [0, 1, 2]);
+        assert!(!dir.join("gone.txt").exists());
+
+        assert!(tauri::async_runtime::block_on(backup_files(repo.clone(), vec!["../escape".into()])).is_err());
+        assert!(tauri::async_runtime::block_on(restore_files(repo, "../x".into())).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

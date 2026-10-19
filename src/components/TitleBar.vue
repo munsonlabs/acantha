@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { basename } from '@/lib/format'
 import { useWorkspaces, type Workspace } from '@/composables/workspace'
 import { openMenu } from '@/composables/useContextMenu'
+import { folderOpenItems } from '@/composables/openers'
 import { useSlidingPill, useTabDrag } from '@/composables/tabs'
 import Icon from './Icon.vue'
 
@@ -32,6 +33,8 @@ function onTabDown(e: PointerEvent, ws: Workspace, index: number) {
 function tabMenu(e: MouseEvent, ws: Workspace) {
   openMenu(e, [
     { label: 'New Tab', run: () => addWorkspace() },
+    'separator',
+    ...(ws.repo.repo.value ? (['separator', ...folderOpenItems(ws.repo.repo.value, () => ws.terminals.add())] as const) : []),
     'separator',
     { label: 'Close Tab', run: () => closeWorkspace(ws.id) },
     { label: 'Close Other Tabs', disabled: workspaces.value.length < 2, run: () => closeOtherWorkspaces(ws.id) },
@@ -66,6 +69,12 @@ defineExpose({ focusSearch: () => input.value?.select() })
         <Icon :name="ws.repo.repo.value ? 'history' : 'folder'" :size="13" />
         <span class="name">{{ label(ws) }}</span>
         <span v-if="ws.repo.log.value?.headBranch" class="branch">· {{ ws.repo.log.value.headBranch }}</span>
+        <span
+          v-if="ws.status.status.value?.behind"
+          class="behind"
+          :title="`${ws.status.status.value.behind} new commit${ws.status.status.value.behind === 1 ? '' : 's'} on ${ws.status.status.value.upstream} to pull`"
+          >↓{{ ws.status.status.value.behind }}</span
+        >
         <button class="tab-close" title="Close Tab (⌘W)" @mousedown.stop @click.stop="closeWorkspace(ws.id)"><Icon name="x" :size="12" /></button>
       </div>
       <button class="ghost icon-btn" title="New Tab (⌘T)" @click="addWorkspace()"><Icon name="plus" /></button>
@@ -106,6 +115,14 @@ defineExpose({ focusSearch: () => input.value?.select() })
 }
 .tab .branch {
   color: var(--fg-muted);
+}
+.behind {
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 600;
 }
 .search {
   display: flex;

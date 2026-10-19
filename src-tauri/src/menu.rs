@@ -79,6 +79,8 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         "Repository",
         true,
         &[
+            &item("undo", "Undo Last Git Action", None)?,
+            &sep()?,
             &item("fetch", "Fetch", None)?,
             &item("pull", "Pull", None)?,
             &item("push", "Push", None)?,

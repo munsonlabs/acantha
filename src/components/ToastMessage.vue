@@ -8,7 +8,8 @@ const { toast, hideToast } = useToast()
   <Transition name="rise">
     <div v-if="toast" class="toast" :class="toast.kind" role="status" @click="hideToast">
       <span v-if="toast.kind === 'busy'" class="spinner" />
-      {{ toast.message }}
+      <span class="message">{{ toast.message }}</span>
+      <button v-if="toast.action" class="action" @click.stop="(toast.action.run(), hideToast())">{{ toast.action.label }}</button>
     </div>
   </Transition>
 </template>
@@ -32,6 +33,23 @@ const { toast, hideToast } = useToast()
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   cursor: pointer;
+}
+.message {
+  min-width: 0;
+}
+.action {
+  flex: none;
+  height: 24px;
+  margin-left: 4px;
+  padding: 0 10px;
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+.action:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--accent) 25%, transparent);
 }
 .toast.error {
   border-color: var(--del);

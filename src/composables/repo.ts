@@ -2,9 +2,24 @@ import { computed, ref, shallowRef } from 'vue'
 import { git, UNCOMMITTED, type Commit, type GitRef, type Log, type Stat } from '@/lib/git'
 import { layoutGraph } from '@/lib/graph'
 import { addRecent, prefs } from './prefs'
+import { confirmAction } from './useDialog'
 import { showToast } from './useToast'
 
 const PAGE = 500
+
+/**
+ * How to undo an action:
+ * - `head`: move the branch back to where it was. `soft` keeps the undone commit's changes staged (for commits and
+ *   amends); `keep` is for everything else and leaves uncommitted work alone.
+ * - `checkout`: switch back to the previous branch or commit.
+ * - `run`: anything else, like deleting a tag that was just created.
+ */
+export type UndoSpec = { label: string } & ({ head: 'soft' | 'keep' } | { checkout: true } | { run: () => Promise<unknown> })
+
+export interface UndoEntry {
+  label: string
+  run: () => Promise<void>
+}
 
 export interface RefGroup {
   /** Local branches, with the remotes that have a branch of the same name on the same commit. */
@@ -131,6 +146,8 @@ export function createRepo() {
     repo.value = root
     log.value = null
     stats.value = new Map()
+    undoStack.value = []
+    lastFetch.value = 0
     limit.value = PAGE
     branches.value = []
     addRecent(root)
@@ -155,21 +172,111 @@ export function createRepo() {
   }
 
   /** Runs one or more git commands in sequence, reporting the outcome and refreshing the graph. */
-  async function run(commands: string[] | string[][], { busy = 'Working…', done = '' } = {}) {
+  async function run(
+    commands: string[] | string[][],
+    { busy = 'Working…', done = '', undo }: { busy?: string; done?: string; undo?: UndoSpec } = {},
+  ) {
     if (!repo.value) return
     const list = (Array.isArray(commands[0]) ? commands : [commands]) as string[][]
     showToast(busy, 'busy')
+    const finish = undo ? await prepareUndo(undo) : null
     try {
       let output = ''
       for (const args of list) output = await git.action(repo.value, args)
-      showToast(done || output.split('\n').filter(Boolean).pop() || 'Done')
+      const entry = finish ? await finish() : null
+      showToast(done || output.split('\n').filter(Boolean).pop() || 'Done', 'ok', entry ? { label: 'Undo', run: undoLast } : undefined)
     } catch (e) {
       showToast(String(e), 'error')
     }
     await reload()
   }
 
+  /** The last few undoable actions in this repository, newest last. */
+  const undoStack = shallowRef<UndoEntry[]>([])
+
+  /**
+   * Records where things stand before an action, and returns a function to call once it has succeeded. That
+   * function pushes an undo entry (or nothing, if the action turned out not to change anything) and returns it.
+   */
+  async function prepareUndo(spec: UndoSpec): Promise<() => Promise<UndoEntry | null>> {
+    const root = repo.value!
+    const before = 'run' in spec ? null : await git.headState(root)
+    return async () => {
+      let entry: UndoEntry | null = null
+      if ('head' in spec) {
+        const after = await git.headState(root)
+        if (!before?.head || after.head === before.head) return null
+        entry = {
+          label: spec.label,
+          run: async () => {
+            const status = await git.status(root)
+            // A rebase or merge that stopped part way is undone by aborting it.
+            if (status.operation) {
+              await git.action(root, [status.operation, '--abort'])
+              return
+            }
+            const now = await git.headState(root)
+            if (now.branch !== after.branch) throw new Error(`Switch back to ${after.branch ?? 'the detached HEAD'} to undo this`)
+            if (
+              now.head !== after.head &&
+              !(await confirmAction('Undo', 'The branch has moved on since. Undo anyway? Later commits will be undone too.', 'Undo', true))
+            )
+              return
+            await git.action(root, ['reset', `--${spec.head}`, before.head!])
+          },
+        }
+      } else if ('checkout' in spec) {
+        const after = await git.headState(root)
+        const back = before?.branch ?? before?.head
+        if (!back || (after.head === before?.head && after.branch === before?.branch)) return null
+        entry = { label: spec.label, run: async () => void (await git.action(root, ['checkout', back])) }
+      } else {
+        entry = { label: spec.label, run: async () => void (await spec.run()) }
+      }
+      undoStack.value = [...undoStack.value.slice(-19), entry]
+      return entry
+    }
+  }
+
+  async function undoLast() {
+    const entry = undoStack.value.at(-1)
+    if (!entry) return showToast('Nothing to undo')
+    undoStack.value = undoStack.value.slice(0, -1)
+    showToast(`Undoing ${entry.label}…`, 'busy')
+    try {
+      await entry.run()
+      showToast(`Undid ${entry.label}`)
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : String(e), 'error')
+    }
+    await reload()
+  }
+
+  /** When this repository last fetched, by hand or in the background. */
+  const lastFetch = ref(0)
+  let fetching = false
+
+  /** A background fetch: no toasts, and failures (offline, no credentials) are ignored until next time. */
+  async function fetchQuietly() {
+    if (!repo.value || fetching || !log.value?.remotes.length) return
+    fetching = true
+    try {
+      await git.action(repo.value, ['fetch', '--all', '--prune', '--quiet'])
+    } catch {
+      // Tried again at the next interval.
+    } finally {
+      fetching = false
+      lastFetch.value = Date.now()
+    }
+    await reload()
+  }
+
   return {
+    undoStack,
+    prepareUndo,
+    undoLast,
+    lastFetch,
+    fetchQuietly,
     repo,
     log,
     rows,

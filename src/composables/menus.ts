@@ -1,4 +1,4 @@
-import type { Commit, Stash } from '@/lib/git'
+import { git, type Commit, type Stash } from '@/lib/git'
 import { shortHash } from '@/lib/format'
 import { ask, confirmAction, type DialogField } from './useDialog'
 import type { Repo } from './repo'
@@ -22,10 +22,12 @@ interface MenuActions {
   rebaseFrom: (base: string, label: string) => void
 }
 
-export function createMenus({ repo, log, rows, run }: Repo, { browse, rebaseFrom }: MenuActions) {
+export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse, rebaseFrom }: MenuActions) {
   const currentBranch = () => log.value?.headBranch ?? null
   const remotes = () => log.value?.remotes ?? []
   const hasLocalBranch = (name: string) => !!log.value?.refs.some((r) => r.kind === 'branch' && r.name === name)
+  /** The commit a branch or tag points at, so deleting it can be undone. */
+  const refHash = (kind: 'branch' | 'tag', name: string) => log.value?.refs.find((r) => r.kind === kind && r.name === name)?.hash
   const into = () => (currentBranch() ? `\`${currentBranch()}\`` : 'the detached HEAD')
 
   const remoteField = (): DialogField => ({
@@ -60,12 +62,17 @@ export function createMenus({ repo, log, rows, run }: Repo, { browse, rebaseFrom
       fields: [{ name: 'noFf', label: 'Always create a merge commit (--no-ff)', type: 'checkbox', value: false }],
       confirm: 'Merge',
     })
-    if (v) await run(['merge', '--no-edit', ...(v.noFf ? ['--no-ff'] : []), target], { busy: 'Merging…', done: `Merged ${target}` })
+    if (v)
+      await run(['merge', '--no-edit', ...(v.noFf ? ['--no-ff'] : []), target], {
+        busy: 'Merging…',
+        done: `Merged ${target}`,
+        undo: { label: `the merge of ${target}`, head: 'keep' },
+      })
   }
 
   async function checkoutBranch(name: string) {
     if (name === currentBranch()) return
-    await run(['checkout', name], { done: `Checked out ${name}` })
+    await run(['checkout', name], { done: `Checked out ${name}`, undo: { label: `checking out ${name}`, checkout: true } })
   }
 
   async function checkoutRemoteBranch(remote: string, name: string) {
@@ -77,7 +84,11 @@ export function createMenus({ repo, log, rows, run }: Repo, { browse, rebaseFrom
     })
     if (!v) return
     if (hasLocalBranch(v.name)) await checkoutBranch(v.name)
-    else await run(['checkout', '-b', v.name, '--track', `${remote}/${name}`], { done: `Checked out ${v.name}` })
+    else
+      await run(['checkout', '-b', v.name, '--track', `${remote}/${name}`], {
+        done: `Checked out ${v.name}`,
+        undo: { label: `checking out ${v.name}`, checkout: true },
+      })
   }
 
   function commitMenu(c: Commit): MenuEntry[] {
@@ -95,7 +106,13 @@ export function createMenus({ repo, log, rows, run }: Repo, { browse, rebaseFrom
             ],
             confirm: 'Add Tag',
           })
-          if (v) await run(v.message ? ['tag', '-a', v.name, '-m', v.message, c.hash] : ['tag', v.name, c.hash], { done: `Created tag ${v.name}` })
+          if (v) {
+            const root = repo.value!
+            await run(v.message ? ['tag', '-a', v.name, '-m', v.message, c.hash] : ['tag', v.name, c.hash], {
+              done: `Created tag ${v.name}`,
+              undo: { label: `tag ${v.name}`, run: () => git.action(root, ['tag', '-d', v.name]) },
+            })
+          }
         },
       },
       {
@@ -110,7 +127,20 @@ export function createMenus({ repo, log, rows, run }: Repo, { browse, rebaseFrom
             ],
             confirm: 'Create Branch',
           })
-          if (v) await run(v.checkout ? ['checkout', '-b', v.name, c.hash] : ['branch', v.name, c.hash], { done: `Created branch ${v.name}` })
+          if (v) {
+            const root = repo.value!
+            const back = currentBranch() ?? log.value?.head
+            await run(v.checkout ? ['checkout', '-b', v.name, c.hash] : ['branch', v.name, c.hash], {
+              done: `Created branch ${v.name}`,
+              undo: {
+                label: `branch ${v.name}`,
+                run: async () => {
+                  if (v.checkout && back) await git.action(root, ['checkout', back])
+                  await git.action(root, ['branch', '-D', v.name])
+                },
+              },
+            })
+          }
         },
       },
       'separator',
@@ -120,21 +150,24 @@ export function createMenus({ repo, log, rows, run }: Repo, { browse, rebaseFrom
         label: 'Checkout…',
         run: async () => {
           if (await confirmAction('Checkout Commit', `Check out commit \`${s}\`? This leaves you in a detached HEAD state.`, 'Checkout'))
-            await run(['checkout', c.hash], { done: `Checked out ${s}` })
+            await run(['checkout', c.hash], { done: `Checked out ${s}`, undo: { label: `checking out ${s}`, checkout: true } })
         },
       },
       {
         label: 'Cherry Pick…',
         run: async () => {
           if (await confirmAction('Cherry Pick', `Cherry pick commit \`${s}\` onto ${into()}?`, 'Cherry Pick'))
-            await run(['cherry-pick', ...mainline(c), c.hash], { done: `Cherry picked ${s}` })
+            await run(['cherry-pick', ...mainline(c), c.hash], {
+              done: `Cherry picked ${s}`,
+              undo: { label: `the cherry pick of ${s}`, head: 'keep' },
+            })
         },
       },
       {
         label: 'Revert…',
         run: async () => {
           if (await confirmAction('Revert', `Create a commit that reverts \`${s}\`?`, 'Revert'))
-            await run(['revert', '--no-edit', ...mainline(c), c.hash], { done: `Reverted ${s}` })
+            await run(['revert', '--no-edit', ...mainline(c), c.hash], { done: `Reverted ${s}`, undo: { label: `the revert of ${s}`, head: 'keep' } })
         },
       },
       { label: 'Merge into Current Branch…', disabled: c.hash === log.value?.head, run: () => merge(c.hash, `commit \`${s}\``) },
@@ -162,7 +195,7 @@ export function createMenus({ repo, log, rows, run }: Repo, { browse, rebaseFrom
             confirm: 'Reset',
             danger: true,
           })
-          if (v) await run(['reset', `--${v.mode}`, c.hash], { done: `Reset to ${s}` })
+          if (v) await run(['reset', `--${v.mode}`, c.hash], { done: `Reset to ${s}`, undo: { label: `the reset to ${s}`, head: 'keep' } })
         },
       },
       'separator',
@@ -194,8 +227,14 @@ export function createMenus({ repo, log, rows, run }: Repo, { browse, rebaseFrom
         label: 'Drop Stash…',
         danger: true,
         run: async () => {
-          if (await confirmAction('Drop Stash', `Permanently delete \`${sel}\`?`, 'Drop', true))
-            await run(['stash', 'drop', sel], { done: `Dropped ${sel}` })
+          if (await confirmAction('Drop Stash', `Permanently delete \`${sel}\`?`, 'Drop', true)) {
+            const root = repo.value!
+            await run(['stash', 'drop', sel], {
+              done: `Dropped ${sel}`,
+              // A dropped stash's commit still exists, so it can be stored back.
+              undo: { label: `dropping ${sel}`, run: () => git.action(root, ['stash', 'store', '-m', stash.subject, stash.hash]) },
+            })
+          }
         },
       },
       'separator',
@@ -217,10 +256,21 @@ export function createMenus({ repo, log, rows, run }: Repo, { browse, rebaseFrom
             ],
             confirm: 'Stash',
           })
-          if (v)
+          if (v) {
+            const root = repo.value!
+            const previousTop = await git.revParse(root, 'stash@{0}')
             await run(['stash', 'push', ...(v.untracked ? ['--include-untracked'] : []), ...(v.message ? ['-m', v.message] : [])], {
               done: 'Stashed changes',
+              undo: {
+                label: 'the stash',
+                run: async () => {
+                  // Only pop if the newest stash is still the one this made.
+                  if ((await git.revParse(root, 'stash@{0}')) === previousTop) throw new Error('That stash has already been applied or dropped')
+                  await git.action(root, ['stash', 'pop'])
+                },
+              },
             })
+          }
         },
       },
       {
@@ -234,7 +284,19 @@ export function createMenus({ repo, log, rows, run }: Repo, { browse, rebaseFrom
             confirm: 'Discard',
             danger: true,
           })
-          if (v) await run([['reset', '--hard', 'HEAD'], ...(v.clean ? [['clean', '-fd']] : [])], { done: 'Discarded changes' })
+          if (v) {
+            // Back the files up first, so the discard can be undone.
+            const root = repo.value!
+            const files = (await git.status(root)).files.filter((f) => v.clean || f.kind !== 'untracked')
+            const backup = await git.backupFiles(
+              root,
+              files.flatMap((f) => (f.oldPath ? [f.oldPath, f.path] : [f.path])),
+            )
+            await run([['reset', '--hard', 'HEAD'], ...(v.clean ? [['clean', '-fd']] : [])], {
+              done: 'Discarded changes',
+              undo: { label: 'discarding changes', run: () => git.restoreFiles(root, backup) },
+            })
+          }
         },
       },
     ]
@@ -252,7 +314,13 @@ export function createMenus({ repo, log, rows, run }: Repo, { browse, rebaseFrom
             fields: [{ name: 'name', label: 'New name', value: name, required: true }],
             confirm: 'Rename',
           })
-          if (v && v.name !== name) await run(['branch', '-m', name, v.name], { done: `Renamed to ${v.name}` })
+          if (v && v.name !== name) {
+            const root = repo.value!
+            await run(['branch', '-m', name, v.name], {
+              done: `Renamed to ${v.name}`,
+              undo: { label: `renaming ${name}`, run: () => git.action(root, ['branch', '-m', v.name, name]) },
+            })
+          }
         },
       },
       {
@@ -267,7 +335,14 @@ export function createMenus({ repo, log, rows, run }: Repo, { browse, rebaseFrom
             confirm: 'Delete',
             danger: true,
           })
-          if (v) await run(['branch', v.force ? '-D' : '-d', name], { done: `Deleted ${name}` })
+          if (v) {
+            const root = repo.value!
+            const hash = refHash('branch', name)
+            await run(['branch', v.force ? '-D' : '-d', name], {
+              done: `Deleted ${name}`,
+              undo: hash ? { label: `deleting ${name}`, run: () => git.action(root, ['branch', name, hash]) } : undefined,
+            })
+          }
         },
       },
       'separator',
@@ -277,7 +352,7 @@ export function createMenus({ repo, log, rows, run }: Repo, { browse, rebaseFrom
         disabled: isCurrent || !currentBranch(),
         run: async () => {
           if (await confirmAction('Rebase', `Rebase ${into()} onto \`${name}\`?`, 'Rebase'))
-            await run(['rebase', name], { busy: 'Rebasing…', done: `Rebased onto ${name}` })
+            await run(['rebase', name], { busy: 'Rebasing…', done: `Rebased onto ${name}`, undo: { label: `the rebase onto ${name}`, head: 'keep' } })
         },
       },
       {
@@ -345,8 +420,15 @@ export function createMenus({ repo, log, rows, run }: Repo, { browse, rebaseFrom
         label: 'Delete Tag…',
         danger: true,
         run: async () => {
-          if (await confirmAction('Delete Tag', `Delete local tag \`${name}\`?`, 'Delete', true))
-            await run(['tag', '-d', name], { done: `Deleted tag ${name}` })
+          if (await confirmAction('Delete Tag', `Delete local tag \`${name}\`?`, 'Delete', true)) {
+            const root = repo.value!
+            const hash = refHash('tag', name)
+            // Restored as a lightweight tag: an annotated tag's message isn't kept.
+            await run(['tag', '-d', name], {
+              done: `Deleted tag ${name}`,
+              undo: hash ? { label: `deleting tag ${name}`, run: () => git.action(root, ['tag', name, hash]) } : undefined,
+            })
+          }
         },
       },
       'separator',
@@ -357,6 +439,7 @@ export function createMenus({ repo, log, rows, run }: Repo, { browse, rebaseFrom
   async function fetchAll() {
     if (!repo.value) return
     await run(['fetch', '--all', '--prune'], { busy: 'Fetching…', done: 'Fetched from all remotes' })
+    lastFetch.value = Date.now()
   }
 
   return { commitMenu, stashMenu, uncommittedMenu, branchMenu, remoteBranchMenu, tagMenu, checkoutBranch, checkoutRemoteBranch, fetchAll }

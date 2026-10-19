@@ -31,7 +31,15 @@ function onKeydown(e: KeyboardEvent) {
         {{ status?.branch ?? 'detached HEAD' }}
       </span>
       <div class="spacer" />
-      <button class="ghost icon-btn" title="Pull" :disabled="busy || !status?.upstream" @click="pull"><Icon name="pull" /></button>
+      <button
+        class="ghost pull"
+        :class="{ behind: status?.behind }"
+        :title="status?.behind ? `Pull ${status.behind} new commit${status.behind === 1 ? '' : 's'}` : 'Pull'"
+        :disabled="busy || !status?.upstream"
+        @click="pull"
+      >
+        <Icon name="pull" /><span v-if="status?.behind">{{ status.behind }}</span>
+      </button>
       <button class="ghost icon-btn" title="Fetch from all remotes" :disabled="busy || !log?.remotes.length" @click="fetchAll">
         <Icon name="fetch" />
       </button>
@@ -94,6 +102,21 @@ function onKeydown(e: KeyboardEvent) {
 .scm {
   display: flex;
   flex-direction: column;
+}
+.pull {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 6px;
+  color: var(--fg-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.pull.behind {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 .title {
   display: flex;

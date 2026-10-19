@@ -32,6 +32,10 @@ Built with Tauri 2, Rust and Vue 3.
 - Branch filter: show any set of branches, or all of them; stashes in the graph, which can be hidden
 - A merge conflict resolver (accept current, incoming or both per conflict, or edit it by hand) with Continue/Abort for merges, rebases and cherry-picks
 - Interactive rebase: reorder by dragging, then pick, reword, edit, squash, fixup or drop
+- Undo for git actions: commits, amends, merges, rebases, resets, checkouts, branches, tags, stashes and discards
+- Instant updates: a file watcher picks up changes from the terminal or your editor straight away
+- Auto-fetch in the background, with badges when a branch is behind its remote
+- "Open in…" for repositories and files: your editor, Finder, Terminal, or a new terminal tab
 - Commit graph across all branches, remotes and tags, with the working tree shown as an "Uncommitted Changes" row
 - Commit details with changed files and a line-numbered diff view
 - Cmd/Ctrl-click a second commit to compare the two

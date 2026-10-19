@@ -16,9 +16,10 @@ export function createTerminals({ repo }: Repo) {
   const activeKey = ref<number | null>(null)
   const open = ref(prefs.terminalOpen.value)
 
-  function add() {
+  /** Opens a terminal tab, in the repository or a folder inside it. */
+  function add(cwd?: string) {
     if (!repo.value) return
-    const session = { key: nextKey++, cwd: repo.value, title: 'Terminal' }
+    const session = { key: nextKey++, cwd: cwd ?? repo.value, title: 'Terminal' }
     sessions.value.push(session)
     activeKey.value = session.key
     open.value = true

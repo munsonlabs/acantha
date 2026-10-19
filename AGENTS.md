@@ -17,7 +17,8 @@
 
 ## Conventions
 
-- `status.ts` polls `git status` (from `App.vue`) while the window is focused. When the status changes it reloads the graph, which is how commits made in the terminal appear.
+- A file watcher per repo (`src-tauri/src/watch.rs`, `src/composables/watcher.ts`) reports changes made outside the app: git changes reload the graph, working-tree changes refresh the Git panel. `App.vue` also polls every 30s as a fallback.
+- Undoable actions pass an `undo` spec to `run`/`exec` (see `UndoSpec` in `repo.ts`). Discards back files up with `backup_files` first.
 - CodeMirror lives in `src/lib/editor.ts` and is only imported dynamically, so it stays out of the startup bundle. Its colours are the app's CSS variables.
 - Markdown previews render in the app's webview, which can call Tauri commands, so their HTML always goes through DOMPurify.
 - Terminals stay mounted (`v-show`) while hidden or in a background tab: unmounting a `TerminalView` kills its shell.

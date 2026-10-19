@@ -66,6 +66,7 @@ export const commands: Command[] = [
   { id: 'zoom-out', label: 'Zoom Out', group: 'View', keys: '⌘−', run: () => stepZoom(-1) },
   { id: 'zoom-reset', label: 'Actual Size', group: 'View', keys: '⌘0', run: () => (prefs.uiZoom.value = 1) },
 
+  { id: 'undo', label: 'Undo Last Git Action', group: 'Repository', run: withRepo((ws) => ws.repo.undoLast()) },
   { id: 'fetch', label: 'Fetch', group: 'Repository', run: withRepo((ws) => ws.menus.fetchAll()) },
   { id: 'pull', label: 'Pull', group: 'Repository', run: withRepo((ws) => ws.status.pull()) },
   { id: 'push', label: 'Push', group: 'Repository', run: withRepo((ws) => ws.status.push()) },

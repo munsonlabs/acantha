@@ -8,6 +8,8 @@ import { useWorkspace } from '@/composables/workspace'
 import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
 import Skeleton from './Skeleton.vue'
+import { openMenu } from '@/composables/useContextMenu'
+import { fileOpenItems } from '@/composables/openers'
 
 const ws = useWorkspace()
 const { details, select, closeDetails } = ws.details
@@ -59,6 +61,14 @@ function startResize(e: MouseEvent) {
 }
 
 const open = (f: FileChange) => openDiff(f, shown.value!.from, shown.value!.to)
+
+/** The working copy is what opens, so a file this commit deleted can't be. */
+const fileMenu = (e: MouseEvent, f: FileChange) =>
+  openMenu(e, [
+    { label: 'Open Changes', run: () => open(f) },
+    'separator',
+    ...fileOpenItems(ws.repo.repo.value!, f.path, { exists: f.status !== 'D' }),
+  ])
 </script>
 
 <template>
@@ -125,7 +135,13 @@ const open = (f: FileChange) => openDiff(f, shown.value!.from, shown.value!.to)
             </div>
             <Skeleton v-if="shown.loading" :lines="5" :gap="14" />
             <ul>
-              <li v-for="f in shown.files" :key="f.path" :title="STATUS[f.status] ?? f.status" @click="open(f)">
+              <li
+                v-for="f in shown.files"
+                :key="f.path"
+                :title="STATUS[f.status] ?? f.status"
+                @click="open(f)"
+                @contextmenu.prevent="fileMenu($event, f)"
+              >
                 <span class="status" :class="`s-${f.status === '?' ? 'U' : f.status}`">{{ f.status === '?' ? 'U' : f.status }}</span>
                 <FileIcon :path="f.path" />
                 <span class="path">

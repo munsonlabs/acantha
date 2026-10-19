@@ -99,10 +99,19 @@ function onKeydown(e: KeyboardEvent) {
 
 let lastFocusReload = 0
 
-// Catch changes made from the terminal or an editor while the window is in use.
+// Background fetch: each open repository fetches quietly once its interval is up, so "behind" badges stay current.
+const autoFetch = setInterval(() => {
+  if (!prefs.autoFetch.value) return
+  const due = Date.now() - prefs.autoFetchMinutes.value * 60_000
+  for (const ws of workspaces.value) {
+    if (ws.repo.repo.value && ws.repo.lastFetch.value < due) void ws.repo.fetchQuietly().then(() => ws.status.refresh())
+  }
+}, 30_000)
+
+// A safety net: the file watcher reports changes instantly, but if it can't run (some network drives), this still catches them.
 const poll = setInterval(() => {
   if (document.hasFocus() && !document.hidden) void active.value?.status.refresh()
-}, 2500)
+}, 30_000)
 
 onMounted(async () => {
   window.addEventListener('keydown', onKeydown)
@@ -141,6 +150,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   clearInterval(poll)
+  clearInterval(autoFetch)
   window.removeEventListener('keydown', onKeydown)
   unlisten.forEach((fn) => fn())
 })

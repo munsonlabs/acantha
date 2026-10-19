@@ -48,7 +48,7 @@ const label = (i: number) => {
           <button class="tab-close" title="Close Terminal" @mousedown.stop @click.stop="close(s.key)"><Icon name="x" :size="12" /></button>
         </div>
       </div>
-      <button class="ghost icon-btn" title="New Terminal (⌃⇧`)" @click="add"><Icon name="plus" /></button>
+      <button class="ghost icon-btn" title="New Terminal (⌃⇧`)" @click="add()"><Icon name="plus" /></button>
       <div class="spacer" />
       <button class="ghost icon-btn" title="Hide Terminal (⌘J)" @click="toggle"><Icon name="sidebar" /></button>
     </header>

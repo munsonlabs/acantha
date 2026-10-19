@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { relativeDate } from '@/composables/dates'
+import { runCommand } from '@/composables/commands'
 import { prefs } from '@/composables/prefs'
 import { useWorkspaces } from '@/composables/workspace'
 import Icon from './Icon.vue'
@@ -8,6 +10,19 @@ const { active } = useWorkspaces()
 
 const repo = computed(() => active.value?.repo.repo.value ?? null)
 const log = computed(() => active.value?.repo.log.value ?? null)
+
+const status = computed(() => active.value?.status.status.value ?? null)
+
+/** "Behind origin/main by 2 · fetched 3m ago" */
+const syncTitle = computed(() => {
+  const s = status.value
+  if (!s?.upstream) return ''
+  const fetched = active.value?.repo.lastFetch.value
+  const parts = [s.behind ? `${s.behind} to pull from ${s.upstream}` : `Up to date with ${s.upstream}`]
+  if (s.ahead) parts.push(`${s.ahead} to push`)
+  parts.push(fetched ? `fetched ${relativeDate(fetched / 1000)}` : 'not fetched yet')
+  return parts.join(' · ')
+})
 
 /** The repo path as breadcrumbs, with the home directory shortened to "~". */
 const crumbs = computed(() => {
@@ -28,6 +43,19 @@ const crumbs = computed(() => {
         </template>
       </span>
       <span v-if="log" class="item"><Icon name="branch" :size="12" />{{ log.headBranch ?? 'detached' }}</span>
+      <button
+        v-if="status?.upstream"
+        class="ghost status-btn sync"
+        :class="{ behind: status.behind }"
+        :title="syncTitle"
+        @click="runCommand('source-control')"
+      >
+        <template v-if="status.behind || status.ahead">
+          <span v-if="status.behind">↓{{ status.behind }}</span>
+          <span v-if="status.ahead">↑{{ status.ahead }}</span>
+        </template>
+        <Icon v-else name="check" :size="12" />
+      </button>
       <span v-if="log?.uncommitted" class="item modified">{{ log.uncommitted }} changed</span>
       <span v-if="active?.status.status.value?.operation" class="item operation">{{ active.status.status.value.operation }} in progress</span>
     </template>
@@ -68,6 +96,13 @@ const crumbs = computed(() => {
 }
 .crumbs .last {
   color: var(--fg);
+}
+.sync {
+  gap: 6px;
+}
+.sync.behind {
+  color: var(--accent);
+  font-weight: 600;
 }
 .modified {
   color: var(--modify);

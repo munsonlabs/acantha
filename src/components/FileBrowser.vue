@@ -4,6 +4,8 @@ import { shortHash } from '@/lib/format'
 import { useWorkspace } from '@/composables/workspace'
 import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
+import { openMenu } from '@/composables/useContextMenu'
+import { fileOpenItems, folderOpenItems } from '@/composables/openers'
 import Skeleton from './Skeleton.vue'
 
 const ws = useWorkspace()
@@ -55,6 +57,16 @@ const visible = computed<Row[]>(() => {
   return out
 })
 
+function rowMenu(e: MouseEvent, r: Row) {
+  const root = ws.repo.repo.value!
+  if (r.kind === 'dir')
+    return openMenu(
+      e,
+      folderOpenItems(`${root}/${r.path}`, () => ws.terminals.add(`${root}/${r.path}`)),
+    )
+  openMenu(e, [{ label: 'Preview', run: () => open(r.path) }, 'separator', ...fileOpenItems(root, r.path)])
+}
+
 const subject = computed(() => rows.value.find((c) => c.hash === rev.value)?.subject)
 
 onMounted(() => {
@@ -94,6 +106,7 @@ watch(status, (now, before) => {
         :style="{ paddingLeft: `${(r.kind === 'file' ? 24 : 8) + r.depth * 14}px` }"
         :title="r.path"
         @click="r.kind === 'dir' ? toggle(r.path) : open(r.path)"
+        @contextmenu.prevent="rowMenu($event, r)"
       >
         <Icon v-if="r.kind === 'dir'" name="chevron" :size="11" class="chev" :class="{ open: expanded.has(r.path) }" />
         <FileIcon :path="r.path" :folder="r.kind === 'dir'" :open="expanded.has(r.path)" />

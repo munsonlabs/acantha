@@ -14,7 +14,7 @@ interface Item {
 
 const ws = useWorkspace()
 const { rebase } = ws.ui
-const { repo, reload } = ws.repo
+const { repo, reload, prepareUndo, undoLast } = ws.repo
 const { refresh } = ws.status
 
 const ACTIONS: { value: RebaseAction; label: string; hint: string }[] = [
@@ -102,8 +102,12 @@ async function start() {
   showToast('Rebasing…', 'busy')
   try {
     const todo = items.value.map((i) => ({ action: i.action, hash: i.commit.hash, message: i.action === 'reword' ? i.message : null }))
+    // Undo moves the branch back, or aborts the rebase if it stopped part way.
+    const finish = await prepareUndo({ label: 'the interactive rebase', head: 'keep' })
     const out = await git.interactiveRebase(repo.value, r.base, todo)
-    showToast(/Stopped at/.test(out) ? 'Rebase stopped for editing. Amend, then continue from the sidebar.' : 'Rebase complete')
+    const entry = await finish()
+    const undo = entry ? { label: 'Undo', run: undoLast } : undefined
+    showToast(/Stopped at/.test(out) ? 'Rebase stopped for editing. Amend, then continue from the Git panel.' : 'Rebase complete', 'ok', undo)
     rebase.value = null
   } catch (e) {
     showToast(String(e), 'error')

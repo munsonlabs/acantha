@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core'
+import { Channel, invoke } from '@tauri-apps/api/core'
 
 /** Pseudo-hash for the working tree, shown as the "Uncommitted Changes" row. */
 export const UNCOMMITTED = '*'
@@ -133,6 +133,17 @@ export const git = {
   action: (repo: string, args: string[]) => invoke<string>('run_action', { repo, args }),
   status: (repo: string) => invoke<Status>('get_status', { repo }),
   stats: (repo: string, hashes: string[]) => invoke<Record<string, Stat>>('get_stats', { repo, hashes }),
+  headState: (repo: string) => invoke<{ head: string | null; branch: string | null }>('head_state', { repo }),
+  revParse: (repo: string, rev: string) => invoke<string | null>('rev_parse', { repo, rev }),
+  backupFiles: (repo: string, paths: string[]) => invoke<string>('backup_files', { repo, paths }),
+  restoreFiles: (repo: string, backup: string) => invoke<void>('restore_files', { repo, backup }),
+  /** Watches a repository for changes made outside the app. "git" means commits, branches or the index changed. */
+  watch: (repo: string, onChange: (kind: 'git' | 'tree') => void) => {
+    const channel = new Channel<'git' | 'tree'>()
+    channel.onmessage = onChange
+    return invoke<number>('watch_repo', { repo, onChange: channel })
+  },
+  unwatch: (id: number) => invoke<void>('unwatch_repo', { id }),
   statusDiff: (repo: string, file: StatusFile, staged: boolean) =>
     invoke<string>('get_status_diff', { repo, path: file.path, oldPath: file.oldPath, staged, untracked: file.kind === 'untracked' }),
   listFiles: (repo: string, rev: string | null) => invoke<string[]>('list_files', { repo, rev }),

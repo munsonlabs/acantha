@@ -18,6 +18,9 @@ export const prefs = {
   terminalFontSize: usePersisted('terminal-font-size', 12.5),
   /** Scale of the whole interface: 1 is 100%. */
   uiZoom: usePersisted('ui-zoom', 1),
+  /** Fetch every open repository in the background, every `autoFetchMinutes`. */
+  autoFetch: usePersisted('auto-fetch', true),
+  autoFetchMinutes: usePersisted('auto-fetch-minutes', 5),
   /** Shell for new terminals. Empty means the login shell. */
   shell: usePersisted('shell', ''),
   /** App used by "Open in Editor". Empty means the system default for the file type. */

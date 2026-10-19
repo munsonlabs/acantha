@@ -57,6 +57,23 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
           </section>
 
           <section>
+            <h3>Git</h3>
+            <label class="row">
+              <div>
+                <span class="label">Fetch automatically</span>
+                <span class="hint">Keeps remote branches and the “behind” badges up to date.</span>
+              </div>
+              <input v-model="prefs.autoFetch.value" type="checkbox" class="switch" />
+            </label>
+            <label class="row" :class="{ off: !prefs.autoFetch.value }">
+              <span class="label">Every</span>
+              <select v-model.number="prefs.autoFetchMinutes.value" :disabled="!prefs.autoFetch.value">
+                <option v-for="m in [2, 5, 10, 15, 30]" :key="m" :value="m">{{ m }} minutes</option>
+              </select>
+            </label>
+          </section>
+
+          <section>
             <h3>Graph</h3>
             <label class="row">
               <span class="label">Show remote branches</span>
@@ -158,6 +175,9 @@ h3 {
 }
 .label {
   font-size: 12.5px;
+}
+.row.off .label {
+  color: var(--fg-faint);
 }
 .hint {
   color: var(--fg-faint);

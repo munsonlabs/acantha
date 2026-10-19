@@ -430,6 +430,28 @@ pub async fn get_status_diff(repo: String, path: String, old_path: Option<String
     git(&repo, args)
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HeadState {
+    head: Option<String>,
+    branch: Option<String>,
+}
+
+/// Where HEAD is right now, read fresh rather than from the last graph load. Undo records this before and after.
+#[tauri::command]
+pub async fn head_state(repo: String) -> HeadState {
+    HeadState {
+        head: trimmed(git(&repo, ["rev-parse", "--verify", "-q", "HEAD"])),
+        branch: trimmed(git(&repo, ["symbolic-ref", "--short", "-q", "HEAD"])),
+    }
+}
+
+/// Resolves a revision to its full hash, or nothing if it doesn't exist.
+#[tauri::command]
+pub async fn rev_parse(repo: String, rev: String) -> Option<String> {
+    trimmed(git(&repo, ["rev-parse", "--verify", "-q", rev.as_str()]))
+}
+
 #[tauri::command]
 pub fn initial_repo() -> Option<String> {
     let arg = std::env::args().skip(1).find(|a| !a.starts_with('-'))?;

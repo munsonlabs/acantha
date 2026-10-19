@@ -11,6 +11,7 @@ import { createReveal } from './reveal'
 import { createSearch } from './search'
 import { createStatus } from './status'
 import { createTerminals } from './terminals'
+import { createWatcher } from './watcher'
 
 /** Everything belonging to one top-level tab: a repository's graph and the terminals beside it. */
 function createWorkspace(id: number) {
@@ -27,6 +28,8 @@ function createWorkspace(id: number) {
       ui.sidebarTab.value = 'files'
       prefs.sidebarOpen.value = true
     }
+    const status = createStatus(repo)
+    createWatcher(repo, status.refresh)
     return {
       repo,
       reveal,
@@ -36,7 +39,7 @@ function createWorkspace(id: number) {
       details: createDetails(repo, reveal),
       search: createSearch(repo, reveal),
       diff,
-      status: createStatus(repo),
+      status,
       menus: createMenus(repo, { browse, rebaseFrom: (base, label) => (ui.rebase.value = { base, label }) }),
       terminals: createTerminals(repo),
     }

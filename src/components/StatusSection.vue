@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import type { StatusFile } from '@/lib/git'
 import { splitPath } from '@/lib/format'
 import { openMenu } from '@/composables/useContextMenu'
+import { fileOpenItems } from '@/composables/openers'
 import { useWorkspace } from '@/composables/workspace'
 import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
@@ -44,7 +45,8 @@ function menu(e: MouseEvent, f: StatusFile) {
       : { label: props.mode === 'conflict' ? 'Mark as Resolved' : 'Stage', run: () => stage([f]) },
     ...(props.mode === 'unstaged' ? [{ label: 'Discard Changes…', danger: true, run: () => discard([f]) }] : []),
     'separator',
-    { label: 'Copy Path', run: () => navigator.clipboard.writeText(f.path) },
+    // A deleted file has nothing on disk to open.
+    ...fileOpenItems(ws.repo.repo.value!, f.path, { exists: f.worktree !== 'D' && !(f.index === 'D' && f.worktree === '.') }),
   ])
 }
 </script>

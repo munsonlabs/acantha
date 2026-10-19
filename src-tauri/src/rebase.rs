@@ -138,6 +138,43 @@ mod tests {
         let _ = std::fs::remove_dir_all(&repo);
     }
 
+    /// The git recipes the app's Undo relies on.
+    #[test]
+    fn undo_recipes_restore_the_previous_state() {
+        let repo = repo("undo");
+        let path = std::path::Path::new(&repo);
+        let read = |f: &str| std::fs::read_to_string(path.join(f)).unwrap_or_default();
+        commit(&repo, "a.txt", "one\n", "first");
+        let first = sh(&repo, &["rev-parse", "HEAD"]).trim().to_string();
+
+        // Undoing a commit is a soft reset: the commit goes, its changes come back staged.
+        commit(&repo, "a.txt", "one\ntwo\n", "second");
+        sh(&repo, &["reset", "--soft", &first]);
+        assert_eq!(sh(&repo, &["rev-parse", "HEAD"]).trim(), first);
+        assert_eq!(sh(&repo, &["diff", "--cached", "--name-only"]).trim(), "a.txt");
+        sh(&repo, &["commit", "-qm", "second"]);
+
+        // A dropped stash comes back from its commit.
+        std::fs::write(path.join("new.txt"), "untracked\n").unwrap();
+        sh(&repo, &["stash", "push", "-q", "--include-untracked", "-m", "keep me"]);
+        let stash = sh(&repo, &["rev-parse", "stash@{0}"]).trim().to_string();
+        sh(&repo, &["stash", "drop", "-q", "stash@{0}"]);
+        sh(&repo, &["stash", "store", "-m", "keep me", &stash]);
+        assert_eq!(sh(&repo, &["rev-parse", "stash@{0}"]).trim(), stash);
+        sh(&repo, &["stash", "pop", "-q"]);
+
+        // reset --keep moves the branch back without touching uncommitted work in other files.
+        let before = sh(&repo, &["rev-parse", "HEAD"]).trim().to_string();
+        // Commit only b.txt, leaving new.txt as uncommitted work.
+        std::fs::write(path.join("b.txt"), "b\n").unwrap();
+        sh(&repo, &["add", "b.txt"]);
+        sh(&repo, &["commit", "-qm", "third"]);
+        sh(&repo, &["reset", "--keep", &before]);
+        assert_eq!(sh(&repo, &["rev-parse", "HEAD"]).trim(), before);
+        assert_eq!(read("new.txt"), "untracked\n");
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+
     #[test]
     fn reports_stashes_conflicts_blame_and_history() {
         let repo = repo("state");
