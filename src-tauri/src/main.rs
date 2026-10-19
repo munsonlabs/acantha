@@ -1,7 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod files;
 mod git;
 mod pty;
+mod rebase;
 
 use tauri::Manager;
 
@@ -20,6 +22,13 @@ fn main() {
             git::run_action,
             git::get_status,
             git::get_status_diff,
+            files::list_files,
+            files::read_file,
+            files::write_file,
+            files::file_history,
+            files::blame_file,
+            rebase::rebase_commits,
+            rebase::interactive_rebase,
             pty::pty_spawn,
             pty::pty_write,
             pty::pty_resize,

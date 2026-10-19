@@ -25,7 +25,7 @@ const nodes = computed(() =>
       cx: nodeX(n.col),
       cy: rowY(i),
       color: colorFor(n.color),
-      kind: hash === UNCOMMITTED ? 'uncommitted' : hash === props.head ? 'head' : 'commit',
+      kind: hash === UNCOMMITTED ? 'uncommitted' : props.rows[i].stash ? 'stash' : hash === props.head ? 'head' : 'commit',
     }
   }),
 )
@@ -34,8 +34,19 @@ const nodes = computed(() =>
 <template>
   <svg class="commit-graph" :width="layout.width" :height="rows.length * ROW_H" aria-hidden="true">
     <path v-for="[key, p] in paths" :key="key" :d="p.d" :stroke="p.stroke" :stroke-dasharray="p.dashed ? '3 3' : undefined" />
+    <rect
+      v-for="n in nodes.filter((n) => n.kind === 'stash')"
+      :key="n.key"
+      class="stash"
+      :x="n.cx - NODE_R"
+      :y="n.cy - NODE_R"
+      :width="NODE_R * 2"
+      :height="NODE_R * 2"
+      rx="1.5"
+      :stroke="n.color"
+    />
     <circle
-      v-for="n in nodes"
+      v-for="n in nodes.filter((n) => n.kind !== 'stash')"
       :key="n.key"
       :class="n.kind"
       :cx="n.cx"
@@ -57,7 +68,8 @@ path {
   stroke-linecap: round;
 }
 circle.head,
-circle.uncommitted {
+circle.uncommitted,
+rect.stash {
   fill: var(--bg);
   stroke-width: 2;
 }

@@ -1,34 +1,26 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useWorkspace } from '@/composables/workspace'
+import BranchFilter from './BranchFilter.vue'
 import Icon from './Icon.vue'
 
 const ws = useWorkspace()
-const { log, branch, showRemotes, reload, setBranch, setShowRemotes } = ws.repo
+const { log, showRemotes, showStashes, reload, setShowRemotes } = ws.repo
 const { fetchAll } = ws.menus
-
-const locals = computed(() => log.value?.refs.filter((r) => r.kind === 'branch') ?? [])
-const remoteRefs = computed(() => (showRemotes.value ? (log.value?.refs.filter((r) => r.kind === 'remote') ?? []) : []))
 </script>
 
 <template>
   <header class="pane-header">
     <span class="title"><Icon name="history" :size="13" /> History</span>
-    <label class="select">
-      <Icon name="branch" :size="13" />
-      <select :value="branch" @change="setBranch(($event.target as HTMLSelectElement).value)">
-        <option value="">All branches</option>
-        <optgroup v-if="locals.length" label="Local">
-          <option v-for="r in locals" :key="r.name" :value="`refs/heads/${r.name}`">{{ r.name }}</option>
-        </optgroup>
-        <optgroup v-if="remoteRefs.length" label="Remote">
-          <option v-for="r in remoteRefs" :key="`${r.remote}/${r.name}`" :value="`refs/remotes/${r.remote}/${r.name}`">
-            {{ r.remote }}/{{ r.name }}
-          </option>
-        </optgroup>
-      </select>
-    </label>
+    <BranchFilter />
     <div class="spacer" />
+    <button
+      class="ghost icon-btn"
+      :class="{ on: showStashes }"
+      :title="showStashes ? 'Hide stashes' : `Show stashes${log?.stashes.length ? ` (${log.stashes.length})` : ''}`"
+      @click="showStashes = !showStashes"
+    >
+      <Icon name="archive" />
+    </button>
     <button
       class="ghost icon-btn"
       :class="{ on: showRemotes }"
@@ -50,32 +42,7 @@ const remoteRefs = computed(() => (showRemotes.value ? (log.value?.refs.filter((
   padding: 0 6px;
   font-weight: 500;
 }
-.select {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 24px;
-  padding: 0 6px;
-  border-radius: 6px;
-  color: var(--fg-muted);
-}
-.select:hover {
-  background: var(--hover);
-  color: var(--fg);
-}
-.select select {
-  max-width: 200px;
-  height: 100%;
-  padding: 0 2px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font-size: 12px;
-  appearance: none;
-  outline: none;
-}
 .icon-btn:not(.on):not(:hover) {
-  color: var(--fg-muted);
+  color: var(--fg-faint);
 }
 </style>

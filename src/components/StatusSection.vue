@@ -11,6 +11,10 @@ const props = defineProps<{ title: string; files: StatusFile[]; mode: 'staged' |
 const ws = useWorkspace()
 const { stage, unstage, discard, busy } = ws.status
 const { openStatusDiff } = ws.diff
+const { conflict } = ws.ui
+
+/** Conflicted files open in the resolver; everything else shows its diff. */
+const openFile = (f: StatusFile) => (props.mode === 'conflict' ? (conflict.value = f) : openStatusDiff(f, props.mode === 'staged'))
 const collapsed = ref(false)
 
 const STATUS: Record<string, string> = {
@@ -32,7 +36,7 @@ function letter(f: StatusFile) {
 
 function menu(e: MouseEvent, f: StatusFile) {
   openMenu(e, [
-    { label: 'Open Changes', run: () => openStatusDiff(f, props.mode === 'staged') },
+    { label: props.mode === 'conflict' ? 'Resolve Conflicts…' : 'Open Changes', run: () => openFile(f) },
     'separator',
     props.mode === 'staged'
       ? { label: 'Unstage', run: () => unstage([f]) }
@@ -70,7 +74,7 @@ function menu(e: MouseEvent, f: StatusFile) {
         v-for="f in files"
         :key="f.path"
         :title="`${f.path}${f.oldPath ? ` ← ${f.oldPath}` : ''} · ${STATUS[letter(f)] ?? letter(f)}`"
-        @click="openStatusDiff(f, mode === 'staged')"
+        @click="openFile(f)"
         @contextmenu.prevent="menu($event, f)"
       >
         <span class="name">{{ splitPath(f.path).name }}</span>

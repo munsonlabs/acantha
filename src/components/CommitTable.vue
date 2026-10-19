@@ -6,6 +6,7 @@ import { compactDate, formatDate, initials, nameHue, shortHash } from '@/lib/for
 import { useWorkspace } from '@/composables/workspace'
 import { openMenu } from '@/composables/useContextMenu'
 import CommitGraph from './CommitGraph.vue'
+import Icon from './Icon.vue'
 import RefLabels from './RefLabels.vue'
 
 const ws = useWorkspace()
@@ -13,7 +14,7 @@ const { log, rows, layout, refsByHash, loadMore } = ws.repo
 const { selected, compareWith, select, compare, closeDetails } = ws.details
 const { matchSet, current } = ws.search
 const { target } = ws.reveal
-const { branchMenu, checkoutBranch, checkoutRemoteBranch, commitMenu, remoteBranchMenu, tagMenu, uncommittedMenu } = ws.menus
+const { branchMenu, checkoutBranch, checkoutRemoteBranch, commitMenu, remoteBranchMenu, stashMenu, tagMenu, uncommittedMenu } = ws.menus
 
 const scroller = ref<HTMLElement>()
 const graphWidth = computed(() => Math.min(Math.max(layout.value.width, 40), 400))
@@ -31,6 +32,7 @@ function onContextMenu(e: MouseEvent, c: Commit) {
   if (ref?.refKind === 'branch') return openMenu(e, branchMenu(ref.refName!))
   if (ref?.refKind === 'remote') return openMenu(e, remoteBranchMenu(ref.refRemote!, ref.refName!))
   if (ref?.refKind === 'tag') return openMenu(e, tagMenu(ref.refName!))
+  if (c.stash) return openMenu(e, stashMenu(c.stash))
   openMenu(e, c.hash === UNCOMMITTED ? uncommittedMenu() : commitMenu(c))
 }
 
@@ -71,6 +73,7 @@ watch(target, (t) => {
           :class="{
             selected: c.hash === selected || c.hash === compareWith,
             uncommitted: c.hash === UNCOMMITTED,
+            stash: !!c.stash,
             head: c.hash === log!.head,
             match: matchSet.has(i),
             'match-current': current === i,
@@ -82,6 +85,7 @@ watch(target, (t) => {
           <div />
           <div class="sha">{{ c.hash === UNCOMMITTED ? '' : shortHash(c.hash) }}</div>
           <div class="desc">
+            <span v-if="c.stash" class="stash-label"><Icon name="archive" :size="11" /> {{ c.stash.selector }}</span>
             <RefLabels
               v-if="refsByHash.has(c.hash) || (c.hash === log!.head && !log!.headBranch)"
               :refs="refsByHash.get(c.hash)"
@@ -177,6 +181,22 @@ watch(target, (t) => {
 .subject {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.commit.stash .subject {
+  color: var(--fg-muted);
+}
+.stash-label {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  margin-right: 6px;
+  padding: 0 6px 0 5px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 5px;
+  color: var(--fg-muted);
+  font-size: 11px;
 }
 .commit.uncommitted .subject {
   font-style: italic;

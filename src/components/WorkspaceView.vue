@@ -4,7 +4,9 @@ import { prefs } from '@/composables/prefs'
 import { provideWorkspace, type Workspace } from '@/composables/workspace'
 import DiffModal from './DiffModal.vue'
 import GraphPane from './GraphPane.vue'
-import SourceControl from './SourceControl.vue'
+import ConflictResolver from './ConflictResolver.vue'
+import RebaseModal from './RebaseModal.vue'
+import Sidebar from './Sidebar.vue'
 import TerminalPane from './TerminalPane.vue'
 
 const props = defineProps<{ ws: Workspace; visible: boolean }>()
@@ -39,7 +41,7 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
 <template>
   <div v-show="visible" ref="el" class="workspace">
     <template v-if="repo">
-      <SourceControl v-show="sidebarOpen" class="sidebar" :style="{ width: `${sidebarWidth}px` }" />
+      <Sidebar v-show="sidebarOpen" class="sidebar" :style="{ width: `${sidebarWidth}px` }" />
       <div v-show="sidebarOpen" class="gutter" @mousedown="startResize($event, 'sidebar')" />
     </template>
     <GraphPane class="graph" />
@@ -49,6 +51,8 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
       <TerminalPane v-show="open" class="terminal" :style="{ width: `${width * 100}%` }" :visible="visible && open" />
     </template>
     <DiffModal />
+    <ConflictResolver />
+    <RebaseModal />
   </div>
 </template>
 

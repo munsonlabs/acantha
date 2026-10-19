@@ -124,5 +124,43 @@ export function createStatus({ repo, log, reload }: Repo) {
     await reload()
   }
 
-  return { status, files, staged, unstaged, conflicts, message, amend, busy, refresh, stage, unstage, discard, setAmend, commit, push, pull }
+  /** Finishes the merge, rebase or cherry-pick that stopped for conflicts. */
+  async function continueOperation() {
+    const op = status.value?.operation
+    if (!op) return
+    if (conflicts.value.length) return showToast('Resolve and stage every conflict first', 'error')
+    const text = message.value.trim()
+    const args = op === 'merge' ? ['commit', ...(text ? ['-m', text] : ['--no-edit'])] : [op, '--continue']
+    if (await exec([args], 'Continuing…')) message.value = ''
+    await reload()
+  }
+
+  async function abortOperation() {
+    const op = status.value?.operation
+    if (!op) return
+    if (!(await confirmAction(`Abort ${op}`, `Abort the ${op} and go back to where you started?`, 'Abort', true))) return
+    await exec([[op, '--abort']], 'Aborting…')
+    await reload()
+  }
+
+  return {
+    status,
+    files,
+    staged,
+    unstaged,
+    conflicts,
+    message,
+    amend,
+    busy,
+    refresh,
+    stage,
+    unstage,
+    discard,
+    setAmend,
+    commit,
+    push,
+    pull,
+    continueOperation,
+    abortOperation,
+  }
 }

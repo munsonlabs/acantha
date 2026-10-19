@@ -1,4 +1,4 @@
-import type { Commit } from '@/lib/git'
+import type { Commit, Stash } from '@/lib/git'
 import { shortHash } from '@/lib/format'
 import { ask, confirmAction, type DialogField } from './useDialog'
 import type { Repo } from './repo'
@@ -17,7 +17,12 @@ async function copy(text: string, what: string) {
 /** Cherry-picking or reverting a merge needs to know which parent is the mainline. */
 const mainline = (c: Commit) => (c.parents.length > 1 ? ['-m', '1'] : [])
 
-export function createMenus({ repo, log, run }: Repo) {
+interface MenuActions {
+  browse: (rev: string | null) => void
+  rebaseFrom: (base: string, label: string) => void
+}
+
+export function createMenus({ repo, log, rows, run }: Repo, { browse, rebaseFrom }: MenuActions) {
   const currentBranch = () => log.value?.headBranch ?? null
   const remotes = () => log.value?.remotes ?? []
   const hasLocalBranch = (name: string) => !!log.value?.refs.some((r) => r.kind === 'branch' && r.name === name)
@@ -30,6 +35,23 @@ export function createMenus({ repo, log, run }: Repo) {
     value: remotes()[0],
     options: remotes().map((r) => ({ value: r, label: r })),
   })
+
+  /** Whether `hash` is in HEAD's history, as far as the loaded graph shows. */
+  function isAncestorOfHead(hash: string) {
+    const head = log.value?.head
+    if (!head || hash === head) return false
+    const parents = new Map(rows.value.map((c) => [c.hash, c.parents]))
+    const seen = new Set<string>()
+    const stack = [head]
+    while (stack.length) {
+      const h = stack.pop()!
+      if (h === hash) return true
+      if (seen.has(h)) continue
+      seen.add(h)
+      stack.push(...(parents.get(h) ?? []))
+    }
+    return false
+  }
 
   async function merge(target: string, label: string) {
     const v = await ask({
@@ -92,6 +114,8 @@ export function createMenus({ repo, log, run }: Repo) {
         },
       },
       'separator',
+      { label: 'Browse Files at this Commit', run: () => browse(c.hash) },
+      'separator',
       {
         label: 'Checkout…',
         run: async () => {
@@ -114,6 +138,7 @@ export function createMenus({ repo, log, run }: Repo) {
         },
       },
       { label: 'Merge into Current Branch…', disabled: c.hash === log.value?.head, run: () => merge(c.hash, `commit \`${s}\``) },
+      { label: 'Interactive Rebase from Here…', disabled: !isAncestorOfHead(c.hash), run: () => rebaseFrom(c.hash, s) },
       {
         label: 'Reset Current Branch to this Commit…',
         danger: true,
@@ -143,6 +168,39 @@ export function createMenus({ repo, log, run }: Repo) {
       'separator',
       { label: 'Copy Commit Hash', run: () => copy(c.hash, 'commit hash') },
       { label: 'Copy Commit Subject', run: () => copy(c.subject, 'commit subject') },
+    ]
+  }
+
+  function stashMenu(stash: Stash): MenuEntry[] {
+    const sel = stash.selector
+    return [
+      { label: 'Apply Stash', run: () => run(['stash', 'apply', sel], { done: `Applied ${sel}` }) },
+      { label: 'Pop Stash', run: () => run(['stash', 'pop', sel], { done: `Popped ${sel}` }) },
+      {
+        label: 'Create Branch from Stash…',
+        run: async () => {
+          const v = await ask({
+            title: 'Create Branch from Stash',
+            message: `Check out a new branch at the commit \`${sel}\` was made on, and apply it there.`,
+            fields: [{ name: 'name', label: 'Name', required: true }],
+            confirm: 'Create Branch',
+          })
+          if (v) await run(['stash', 'branch', v.name, sel], { done: `Created ${v.name}` })
+        },
+      },
+      { label: 'Browse Files in Stash', run: () => browse(stash.hash) },
+      'separator',
+      {
+        label: 'Drop Stash…',
+        danger: true,
+        run: async () => {
+          if (await confirmAction('Drop Stash', `Permanently delete \`${sel}\`?`, 'Drop', true))
+            await run(['stash', 'drop', sel], { done: `Dropped ${sel}` })
+        },
+      },
+      'separator',
+      { label: 'Copy Stash Name', run: () => copy(sel, 'stash name') },
+      { label: 'Copy Commit Hash', run: () => copy(stash.hash, 'commit hash') },
     ]
   }
 
@@ -301,5 +359,5 @@ export function createMenus({ repo, log, run }: Repo) {
     await run(['fetch', '--all', '--prune'], { busy: 'Fetching…', done: 'Fetched from all remotes' })
   }
 
-  return { commitMenu, uncommittedMenu, branchMenu, remoteBranchMenu, tagMenu, checkoutBranch, checkoutRemoteBranch, fetchAll }
+  return { commitMenu, stashMenu, uncommittedMenu, branchMenu, remoteBranchMenu, tagMenu, checkoutBranch, checkoutRemoteBranch, fetchAll }
 }

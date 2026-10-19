@@ -6,7 +6,10 @@ import StatusSection from './StatusSection.vue'
 
 const ws = useWorkspace()
 const { log } = ws.repo
-const { status, staged, unstaged, conflicts, message, amend, busy, refresh, setAmend, commit, push, pull } = ws.status
+const { status, staged, unstaged, conflicts, message, amend, busy, refresh, setAmend, commit, push, pull, continueOperation, abortOperation } =
+  ws.status
+
+const OPERATIONS = { merge: 'Merge', rebase: 'Rebase', 'cherry-pick': 'Cherry-pick', revert: 'Revert' }
 const { fetchAll } = ws.menus
 
 const canPush = computed(() => !!status.value && (!!status.value.upstream || !!log.value?.remotes.length))
@@ -21,7 +24,7 @@ function onKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
-  <section class="pane scm">
+  <div class="scm">
     <header class="pane-header">
       <span class="title" :title="status?.upstream ? `Tracking ${status.upstream}` : 'No upstream'">
         <Icon name="branch" :size="13" />
@@ -35,6 +38,19 @@ function onKeydown(e: KeyboardEvent) {
       <button class="ghost icon-btn" title="Refresh" @click="refresh"><Icon name="refresh" /></button>
     </header>
     <div class="scm-body">
+      <div v-if="status?.operation" class="operation">
+        <div class="op-title">
+          <Icon name="warning" :size="13" />
+          {{ OPERATIONS[status.operation] }} in progress
+        </div>
+        <p>
+          {{ conflicts.length ? `Resolve ${conflicts.length} conflict${conflicts.length === 1 ? '' : 's'}, then continue.` : 'Ready to continue.' }}
+        </p>
+        <div class="op-buttons">
+          <button :disabled="busy" @click="abortOperation">Abort</button>
+          <button class="primary" :disabled="busy || conflicts.length > 0" @click="continueOperation">Continue</button>
+        </div>
+      </div>
       <div class="composer">
         <textarea
           v-model="message"
@@ -71,7 +87,7 @@ function onKeydown(e: KeyboardEvent) {
         <p v-if="clean" class="clean"><Icon name="check" :size="13" /> Working tree clean</p>
       </div>
     </div>
-  </section>
+  </div>
 </template>
 
 <style scoped>
@@ -100,6 +116,30 @@ function onKeydown(e: KeyboardEvent) {
 }
 .composer {
   position: relative;
+}
+.operation {
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid color-mix(in oklab, var(--modify) 40%, transparent);
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--modify) 8%, transparent);
+}
+.op-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--modify);
+  font-weight: 500;
+}
+.operation p {
+  margin: 4px 0 8px;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+.op-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
 }
 textarea {
   display: block;

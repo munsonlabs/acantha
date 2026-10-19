@@ -9,6 +9,7 @@ import Icon from './Icon.vue'
 const ws = useWorkspace()
 const { details, select, closeDetails } = ws.details
 const { openDiff } = ws.diff
+const { browse } = ws
 const height = prefs.detailsHeight
 
 const STATUS: Record<string, string> = { A: 'Added', M: 'Modified', D: 'Deleted', R: 'Renamed', C: 'Copied', T: 'Type changed', '?': 'Untracked' }
@@ -46,6 +47,9 @@ const open = (f: FileChange) => openDiff(f, details.value!.from, details.value!.
     <div class="resize" @mousedown.prevent="startResize" />
     <header>
       <h2 :title="title">{{ title }}</h2>
+      <button v-if="details.kind !== 'compare'" class="ghost browse" @click="browse(details.kind === 'uncommitted' ? null : details.to)">
+        <Icon name="files" :size="13" /> Browse Files
+      </button>
       <button class="ghost icon-btn" title="Close (Esc)" @click="closeDetails"><Icon name="x" /></button>
     </header>
     <div class="body">
@@ -130,6 +134,15 @@ header {
   gap: 8px;
   padding: 6px 8px 6px 14px;
   border-bottom: 1px solid var(--border);
+}
+.browse {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  color: var(--fg-muted);
+  font-size: 12px;
 }
 h2 {
   flex: 1;

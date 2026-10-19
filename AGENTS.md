@@ -5,6 +5,8 @@
 | Path                           | What lives there                                                                                                                           |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `src-tauri/src/pty.rs`         | Terminal sessions: spawns the login shell in a PTY and streams output over a Tauri `Channel`                                               |
+| `src-tauri/src/files.rs`       | Listing, reading, blaming and writing files, at a commit or in the working tree (paths are checked to stay inside the repo)                |
+| `src-tauri/src/rebase.rs`      | Interactive rebase: writes the todo itself through `GIT_SEQUENCE_EDITOR`, rewording through `exec git commit --amend`                      |
 | `src-tauri/src/git.rs`         | Every Tauri command. Shells out to the `git` CLI, the same way the VS Code extension does                                                  |
 | `src/lib/git.ts`               | Typed `invoke` wrappers and the shared types. Keep in sync with the Rust structs                                                           |
 | `src/lib/graph.ts`             | Lane layout: assigns each commit a column and produces row-to-row edges                                                                    |
@@ -16,6 +18,7 @@
 ## Conventions
 
 - `status.ts` polls `git status` (from `App.vue`) while the window is focused. When the status changes it reloads the graph, which is how commits made in the terminal appear.
+- Markdown previews render in the app's webview, which can call Tauri commands, so their HTML always goes through DOMPurify.
 - Terminals stay mounted (`v-show`) while hidden or in a background tab: unmounting a `TerminalView` kills its shell.
 - Theme tokens in `src/styles/main.css` mirror Terax's default theme, including the ANSI palette the terminal reads.
 

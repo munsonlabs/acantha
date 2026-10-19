@@ -3,19 +3,26 @@ import { useWorkspace } from '@/composables/workspace'
 import CommitTable from './CommitTable.vue'
 import DetailsPanel from './DetailsPanel.vue'
 import EmptyState from './EmptyState.vue'
+import FilePreview from './FilePreview.vue'
 import GraphToolbar from './GraphToolbar.vue'
 
-const { repo, log } = useWorkspace().repo
+const ws = useWorkspace()
+const { repo, log } = ws.repo
+const { preview } = ws.files
 </script>
 
 <template>
   <section class="pane graph-pane">
-    <GraphToolbar v-if="repo" />
-    <div class="graph-body">
-      <CommitTable v-if="repo && log" />
-      <EmptyState v-else-if="!repo" />
-    </div>
-    <DetailsPanel />
+    <FilePreview v-if="preview" class="graph-body" />
+    <!-- The table stays mounted under a preview so its scroll position survives. -->
+    <template v-if="repo">
+      <GraphToolbar v-show="!preview" />
+      <div v-show="!preview" class="graph-body">
+        <CommitTable v-if="log" />
+      </div>
+      <DetailsPanel v-show="!preview" />
+    </template>
+    <div v-else class="graph-body"><EmptyState /></div>
   </section>
 </template>
 

@@ -1,6 +1,8 @@
 import { computed, effectScope, inject, provide, shallowRef, watch, type InjectionKey } from 'vue'
 import { open } from '@tauri-apps/plugin-dialog'
 import { createDetails } from './details'
+import { createFiles } from './files'
+import { createUi } from './ui'
 import { createDiff } from './diff'
 import { createMenus } from './menus'
 import { prefs } from './prefs'
@@ -17,14 +19,25 @@ function createWorkspace(id: number) {
     const repo = createRepo()
     const reveal = createReveal()
     const diff = createDiff(repo)
+    const ui = createUi()
+    const files = createFiles(repo)
+    // Opening a commit's files switches the sidebar to the file browser.
+    const browse = (rev: string | null) => {
+      files.browse(rev)
+      ui.sidebarTab.value = 'files'
+      prefs.sidebarOpen.value = true
+    }
     return {
       repo,
       reveal,
+      ui,
+      files,
+      browse,
       details: createDetails(repo, reveal),
       search: createSearch(repo, reveal),
       diff,
       status: createStatus(repo),
-      menus: createMenus(repo),
+      menus: createMenus(repo, { browse, rebaseFrom: (base, label) => (ui.rebase.value = { base, label }) }),
       terminals: createTerminals(repo),
     }
   })!

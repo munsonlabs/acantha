@@ -29,6 +29,7 @@ const crumbs = computed(() => {
       </span>
       <span v-if="log" class="item"><Icon name="branch" :size="12" />{{ log.headBranch ?? 'detached' }}</span>
       <span v-if="log?.uncommitted" class="item modified">{{ log.uncommitted }} changed</span>
+      <span v-if="active?.status.status.value?.operation" class="item operation">{{ active.status.status.value.operation }} in progress</span>
     </template>
     <span v-else class="item">No repository</span>
     <div class="spacer" />
@@ -70,6 +71,12 @@ const crumbs = computed(() => {
 }
 .modified {
   color: var(--modify);
+}
+.operation {
+  color: var(--del);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .status-btn {
   display: flex;

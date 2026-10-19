@@ -33,8 +33,8 @@ const ACTIONS: &[&str] = &[
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Commit {
-    hash: String,
-    parents: Vec<String>,
+    pub(crate) hash: String,
+    pub(crate) parents: Vec<String>,
     author: String,
     email: String,
     date: i64,
@@ -61,6 +61,21 @@ pub struct Log {
     head_branch: Option<String>,
     uncommitted: usize,
     has_more: bool,
+    stashes: Vec<Stash>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Stash {
+    hash: String,
+    /// The commit the stash was made on top of.
+    base: String,
+    /// e.g. "stash@{0}"
+    selector: String,
+    subject: String,
+    author: String,
+    email: String,
+    date: i64,
 }
 
 #[derive(Serialize)]
@@ -109,28 +124,34 @@ pub struct Status {
     ahead: u32,
     behind: u32,
     files: Vec<StatusFile>,
+    /// A multi-step operation that stopped part way: "merge" | "rebase" | "cherry-pick" | "revert".
+    operation: Option<&'static str>,
 }
 
-fn run<I, S>(repo: &str, args: I) -> Result<Output, String>
+pub(crate) const COMMIT_FORMAT: &str = "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%s%x1e";
+
+pub(crate) fn command(repo: &str) -> Command {
+    // Apps launched from Finder get a minimal PATH, which breaks credential helpers and hooks.
+    let path = std::env::var("PATH").unwrap_or_default();
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
+        .arg(repo)
+        .args(["-c", "core.quotepath=false", "-c", "color.ui=false", "-c", "log.showSignature=false"])
+        .env("PATH", format!("{path}:/opt/homebrew/bin:/usr/local/bin"))
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_EDITOR", "true");
+    cmd
+}
+
+pub(crate) fn run<I, S>(repo: &str, args: I) -> Result<Output, String>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    // Apps launched from Finder get a minimal PATH, which breaks credential helpers and hooks.
-    let path = std::env::var("PATH").unwrap_or_default();
-    Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        .args(["-c", "core.quotepath=false", "-c", "color.ui=false", "-c", "log.showSignature=false"])
-        .args(args)
-        .env("PATH", format!("{path}:/opt/homebrew/bin:/usr/local/bin"))
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GIT_EDITOR", "true")
-        .output()
-        .map_err(|e| format!("Failed to run git: {e}"))
+    command(repo).args(args).output().map_err(|e| format!("Failed to run git: {e}"))
 }
 
-fn stderr_or_code(out: &Output) -> String {
+pub(crate) fn stderr_or_code(out: &Output) -> String {
     let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
     if err.is_empty() {
         format!("git exited with code {}", out.status.code().unwrap_or(-1))
@@ -139,7 +160,7 @@ fn stderr_or_code(out: &Output) -> String {
     }
 }
 
-fn git_with<I, S>(repo: &str, args: I, ok_codes: &[i32]) -> Result<String, String>
+pub(crate) fn git_with<I, S>(repo: &str, args: I, ok_codes: &[i32]) -> Result<String, String>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
@@ -152,7 +173,7 @@ where
     }
 }
 
-fn git<I, S>(repo: &str, args: I) -> Result<String, String>
+pub(crate) fn git<I, S>(repo: &str, args: I) -> Result<String, String>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
@@ -168,7 +189,61 @@ fn empty_tree(hash: &str) -> &'static str {
     }
 }
 
-fn trimmed(s: Result<String, String>) -> Option<String> {
+/// Parses `git log` output in `COMMIT_FORMAT`.
+pub(crate) fn parse_commits(out: &str) -> Vec<Commit> {
+    out.split('\x1e')
+        .filter_map(|record| {
+            let f: Vec<&str> = record.trim_start_matches('\n').splitn(6, '\x1f').collect();
+            (f.len() == 6).then(|| Commit {
+                hash: f[0].into(),
+                parents: f[1].split_whitespace().map(String::from).collect(),
+                author: f[2].into(),
+                email: f[3].into(),
+                date: f[4].parse().unwrap_or(0),
+                subject: f[5].into(),
+            })
+        })
+        .collect()
+}
+
+fn parse_stashes(out: &str) -> Vec<Stash> {
+    out.lines()
+        .filter_map(|line| {
+            let f: Vec<&str> = line.splitn(7, '\x1f').collect();
+            (f.len() == 7).then(|| Stash {
+                hash: f[0].into(),
+                base: f[1].split_whitespace().next().unwrap_or_default().into(),
+                selector: f[2].into(),
+                subject: f[3].into(),
+                author: f[4].into(),
+                email: f[5].into(),
+                date: f[6].parse().unwrap_or(0),
+            })
+        })
+        .collect()
+}
+
+/// Which multi-step operation, if any, is waiting to be continued or aborted.
+fn operation(repo: &str) -> Option<&'static str> {
+    const MARKERS: [(&str, &str); 5] = [
+        ("rebase-merge", "rebase"),
+        ("rebase-apply", "rebase"),
+        ("MERGE_HEAD", "merge"),
+        ("CHERRY_PICK_HEAD", "cherry-pick"),
+        ("REVERT_HEAD", "revert"),
+    ];
+    let mut args = vec!["rev-parse"];
+    for (marker, _) in MARKERS {
+        args.extend(["--git-path", marker]);
+    }
+    let out = git(repo, args).ok()?;
+    out.lines()
+        .zip(MARKERS)
+        .find(|(path, _)| std::path::Path::new(repo).join(path).exists())
+        .map(|(_, (_, op))| op)
+}
+
+pub(crate) fn trimmed(s: Result<String, String>) -> Option<String> {
     s.ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
 }
 
@@ -264,6 +339,7 @@ fn parse_status(out: &str) -> Status {
         ahead: 0,
         behind: 0,
         files: Vec::new(),
+        operation: None,
     };
     let mut it = out.split('\0');
     while let Some(entry) = it.next() {
@@ -323,10 +399,9 @@ fn parse_status(out: &str) -> Status {
 
 #[tauri::command]
 pub async fn get_status(repo: String) -> Result<Status, String> {
-    Ok(parse_status(&git(
-        &repo,
-        ["status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all"],
-    )?))
+    let mut status = parse_status(&git(&repo, ["status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all"])?);
+    status.operation = operation(&repo);
+    Ok(status)
 }
 
 /// Diff of one file in the working tree, against the index (unstaged) or of the index against HEAD (staged).
@@ -357,7 +432,7 @@ pub async fn resolve_repo(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn get_log(repo: String, limit: usize, branch: Option<String>, show_remotes: bool) -> Result<Log, String> {
+pub async fn get_log(repo: String, limit: usize, branches: Vec<String>, show_remotes: bool) -> Result<Log, String> {
     let head = trimmed(git(&repo, ["rev-parse", "--verify", "-q", "HEAD"]));
     let head_branch = trimmed(git(&repo, ["symbolic-ref", "--short", "-q", "HEAD"]));
     let refs = parse_refs(&git(
@@ -379,38 +454,24 @@ pub async fn get_log(repo: String, limit: usize, branch: Option<String>, show_re
             "log".to_string(),
             "--date-order".into(),
             format!("--max-count={}", limit + 1),
-            "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%s%x1e".into(),
+            COMMIT_FORMAT.into(),
         ];
-        match branch {
-            Some(b) => args.push(b),
-            None => {
-                args.extend(["--branches".into(), "--tags".into()]);
-                if show_remotes {
-                    args.push("--remotes".into());
-                }
-                if head.is_some() {
-                    args.push("HEAD".into());
-                }
+        if branches.is_empty() {
+            args.extend(["--branches".into(), "--tags".into()]);
+            if show_remotes {
+                args.push("--remotes".into());
             }
+            if head.is_some() {
+                args.push("HEAD".into());
+            }
+        } else {
+            args.extend(branches);
         }
         args.push("--".into());
-
-        for record in git(&repo, &args)?.split('\x1e') {
-            let record = record.trim_start_matches('\n');
-            let f: Vec<&str> = record.splitn(6, '\x1f').collect();
-            if f.len() < 6 {
-                continue;
-            }
-            commits.push(Commit {
-                hash: f[0].into(),
-                parents: f[1].split_whitespace().map(String::from).collect(),
-                author: f[2].into(),
-                email: f[3].into(),
-                date: f[4].parse().unwrap_or(0),
-                subject: f[5].into(),
-            });
-        }
+        commits = parse_commits(&git(&repo, &args)?);
     }
+
+    let stashes = parse_stashes(&git(&repo, ["stash", "list", "--format=%H%x1f%P%x1f%gd%x1f%gs%x1f%an%x1f%ae%x1f%at"]).unwrap_or_default());
 
     let has_more = commits.len() > limit;
     commits.truncate(limit);
@@ -422,6 +483,7 @@ pub async fn get_log(repo: String, limit: usize, branch: Option<String>, show_re
         head_branch,
         uncommitted,
         has_more,
+        stashes,
     })
 }
 
@@ -559,7 +621,7 @@ mod tests {
     #[test]
     fn reads_log_refs_and_changes() {
         let repo = repo();
-        let log = block_on(get_log(repo.clone(), 100, None, true)).unwrap();
+        let log = block_on(get_log(repo.clone(), 100, vec![], true)).unwrap();
         assert_eq!(
             log.commits.iter().map(|c| c.subject.as_str()).collect::<Vec<_>>(),
             ["merge", "rename", "first"]

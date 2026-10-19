@@ -17,15 +17,34 @@ export function createRepo() {
   const repo = ref<string | null>(null)
   const log = shallowRef<Log | null>(null)
   const limit = ref(PAGE)
-  const branch = ref('')
+  /** Revisions picked in the branch filter. Empty shows everything. */
+  const branches = ref<string[]>([])
   const showRemotes = prefs.showRemotes
+  const showStashes = prefs.showStashes
 
   const rows = computed<Commit[]>(() => {
     const l = log.value
     if (!l) return []
     // Only show the working tree when HEAD is part of the graph being viewed.
     const headVisible = l.head ? l.commits.some((c) => c.hash === l.head) : true
-    if (!l.uncommitted || !headVisible) return l.commits
+    const list = [...l.commits]
+    // Each stash sits just above the commit it was made on, branching off it.
+    if (showStashes.value) {
+      for (const stash of l.stashes) {
+        const i = list.findIndex((c) => c.hash === stash.base && !c.stash)
+        if (i !== -1)
+          list.splice(i, 0, {
+            hash: stash.hash,
+            parents: [stash.base],
+            author: stash.author,
+            email: stash.email,
+            date: stash.date,
+            subject: stash.subject,
+            stash,
+          })
+      }
+    }
+    if (!l.uncommitted || !headVisible) return list
     const pseudo: Commit = {
       hash: UNCOMMITTED,
       parents: l.head ? [l.head] : [],
@@ -34,7 +53,7 @@ export function createRepo() {
       date: Math.floor(Date.now() / 1000),
       subject: `Uncommitted Changes (${l.uncommitted})`,
     }
-    return [pseudo, ...l.commits]
+    return [pseudo, ...list]
   })
 
   const layout = computed(() => layoutGraph(rows.value))
@@ -68,13 +87,13 @@ export function createRepo() {
     if (!repo.value) return
     const seq = ++reloadSeq
     try {
-      const result = await git.log(repo.value, { limit: limit.value, branch: branch.value || null, showRemotes: showRemotes.value })
+      const result = await git.log(repo.value, { limit: limit.value, branches: branches.value, showRemotes: showRemotes.value })
       if (seq === reloadSeq) log.value = result
     } catch (e) {
       if (seq !== reloadSeq) return
       // The filtered branch may have been deleted or renamed.
-      if (branch.value) {
-        branch.value = ''
+      if (branches.value.length) {
+        branches.value = []
         return reload()
       }
       showToast(String(e), 'error')
@@ -93,14 +112,14 @@ export function createRepo() {
     repo.value = root
     log.value = null
     limit.value = PAGE
-    branch.value = ''
+    branches.value = []
     addRecent(root)
     await reload()
     return true
   }
 
-  function setBranch(value: string) {
-    branch.value = value
+  function setBranches(value: string[]) {
+    branches.value = value
     limit.value = PAGE
     return reload()
   }
@@ -130,7 +149,7 @@ export function createRepo() {
     await reload()
   }
 
-  return { repo, log, rows, layout, refsByHash, branch, showRemotes, reload, openRepo, setBranch, setShowRemotes, loadMore, run }
+  return { repo, log, rows, layout, refsByHash, branches, showRemotes, showStashes, reload, openRepo, setBranches, setShowRemotes, loadMore, run }
 }
 
 export type Repo = ReturnType<typeof createRepo>

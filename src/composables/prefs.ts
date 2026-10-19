@@ -3,6 +3,7 @@ import { usePersisted } from './usePersisted'
 /** App-wide preferences, shared by every workspace tab. */
 export const prefs = {
   showRemotes: usePersisted('show-remotes', true),
+  showStashes: usePersisted('show-stashes', true),
   recents: usePersisted<string[]>('recents', []),
   detailsHeight: usePersisted('details-height', 280),
   terminalWidth: usePersisted('terminal-width', 0.42),
