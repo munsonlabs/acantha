@@ -4,6 +4,7 @@ import CommitTable from './CommitTable.vue'
 import DetailsPanel from './DetailsPanel.vue'
 import EmptyState from './EmptyState.vue'
 import FilePreview from './FilePreview.vue'
+import Skeleton from './Skeleton.vue'
 import GraphToolbar from './GraphToolbar.vue'
 
 const ws = useWorkspace()
@@ -19,6 +20,7 @@ const { preview } = ws.files
       <GraphToolbar v-show="!preview" />
       <div v-show="!preview" class="graph-body">
         <CommitTable v-if="log" />
+        <Skeleton v-else :lines="16" :gap="15" />
       </div>
       <DetailsPanel v-show="!preview" />
     </template>

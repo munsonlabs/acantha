@@ -9,7 +9,7 @@
     "dev": "tauri dev",
     "build": "tauri build",
     "dev:web": "vp dev",
-    "check": "vp check && vue-tsc --noEmit",
+    "check": "vp check && vue-tsc --noEmit && vp build",
     "lint": "vp lint",
     "fmt": "vp fmt",
     "tauri": "tauri",

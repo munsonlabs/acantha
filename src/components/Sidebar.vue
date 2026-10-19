@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ref } from 'vue'
+import { useSlidingPill } from '@/composables/tabs'
 import { useWorkspace } from '@/composables/workspace'
 import FileBrowser from './FileBrowser.vue'
 import Icon from './Icon.vue'
@@ -7,15 +9,18 @@ import SourceControl from './SourceControl.vue'
 const ws = useWorkspace()
 const { sidebarTab } = ws.ui
 const { files } = ws.status
+const nav = ref<HTMLElement>()
+const pill = useSlidingPill(nav, () => [sidebarTab.value, files.value.length])
 </script>
 
 <template>
   <section class="pane sidebar-pane">
     <FileBrowser v-if="sidebarTab === 'files'" class="content" />
     <SourceControl v-else class="content" />
-    <nav class="switcher">
-      <button class="ghost" :class="{ on: sidebarTab === 'files' }" @click="sidebarTab = 'files'"><Icon name="files" :size="13" /> Files</button>
-      <button class="ghost" :class="{ on: sidebarTab === 'scm' }" @click="sidebarTab = 'scm'">
+    <nav ref="nav" class="switcher">
+      <span class="tab-pill" :style="pill.style.value" />
+      <button class="ghost" :class="{ active: sidebarTab === 'files' }" @click="sidebarTab = 'files'"><Icon name="files" :size="13" /> Files</button>
+      <button class="ghost" :class="{ active: sidebarTab === 'scm' }" @click="sidebarTab = 'scm'">
         <Icon name="scm" :size="13" /> Source Control
         <span v-if="files.length" class="count">{{ files.length }}</span>
       </button>
@@ -33,6 +38,7 @@ const { files } = ws.status
   min-height: 0;
 }
 .switcher {
+  position: relative;
   display: flex;
   flex: none;
   gap: 4px;
@@ -52,10 +58,15 @@ const { files } = ws.status
   color: var(--fg-muted);
   font-size: 12px;
 }
-.switcher button.on {
-  background: var(--pill);
-  box-shadow: inset 0 0 0 1px var(--hover);
+.switcher button {
+  position: relative;
+  z-index: 1;
+}
+.switcher button.active {
   color: var(--fg);
+}
+.switcher button.active:hover {
+  background: transparent;
 }
 .count {
   padding: 0 5px;

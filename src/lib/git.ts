@@ -40,6 +40,13 @@ export interface Log {
   uncommitted: number
   hasMore: boolean
   stashes: Stash[]
+  remoteUrl: string | null
+}
+
+export interface Stat {
+  files: number
+  additions: number
+  deletions: number
 }
 
 export interface CommitDetails {
@@ -125,6 +132,7 @@ export const git = {
   fileDiff: (repo: string, opts: FileDiffOptions) => invoke<string>('get_file_diff', { repo, ...opts }),
   action: (repo: string, args: string[]) => invoke<string>('run_action', { repo, args }),
   status: (repo: string) => invoke<Status>('get_status', { repo }),
+  stats: (repo: string, hashes: string[]) => invoke<Record<string, Stat>>('get_stats', { repo, hashes }),
   statusDiff: (repo: string, file: StatusFile, staged: boolean) =>
     invoke<string>('get_status_diff', { repo, path: file.path, oldPath: file.oldPath, staged, untracked: file.kind === 'untracked' }),
   listFiles: (repo: string, rev: string | null) => invoke<string[]>('list_files', { repo, rev }),

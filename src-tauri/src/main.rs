@@ -2,6 +2,7 @@
 
 mod files;
 mod git;
+mod menu;
 mod pty;
 mod rebase;
 
@@ -12,6 +13,8 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(pty::Ptys::default())
+        .menu(menu::build)
+        .on_menu_event(|app, event| menu::forward(app, event.id().as_ref()))
         .invoke_handler(tauri::generate_handler![
             git::initial_repo,
             git::resolve_repo,
@@ -22,6 +25,7 @@ fn main() {
             git::run_action,
             git::get_status,
             git::get_status_diff,
+            git::get_stats,
             files::list_files,
             files::read_file,
             files::write_file,

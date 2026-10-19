@@ -61,10 +61,20 @@ pub struct Spawned {
 }
 
 #[tauri::command]
-pub fn pty_spawn(state: State<'_, Ptys>, cwd: String, cols: u16, rows: u16, on_event: Channel<PtyEvent>) -> Result<Spawned, String> {
+pub fn pty_spawn(
+    state: State<'_, Ptys>,
+    cwd: String,
+    cols: u16,
+    rows: u16,
+    shell: Option<String>,
+    on_event: Channel<PtyEvent>,
+) -> Result<Spawned, String> {
     let pair = native_pty_system().openpty(size(cols, rows)).map_err(|e| e.to_string())?;
 
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
+    // A shell chosen in settings wins over the login shell.
+    let shell = shell
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into()));
     let mut cmd = CommandBuilder::new(&shell);
     cmd.arg("-l");
     cmd.cwd(&cwd);

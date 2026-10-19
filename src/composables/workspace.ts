@@ -97,6 +97,12 @@ function closeOtherWorkspaces(id: number) {
   activate(id)
 }
 
+function moveWorkspace(from: number, to: number) {
+  const list = [...workspaces.value]
+  list.splice(to, 0, list.splice(from, 1)[0])
+  workspaces.value = list
+}
+
 function stepWorkspace(delta: number) {
   const list = workspaces.value
   const i = list.findIndex((w) => w.id === activeId.value)
@@ -119,5 +125,17 @@ async function pickRepo() {
 }
 
 export function useWorkspaces() {
-  return { workspaces, activeId, active, activate, addWorkspace, closeWorkspace, closeOtherWorkspaces, stepWorkspace, openInWorkspace, pickRepo }
+  return {
+    workspaces,
+    activeId,
+    active,
+    activate,
+    addWorkspace,
+    closeWorkspace,
+    closeOtherWorkspaces,
+    moveWorkspace,
+    stepWorkspace,
+    openInWorkspace,
+    pickRepo,
+  }
 }

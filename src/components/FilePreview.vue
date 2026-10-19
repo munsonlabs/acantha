@@ -4,6 +4,7 @@ import { openPath } from '@tauri-apps/plugin-opener'
 import { git, type Blame, type Commit, type FileContent } from '@/lib/git'
 import { tokenize, type Token } from '@/lib/highlight'
 import { compactDate, formatDate, nameHue, shortHash, splitPath } from '@/lib/format'
+import { displayDate } from '@/composables/dates'
 import type { PreviewView } from '@/composables/files'
 import { prefs } from '@/composables/prefs'
 import { openMenu } from '@/composables/useContextMenu'
@@ -15,6 +16,7 @@ import CodeView, { type BlameCell } from './CodeView.vue'
 import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
 import MarkdownView from './MarkdownView.vue'
+import Skeleton from './Skeleton.vue'
 
 const ws = useWorkspace()
 const { preview, dirty, open, closePreview } = ws.files
@@ -220,14 +222,14 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
       <p v-if="error" class="note error">{{ error }}</p>
 
       <template v-else-if="preview.view === 'history'">
-        <p v-if="!history" class="note">Loading…</p>
+        <Skeleton v-if="!history" :lines="6" :gap="18" />
         <p v-else-if="!history.length" class="note">No commits touch this file.</p>
         <ul v-else class="history">
           <li v-for="c in history" :key="c.hash" @click="historyDiff(c)">
             <span class="sha">{{ shortHash(c.hash) }}</span>
             <span class="subject">{{ c.subject }}</span>
             <span class="author">{{ c.author }}</span>
-            <span class="date" :title="formatDate(c.date)">{{ compactDate(c.date) }}</span>
+            <span class="date" :title="formatDate(c.date)">{{ displayDate(c.date) }}</span>
             <button class="ghost icon-btn" title="View the file at this commit" @click.stop="open(preview.path, 'preview', c.hash)">
               <Icon name="eye" :size="13" />
             </button>
@@ -235,7 +237,7 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
         </ul>
       </template>
 
-      <p v-else-if="!content" class="note">Loading…</p>
+      <Skeleton v-else-if="!content" :lines="14" />
       <p v-else-if="preview.view === 'edit' && content.kind !== 'text'" class="note">
         Only text files can be edited here. Use Open to edit it elsewhere.
       </p>
@@ -262,7 +264,7 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
         :rev="preview.rev"
         @open="(path) => open(path, 'preview', preview!.rev)"
       />
-      <p v-else-if="!tokens" class="note">Loading…</p>
+      <Skeleton v-else-if="!tokens" :lines="14" />
       <CodeView v-else :lines="tokens" :blame="preview.view === 'blame' ? blameCells : undefined" @commit="showCommit" />
     </div>
   </div>

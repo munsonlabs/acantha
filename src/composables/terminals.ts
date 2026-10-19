@@ -43,13 +43,19 @@ export function createTerminals({ repo }: Repo) {
     activeKey.value = sessions.value[(i + delta + n) % n].key
   }
 
+  function move(from: number, to: number) {
+    const list = [...sessions.value]
+    list.splice(to, 0, list.splice(from, 1)[0])
+    sessions.value = list
+  }
+
   function toggle() {
     open.value = !open.value
     prefs.terminalOpen.value = open.value
     if (open.value && !sessions.value.length) add()
   }
 
-  return { sessions, activeKey, open, add, close, closeActive, step, toggle }
+  return { sessions, activeKey, open, add, close, closeActive, step, move, toggle }
 }
 
 export type Terminals = ReturnType<typeof createTerminals>

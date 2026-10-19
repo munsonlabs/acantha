@@ -1,10 +1,25 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
+import { useSlidingPill, useTabDrag } from '@/composables/tabs'
 import { useWorkspace } from '@/composables/workspace'
 import Icon from './Icon.vue'
 import TerminalView from './TerminalView.vue'
 
 defineProps<{ visible: boolean }>()
-const { sessions, activeKey, add, close, toggle } = useWorkspace().terminals
+const { sessions, activeKey, add, close, move, toggle } = useWorkspace().terminals
+const strip = ref<HTMLElement>()
+
+const pill = useSlidingPill(strip, () => [activeKey.value, sessions.value.map((s) => `${s.key}:${s.title}`)])
+const { dragging, onPointerDown } = useTabDrag(strip, move)
+
+/** Terminals render in creation order, so reordering tabs never moves (and disturbs) a live terminal. */
+const views = computed(() => [...sessions.value].sort((a, b) => a.key - b.key))
+
+function onTabDown(e: PointerEvent, key: number, index: number) {
+  if (e.button !== 0) return
+  activeKey.value = key
+  onPointerDown(e, index)
+}
 
 /** Numbers tabs that would otherwise share a name, like "zsh" and "zsh 2". */
 const label = (i: number) => {
@@ -17,14 +32,15 @@ const label = (i: number) => {
 <template>
   <section class="pane terminal-pane">
     <header class="pane-header">
-      <div class="tabs">
+      <div ref="strip" class="tabs pilled">
+        <span class="tab-pill" :style="pill.style.value" />
         <div
           v-for="(s, i) in sessions"
           :key="s.key"
           class="tab"
-          :class="{ active: s.key === activeKey }"
+          :class="{ active: s.key === activeKey, dragging: dragging === i }"
           :title="s.cwd"
-          @mousedown.left="activeKey = s.key"
+          @pointerdown="onTabDown($event, s.key, i)"
           @auxclick.middle="close(s.key)"
         >
           <Icon name="terminal" :size="13" />
@@ -38,7 +54,7 @@ const label = (i: number) => {
     </header>
     <div class="terminal-body">
       <TerminalView
-        v-for="s in sessions"
+        v-for="s in views"
         v-show="s.key === activeKey"
         :key="s.key"
         :session="s"
@@ -56,6 +72,7 @@ const label = (i: number) => {
   flex-direction: column;
 }
 .tabs {
+  position: relative;
   display: flex;
   gap: 2px;
   min-width: 0;

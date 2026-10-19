@@ -18,12 +18,23 @@ A standalone desktop take on the VS Code Git Graph extension, built with Tauri 2
 - Watches the working tree while the window is focused, so changes made in the terminal or an editor show up
 - Open a repo from the toolbar, by dropping its folder onto the window, or from the command line
 
+## Interface
+
+- Relative dates ("3h ago"), author pictures from GitHub or Gravatar, and a lines-changed column
+- Hover a commit for a card with its message, files and a link to the commit online; hovering also highlights its branch line
+- A command palette (⌘P) for commands, branches, files, commits and recent repositories
+- Settings (⌘,), a native menu bar, and a shortcuts sheet (⌘/)
+- Tabs with a sliding highlight, reordered by dragging
+
 ## Shortcuts
 
 | Keys          | Action                                              |
 | ------------- | --------------------------------------------------- |
 | ⌘T / ⌘W       | New tab / close tab (or the terminal, when focused) |
 | ⌘1–9, ⌘⇧[ ⌘⇧] | Switch tabs                                         |
+| ⌘P            | Command palette                                     |
+| ⌘,            | Settings                                            |
+| ⌘/            | Keyboard shortcuts                                  |
 | ⌘B            | Show or hide the source control sidebar             |
 | ⌘↵            | Commit (in the message box)                         |
 | ⌘J            | Show or hide the terminal                           |

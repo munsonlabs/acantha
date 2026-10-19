@@ -12,6 +12,12 @@ export const prefs = {
   sidebarOpen: usePersisted('sidebar-open', true),
   workspaces: usePersisted<string[]>('workspaces', []),
   editorVim: usePersisted('editor-vim', false),
+  dateStyle: usePersisted<'relative' | 'absolute'>('date-style', 'relative'),
+  /** Author pictures from GitHub and Gravatar. Gravatar gets a hash of the email, never the address. */
+  avatars: usePersisted('avatars', true),
+  terminalFontSize: usePersisted('terminal-font-size', 12.5),
+  /** Shell for new terminals. Empty means the login shell. */
+  shell: usePersisted('shell', ''),
   /** App used by "Open in Editor". Empty means the system default for the file type. */
   externalEditor: usePersisted('external-editor', ''),
 }

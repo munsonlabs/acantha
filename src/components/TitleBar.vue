@@ -3,10 +3,12 @@ import { computed, ref } from 'vue'
 import { basename } from '@/lib/format'
 import { useWorkspaces, type Workspace } from '@/composables/workspace'
 import { openMenu } from '@/composables/useContextMenu'
+import { useSlidingPill, useTabDrag } from '@/composables/tabs'
 import Icon from './Icon.vue'
 
-const { workspaces, activeId, active, activate, addWorkspace, closeWorkspace, closeOtherWorkspaces } = useWorkspaces()
+const { workspaces, activeId, active, activate, addWorkspace, closeWorkspace, closeOtherWorkspaces, moveWorkspace } = useWorkspaces()
 const input = ref<HTMLInputElement>()
+const strip = ref<HTMLElement>()
 
 const search = computed(() => active.value?.search ?? null)
 const query = computed({
@@ -17,6 +19,15 @@ const query = computed({
 })
 
 const label = (ws: Workspace) => (ws.repo.repo.value ? basename(ws.repo.repo.value) : 'New Tab')
+
+const pill = useSlidingPill(strip, () => [activeId.value, workspaces.value.map((w) => `${w.id}:${label(w)}:${w.repo.log.value?.headBranch ?? ''}`)])
+const { dragging, onPointerDown } = useTabDrag(strip, moveWorkspace)
+
+function onTabDown(e: PointerEvent, ws: Workspace, index: number) {
+  if (e.button !== 0) return
+  activate(ws.id)
+  onPointerDown(e, index)
+}
 
 function tabMenu(e: MouseEvent, ws: Workspace) {
   openMenu(e, [
@@ -40,14 +51,15 @@ defineExpose({ focusSearch: () => input.value?.select() })
 
 <template>
   <header class="titlebar" data-tauri-drag-region>
-    <div class="tabs" data-tauri-drag-region>
+    <div ref="strip" class="tabs pilled" data-tauri-drag-region>
+      <span class="tab-pill" :style="pill.style.value" />
       <div
-        v-for="ws in workspaces"
+        v-for="(ws, i) in workspaces"
         :key="ws.id"
         class="tab"
-        :class="{ active: ws.id === activeId }"
+        :class="{ active: ws.id === activeId, dragging: dragging === i }"
         :title="ws.repo.repo.value ?? undefined"
-        @mousedown.left="activate(ws.id)"
+        @pointerdown="onTabDown($event, ws, i)"
         @auxclick.middle="closeWorkspace(ws.id)"
         @contextmenu.prevent="tabMenu($event, ws)"
       >
@@ -77,6 +89,7 @@ defineExpose({ focusSearch: () => input.value?.select() })
   padding: 0 10px 0 84px;
 }
 .tabs {
+  position: relative;
   display: flex;
   flex: 1;
   align-items: center;

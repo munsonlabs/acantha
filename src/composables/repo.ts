@@ -1,5 +1,5 @@
 import { computed, ref, shallowRef } from 'vue'
-import { git, UNCOMMITTED, type Commit, type GitRef, type Log } from '@/lib/git'
+import { git, UNCOMMITTED, type Commit, type GitRef, type Log, type Stat } from '@/lib/git'
 import { layoutGraph } from '@/lib/graph'
 import { addRecent, prefs } from './prefs'
 import { showToast } from './useToast'
@@ -21,6 +21,8 @@ export function createRepo() {
   const branches = ref<string[]>([])
   const showRemotes = prefs.showRemotes
   const showStashes = prefs.showStashes
+  /** Lines changed per commit, filled in after the graph loads. Commits never change, so it only grows. */
+  const stats = shallowRef(new Map<string, Stat>())
 
   const rows = computed<Commit[]>(() => {
     const l = log.value
@@ -88,7 +90,10 @@ export function createRepo() {
     const seq = ++reloadSeq
     try {
       const result = await git.log(repo.value, { limit: limit.value, branches: branches.value, showRemotes: showRemotes.value })
-      if (seq === reloadSeq) log.value = result
+      if (seq === reloadSeq) {
+        log.value = result
+        void loadStats(repo.value, result.commits)
+      }
     } catch (e) {
       if (seq !== reloadSeq) return
       // The filtered branch may have been deleted or renamed.
@@ -97,6 +102,20 @@ export function createRepo() {
         return reload()
       }
       showToast(String(e), 'error')
+    }
+  }
+
+  async function loadStats(root: string, commits: Commit[]) {
+    const missing = commits.map((c) => c.hash).filter((h) => !stats.value.has(h))
+    if (!missing.length) return
+    try {
+      const found = await git.stats(root, missing)
+      if (root !== repo.value) return
+      const next = new Map(stats.value)
+      for (const [hash, stat] of Object.entries(found)) next.set(hash, stat)
+      stats.value = next
+    } catch {
+      // Stats are a nicety; the graph works without them.
     }
   }
 
@@ -111,6 +130,7 @@ export function createRepo() {
     }
     repo.value = root
     log.value = null
+    stats.value = new Map()
     limit.value = PAGE
     branches.value = []
     addRecent(root)
@@ -149,7 +169,23 @@ export function createRepo() {
     await reload()
   }
 
-  return { repo, log, rows, layout, refsByHash, branches, showRemotes, showStashes, reload, openRepo, setBranches, setShowRemotes, loadMore, run }
+  return {
+    repo,
+    log,
+    rows,
+    layout,
+    refsByHash,
+    stats,
+    branches,
+    showRemotes,
+    showStashes,
+    reload,
+    openRepo,
+    setBranches,
+    setShowRemotes,
+    loadMore,
+    run,
+  }
 }
 
 export type Repo = ReturnType<typeof createRepo>

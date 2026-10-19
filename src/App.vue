@@ -1,24 +1,27 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import type { UnlistenFn } from '@tauri-apps/api/event'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { git } from '@/lib/git'
 import { basename } from '@/lib/format'
+import { activateTabNumber, overlays, runCommand } from '@/composables/commands'
 import { prefs } from '@/composables/prefs'
 import { useWorkspaces } from '@/composables/workspace'
 import { closeDialog, useDialog } from '@/composables/useDialog'
 import { useContextMenu } from '@/composables/useContextMenu'
+import CommandPalette from '@/components/CommandPalette.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
 import PromptDialog from '@/components/PromptDialog.vue'
+import SettingsModal from '@/components/SettingsModal.vue'
+import ShortcutsModal from '@/components/ShortcutsModal.vue'
 import StatusBar from '@/components/StatusBar.vue'
 import TitleBar from '@/components/TitleBar.vue'
 import ToastMessage from '@/components/ToastMessage.vue'
 import WorkspaceView from '@/components/WorkspaceView.vue'
 
-const { workspaces, activeId, active, activate, addWorkspace, closeWorkspace, stepWorkspace, openInWorkspace, pickRepo } = useWorkspaces()
+const { workspaces, activeId, active, activate, addWorkspace, closeWorkspace, openInWorkspace } = useWorkspaces()
 const { current: dialog } = useDialog()
 const { menu, closeMenu } = useContextMenu()
-const titlebar = ref<InstanceType<typeof TitleBar>>()
 const appWindow = getCurrentWindow()
 const unlisten: UnlistenFn[] = []
 
@@ -27,7 +30,19 @@ watch(
   (r) => appWindow.setTitle(r ? `${basename(r)} · Git Graph` : 'Git Graph').catch(() => {}),
 )
 
-const inTerminal = (el: Element | null) => !!el?.closest('.terminal-pane')
+/** ⌘ + key → command. The native menu sends most of these too; `runCommand` ignores the duplicate. */
+const KEYS: Record<string, string> = {
+  t: 'new-tab',
+  o: 'open-repo',
+  w: 'close',
+  b: 'toggle-sidebar',
+  j: 'toggle-terminal',
+  r: 'refresh',
+  p: 'palette',
+  ',': 'settings',
+  '/': 'shortcuts',
+  f: 'find',
+}
 
 function onKeydown(e: KeyboardEvent) {
   const ws = active.value
@@ -39,39 +54,21 @@ function onKeydown(e: KeyboardEvent) {
 
   if (e.ctrlKey && e.shiftKey && e.code === 'Backquote') {
     e.preventDefault()
-    ws?.terminals.add()
+    runCommand('new-terminal')
   } else if (e.metaKey && /^[1-9]$/.test(e.key)) {
     e.preventDefault()
-    const target = e.key === '9' ? workspaces.value.at(-1) : workspaces.value[Number(e.key) - 1]
-    if (target) activate(target.id)
+    activateTabNumber(Number(e.key))
   } else if (e.metaKey && e.shiftKey && (e.key === '[' || e.key === '{' || e.key === ']' || e.key === '}')) {
     e.preventDefault()
-    stepWorkspace(e.key === '[' || e.key === '{' ? -1 : 1)
-  } else if (mod && key === 't') {
+    runCommand(e.key === '[' || e.key === '{' ? 'prev-tab' : 'next-tab')
+  } else if (mod && !e.shiftKey && !e.altKey && KEYS[key] && !(key === 'f' && inEditor)) {
     e.preventDefault()
-    void addWorkspace()
-  } else if (mod && key === 'w') {
-    e.preventDefault()
-    if (ws && inTerminal(document.activeElement)) ws.terminals.closeActive()
-    else if (ws) void closeWorkspace(ws.id)
-  } else if (mod && key === 'b') {
-    e.preventDefault()
-    prefs.sidebarOpen.value = !prefs.sidebarOpen.value
-  } else if (mod && key === 'j') {
-    e.preventDefault()
-    if (ws?.repo.repo.value) ws.terminals.toggle()
-  } else if (mod && key === 'f' && ws?.repo.repo.value && !inEditor) {
-    e.preventDefault()
-    titlebar.value?.focusSearch()
-  } else if (mod && key === 'r') {
-    e.preventDefault()
-    void ws?.repo.reload()
-  } else if (mod && key === 'o') {
-    e.preventDefault()
-    void pickRepo()
+    runCommand(KEYS[key])
   } else if (e.key === 'Escape') {
     if (inEditor) return
     if (dialog.value) closeDialog(null)
+    else if (overlays.settings.value) overlays.settings.value = false
+    else if (overlays.shortcuts.value) overlays.shortcuts.value = false
     else if (ws?.diff.diff.value) ws.diff.closeDiff()
     else if (ws?.ui.conflict.value) ws.ui.conflict.value = null
     else if (ws?.ui.rebase.value) ws.ui.rebase.value = null
@@ -101,6 +98,8 @@ onMounted(async () => {
         void active.value?.repo.reload()
       }
     }),
+    // Clicks and shortcuts from the native menu bar.
+    await listen<string>('menu', ({ payload }) => runCommand(payload)),
     await appWindow.onDragDropEvent(({ payload }) => {
       if (payload.type === 'drop' && payload.paths[0]) void openInWorkspace(payload.paths[0])
     }),
@@ -132,10 +131,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <TitleBar ref="titlebar" />
+  <TitleBar />
   <WorkspaceView v-for="ws in workspaces" :key="ws.id" :ws="ws" :visible="ws.id === activeId" />
   <StatusBar />
   <ContextMenu />
+  <CommandPalette />
+  <SettingsModal />
+  <ShortcutsModal />
   <PromptDialog />
   <ToastMessage />
 </template>

@@ -4,6 +4,7 @@ import { shortHash } from '@/lib/format'
 import { useWorkspace } from '@/composables/workspace'
 import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
+import Skeleton from './Skeleton.vue'
 
 const ws = useWorkspace()
 const { rev, list, loading, filter, expanded, preview, load, browse, toggle, open } = ws.files
@@ -83,7 +84,7 @@ watch(status, (now, before) => {
       <input v-model="filter" type="text" placeholder="Filter files" spellcheck="false" autocomplete="off" />
     </div>
     <div class="tree">
-      <p v-if="loading && !list.length" class="note">Loading…</p>
+      <Skeleton v-if="loading && !list.length" :lines="10" />
       <p v-else-if="!visible.length" class="note">No files</p>
       <div
         v-for="r in visible"

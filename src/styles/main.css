@@ -203,6 +203,42 @@ dd {
   color: var(--fg);
 }
 
+/* With a sliding pill, the pill is the active background and the tabs sit on top of it. */
+.pilled > .tab {
+  position: relative;
+  z-index: 1;
+}
+
+.pilled > .tab.active {
+  background: transparent;
+  box-shadow: none;
+}
+
+.tab.dragging {
+  opacity: 0.6;
+}
+
+.tab-pill {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 28px;
+  margin-top: -14px;
+  border-radius: 7px;
+  background: var(--pill);
+  box-shadow: inset 0 0 0 1px var(--hover);
+  pointer-events: none;
+  transition:
+    transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.15s;
+}
+
+.pane-header .tab-pill {
+  height: 26px;
+  margin-top: -13px;
+}
+
 .tab-close {
   display: grid;
   place-items: center;

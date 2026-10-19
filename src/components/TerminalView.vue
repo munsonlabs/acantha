@@ -7,6 +7,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import '@xterm/xterm/css/xterm.css'
 import { pty } from '@/lib/pty'
+import { prefs } from '@/composables/prefs'
 import type { TerminalSession } from '@/composables/terminals'
 import { showToast } from '@/composables/useToast'
 
@@ -55,7 +56,7 @@ onMounted(async () => {
 
   term = new Terminal({
     fontFamily: '"JetBrains Mono", ui-monospace, Menlo, monospace',
-    fontSize: 12.5,
+    fontSize: prefs.terminalFontSize.value,
     lineHeight: 1.3,
     cursorBlink: true,
     cursorStyle: 'bar',
@@ -86,7 +87,7 @@ onMounted(async () => {
   })
 
   try {
-    const { id, shell } = await pty.spawn(props.session.cwd, term.cols, term.rows, (e) => {
+    const { id, shell } = await pty.spawn(props.session.cwd, term.cols, term.rows, prefs.shell.value || null, (e) => {
       if (e.type === 'data') term?.write(e.data)
       else emit('exit')
     })
@@ -105,6 +106,12 @@ onMounted(async () => {
   observer.observe(el.value!)
   scheme.addEventListener('change', updateTheme)
   if (props.active) term.focus()
+})
+
+watch(prefs.terminalFontSize, (size) => {
+  if (!term) return
+  term.options.fontSize = size
+  fitNow()
 })
 
 watch(

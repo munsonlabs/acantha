@@ -62,6 +62,16 @@ pub struct Log {
     uncommitted: usize,
     has_more: bool,
     stashes: Vec<Stash>,
+    /// The first remote's URL, to link commits to their web page.
+    remote_url: Option<String>,
+}
+
+#[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Stat {
+    files: u32,
+    additions: u32,
+    deletions: u32,
 }
 
 #[derive(Serialize)]
@@ -445,7 +455,8 @@ pub async fn get_log(repo: String, limit: usize, branches: Vec<String>, show_rem
             "refs/tags",
         ],
     )?);
-    let remotes = git(&repo, ["remote"])?.lines().map(String::from).collect();
+    let remotes: Vec<String> = git(&repo, ["remote"])?.lines().map(String::from).collect();
+    let remote_url = remotes.first().and_then(|r| trimmed(git(&repo, ["remote", "get-url", r.as_str()])));
     let uncommitted = git(&repo, ["status", "--porcelain", "--untracked-files=all"])?.lines().count();
 
     let mut commits = Vec::new();
@@ -476,6 +487,7 @@ pub async fn get_log(repo: String, limit: usize, branches: Vec<String>, show_rem
     let has_more = commits.len() > limit;
     commits.truncate(limit);
     Ok(Log {
+        remote_url,
         commits,
         refs,
         remotes,
@@ -485,6 +497,58 @@ pub async fn get_log(repo: String, limit: usize, branches: Vec<String>, show_rem
         has_more,
         stashes,
     })
+}
+
+/// Parses the summary line of `--shortstat`, e.g. " 3 files changed, 10 insertions(+), 2 deletions(-)".
+fn parse_shortstat(line: &str) -> Stat {
+    let mut stat = Stat::default();
+    for part in line.split(',') {
+        let n = part.split_whitespace().next().and_then(|n| n.parse().ok()).unwrap_or(0);
+        if part.contains("file") {
+            stat.files = n;
+        } else if part.contains("insertion") {
+            stat.additions = n;
+        } else if part.contains("deletion") {
+            stat.deletions = n;
+        }
+    }
+    stat
+}
+
+/// Lines added and removed per commit. Loaded after the log so the graph shows up first. Merges have no stat.
+#[tauri::command]
+pub async fn get_stats(repo: String, hashes: Vec<String>) -> Result<HashMap<String, Stat>, String> {
+    use std::io::Write;
+    use std::process::Stdio;
+    if hashes.is_empty() {
+        return Ok(HashMap::new());
+    }
+    // Hashes go in on stdin, since a long list would overflow the command line.
+    let mut child = command(&repo)
+        .args(["log", "--no-walk=unsorted", "--stdin", "--shortstat", "--format=%x1e%H"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to run git: {e}"))?;
+    child
+        .stdin
+        .take()
+        .ok_or("no stdin")?
+        .write_all(hashes.join("\n").as_bytes())
+        .map_err(|e| e.to_string())?;
+    let out = child.wait_with_output().map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(stderr_or_code(&out));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .split('\x1e')
+        .filter_map(|record| {
+            let mut lines = record.lines().filter(|l| !l.trim().is_empty());
+            let hash = lines.next()?.trim().to_string();
+            Some((hash, lines.next().map(parse_shortstat).unwrap_or_default()))
+        })
+        .collect())
 }
 
 #[tauri::command]
@@ -656,6 +720,11 @@ mod tests {
         ))
         .unwrap();
         assert!(diff.contains("+x"));
+
+        let stats = block_on(get_stats(repo.clone(), log.commits.iter().map(|c| c.hash.clone()).collect())).unwrap();
+        let first = &stats[&log.commits[2].hash];
+        assert_eq!((first.files, first.additions, first.deletions), (1, 1, 0));
+        assert_eq!(stats[&log.commits[0].hash].files, 0, "merges have no stat");
 
         let status = block_on(get_status(repo.clone())).unwrap();
         assert_eq!(status.branch.as_deref(), Some("main"));

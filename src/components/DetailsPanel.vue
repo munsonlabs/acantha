@@ -6,6 +6,7 @@ import { prefs } from '@/composables/prefs'
 import { useWorkspace } from '@/composables/workspace'
 import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
+import Skeleton from './Skeleton.vue'
 
 const ws = useWorkspace()
 const { details, select, closeDetails } = ws.details
@@ -96,6 +97,7 @@ const open = (f: FileChange) => openDiff(f, details.value!.from, details.value!.
             ><span class="add">+{{ totals.add }}</span> <span class="del">−{{ totals.del }}</span></span
           >
         </div>
+        <Skeleton v-if="details.loading" :lines="5" :gap="14" />
         <ul>
           <li v-for="f in details.files" :key="f.path" :title="STATUS[f.status] ?? f.status" @click="open(f)">
             <span class="status" :class="`s-${f.status === '?' ? 'U' : f.status}`">{{ f.status === '?' ? 'U' : f.status }}</span>
