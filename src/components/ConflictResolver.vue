@@ -4,6 +4,7 @@ import { git } from '@/lib/git'
 import { parseConflicts, resolvedLines, serialize, type ConflictBlock, type Resolution, type Segment } from '@/lib/conflicts'
 import { useWorkspace } from '@/composables/workspace'
 import { showToast } from '@/composables/useToast'
+import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
 
 const ws = useWorkspace()
@@ -67,6 +68,7 @@ const close = () => (conflict.value = null)
       <header>
         <h2>
           <Icon name="warning" :size="14" />
+          <FileIcon :path="conflict.path" />
           <span class="mono">{{ conflict.path }}</span>
         </h2>
         <span class="progress">{{ resolved }} of {{ blocks.length }} resolved</span>

@@ -6,6 +6,7 @@ import { compactDate, formatDate, nameHue, shortHash, splitPath } from '@/lib/fo
 import type { PreviewView } from '@/composables/files'
 import { useWorkspace } from '@/composables/workspace'
 import CodeView, { type BlameCell } from './CodeView.vue'
+import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
 import MarkdownView from './MarkdownView.vue'
 
@@ -98,6 +99,7 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
   <div v-if="preview" class="preview">
     <header class="pane-header">
       <button class="ghost icon-btn" title="Back to history (Esc)" @click="closePreview"><Icon name="history" /></button>
+      <FileIcon :path="preview.path" />
       <span class="path" :title="preview.path">
         <span class="dir">{{ crumbs.dir }}</span
         ><span class="name">{{ crumbs.name }}</span>

@@ -2,6 +2,7 @@
 import { computed, onMounted, watch } from 'vue'
 import { shortHash } from '@/lib/format'
 import { useWorkspace } from '@/composables/workspace'
+import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
 
 const ws = useWorkspace()
@@ -94,7 +95,7 @@ watch(status, (now, before) => {
         @click="r.kind === 'dir' ? toggle(r.path) : open(r.path)"
       >
         <Icon v-if="r.kind === 'dir'" name="chevron" :size="11" class="chev" :class="{ open: expanded.has(r.path) }" />
-        <Icon :name="r.kind === 'dir' ? 'folder' : 'file'" :size="13" class="kind" />
+        <FileIcon :path="r.path" :folder="r.kind === 'dir'" :open="expanded.has(r.path)" />
         <span class="name">{{ r.name }}</span>
       </div>
     </div>
@@ -179,12 +180,6 @@ watch(status, (now, before) => {
 }
 .row.file .chev {
   display: none;
-}
-.kind {
-  color: var(--fg-faint);
-}
-.row.dir .kind {
-  color: var(--fg-muted);
 }
 .name {
   overflow: hidden;

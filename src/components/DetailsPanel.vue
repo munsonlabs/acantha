@@ -4,6 +4,7 @@ import type { FileChange } from '@/lib/git'
 import { formatDate, shortHash, splitPath } from '@/lib/format'
 import { prefs } from '@/composables/prefs'
 import { useWorkspace } from '@/composables/workspace'
+import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
 
 const ws = useWorkspace()
@@ -98,6 +99,7 @@ const open = (f: FileChange) => openDiff(f, details.value!.from, details.value!.
         <ul>
           <li v-for="f in details.files" :key="f.path" :title="STATUS[f.status] ?? f.status" @click="open(f)">
             <span class="status" :class="`s-${f.status === '?' ? 'U' : f.status}`">{{ f.status === '?' ? 'U' : f.status }}</span>
+            <FileIcon :path="f.path" />
             <span class="path">
               <span class="dir">{{ splitPath(f.path).dir }}</span
               >{{ splitPath(f.path).name }}

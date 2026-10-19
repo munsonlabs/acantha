@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useWorkspace } from '@/composables/workspace'
+import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
 
 const { diff, closeDiff } = useWorkspace().diff
@@ -9,6 +10,7 @@ const { diff, closeDiff } = useWorkspace().diff
   <div v-if="diff" class="overlay" @mousedown.self="closeDiff">
     <div class="modal" role="dialog" aria-modal="true">
       <header>
+        <FileIcon :path="diff.file.path" />
         <h2 class="mono">
           {{ diff.file.path }}<span v-if="diff.file.oldPath" class="muted"> ← {{ diff.file.oldPath }}</span>
           <span v-if="diff.label" class="label">{{ diff.label }}</span>

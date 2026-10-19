@@ -4,6 +4,7 @@ import type { StatusFile } from '@/lib/git'
 import { splitPath } from '@/lib/format'
 import { openMenu } from '@/composables/useContextMenu'
 import { useWorkspace } from '@/composables/workspace'
+import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
 
 const props = defineProps<{ title: string; files: StatusFile[]; mode: 'staged' | 'unstaged' | 'conflict' }>()
@@ -77,6 +78,7 @@ function menu(e: MouseEvent, f: StatusFile) {
         @click="openFile(f)"
         @contextmenu.prevent="menu($event, f)"
       >
+        <FileIcon :path="f.path" />
         <span class="name">{{ splitPath(f.path).name }}</span>
         <span class="dir">{{ splitPath(f.path).dir.replace(/\/$/, '') }}</span>
         <div class="actions" @click.stop>
@@ -141,7 +143,7 @@ li {
   align-items: center;
   gap: 6px;
   height: 26px;
-  padding: 0 6px 0 22px;
+  padding: 0 6px 0 20px;
   border-radius: 6px;
   font-size: 12.5px;
 }
