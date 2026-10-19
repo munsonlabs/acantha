@@ -64,6 +64,7 @@ function tabMenu(e: MouseEvent, ws: Workspace) {
   const items: MenuEntry[] = []
   if (path) {
     items.push(
+      { header: basename(path), detail: path.replace(/^\/Users\/[^/]+/, '~') },
       {
         swatches: [...TAB_COLORS.map((c) => ({ color: c.value, name: c.name })), { color: null, name: 'No colour' }],
         selected: colorOf(ws),
@@ -72,12 +73,12 @@ function tabMenu(e: MouseEvent, ws: Workspace) {
       'separator',
     )
   }
-  items.push({ label: 'New Tab', run: () => addWorkspace() })
+  items.push({ label: 'New Tab', icon: 'plus', shortcut: '⌘T', run: () => addWorkspace() })
   if (path) items.push('separator', ...folderOpenItems(path, () => ws.terminals.add()))
   items.push(
     'separator',
-    { label: 'Close Tab', run: () => closeWorkspace(ws.id) },
-    { label: 'Close Other Tabs', disabled: workspaces.value.length < 2, run: () => closeOtherWorkspaces(ws.id) },
+    { label: 'Close Tab', icon: 'x', shortcut: '⌘W', run: () => closeWorkspace(ws.id) },
+    { label: 'Close Other Tabs', icon: 'x', disabled: workspaces.value.length < 2, run: () => closeOtherWorkspaces(ws.id) },
   )
   openMenu(e, items)
 }

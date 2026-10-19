@@ -59,12 +59,9 @@ const visible = computed<Row[]>(() => {
 
 function rowMenu(e: MouseEvent, r: Row) {
   const root = ws.repo.repo.value!
-  if (r.kind === 'dir')
-    return openMenu(
-      e,
-      folderOpenItems(`${root}/${r.path}`, () => ws.terminals.add(`${root}/${r.path}`)),
-    )
-  openMenu(e, [{ label: 'Preview', run: () => open(r.path) }, 'separator', ...fileOpenItems(root, r.path)])
+  const header = { header: r.path.split('/').pop()!, detail: r.path }
+  if (r.kind === 'dir') return openMenu(e, [header, ...folderOpenItems(`${root}/${r.path}`, () => ws.terminals.add(`${root}/${r.path}`))])
+  openMenu(e, [header, { label: 'Preview', icon: 'eye', run: () => open(r.path) }, 'separator', ...fileOpenItems(root, r.path)])
 }
 
 const subject = computed(() => rows.value.find((c) => c.hash === rev.value)?.subject)

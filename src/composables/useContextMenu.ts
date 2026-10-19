@@ -1,8 +1,12 @@
 import { shallowRef } from 'vue'
+import type { IconName } from '@/lib/icons'
 
 export interface MenuItem {
   label: string
   run: () => unknown
+  icon?: IconName
+  /** A keyboard shortcut to show beside the label, e.g. "⌘T". */
+  shortcut?: string
   disabled?: boolean
   danger?: boolean
 }
@@ -14,7 +18,13 @@ export interface MenuSwatches {
   pick: (color: string | null) => void
 }
 
-export type MenuEntry = MenuItem | MenuSwatches | 'separator'
+/** A title at the top of a menu saying what it's for: a commit, branch or file. */
+export interface MenuHeader {
+  header: string
+  detail?: string
+}
+
+export type MenuEntry = MenuItem | MenuSwatches | MenuHeader | 'separator'
 
 const menu = shallowRef<{ x: number; y: number; items: MenuEntry[] } | null>(null)
 

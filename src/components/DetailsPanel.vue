@@ -65,7 +65,8 @@ const open = (f: FileChange) => openDiff(f, shown.value!.from, shown.value!.to)
 /** The working copy is what opens, so a file this commit deleted can't be. */
 const fileMenu = (e: MouseEvent, f: FileChange) =>
   openMenu(e, [
-    { label: 'Open Changes', run: () => open(f) },
+    { header: splitPath(f.path).name, detail: f.path },
+    { label: 'Open Changes', icon: 'eye', run: () => open(f) },
     'separator',
     ...fileOpenItems(ws.repo.repo.value!, f.path, { exists: f.status !== 'D' }),
   ])

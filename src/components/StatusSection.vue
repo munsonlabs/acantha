@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import type { StatusFile } from '@/lib/git'
 import { splitPath } from '@/lib/format'
-import { openMenu } from '@/composables/useContextMenu'
+import { openMenu, type MenuItem } from '@/composables/useContextMenu'
 import { fileOpenItems } from '@/composables/openers'
 import { useWorkspace } from '@/composables/workspace'
 import FileIcon from './FileIcon.vue'
@@ -38,12 +38,21 @@ function letter(f: StatusFile) {
 
 function menu(e: MouseEvent, f: StatusFile) {
   openMenu(e, [
-    { label: props.mode === 'conflict' ? 'Resolve Conflicts…' : 'Open Changes', run: () => openFile(f) },
+    { header: splitPath(f.path).name, detail: f.path },
+    {
+      label: props.mode === 'conflict' ? 'Resolve Conflicts…' : 'Open Changes',
+      icon: props.mode === 'conflict' ? 'warning' : 'eye',
+      run: () => openFile(f),
+    },
     'separator',
     props.mode === 'staged'
-      ? { label: 'Unstage', run: () => unstage([f]) }
-      : { label: props.mode === 'conflict' ? 'Mark as Resolved' : 'Stage', run: () => stage([f]) },
-    ...(props.mode === 'unstaged' ? [{ label: 'Discard Changes…', danger: true, run: () => discard([f]) }] : []),
+      ? { label: 'Unstage', icon: 'minus', run: () => unstage([f]) }
+      : {
+          label: props.mode === 'conflict' ? 'Mark as Resolved' : 'Stage',
+          icon: props.mode === 'conflict' ? 'check' : 'plus',
+          run: () => stage([f]),
+        },
+    ...(props.mode === 'unstaged' ? [{ label: 'Discard Changes…', icon: 'trash', danger: true, run: () => discard([f]) } satisfies MenuItem] : []),
     'separator',
     // A deleted file has nothing on disk to open.
     ...fileOpenItems(ws.repo.repo.value!, f.path, { exists: f.worktree !== 'D' && !(f.index === 'D' && f.worktree === '.') }),

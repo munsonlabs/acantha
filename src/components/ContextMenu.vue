@@ -1,13 +1,21 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { useContextMenu, type MenuItem } from '@/composables/useContextMenu'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { useContextMenu, type MenuEntry, type MenuItem } from '@/composables/useContextMenu'
+import Icon from './Icon.vue'
 
 const { menu, closeMenu } = useContextMenu()
 const el = ref<HTMLElement>()
 const pos = ref({ left: 0, top: 0 })
+/** The highlighted item, by index into the menu's entries, for the mouse and the arrow keys alike. */
+const active = ref(-1)
 
-// Keep the menu on screen once its size is known.
+const isItem = (entry: MenuEntry): entry is MenuItem => typeof entry === 'object' && 'run' in entry
+const choosable = computed(() => (menu.value?.items ?? []).flatMap((entry, i) => (isItem(entry) && !entry.disabled ? [i] : [])))
+const hasIcons = computed(() => (menu.value?.items ?? []).some((entry) => isItem(entry) && entry.icon))
+
+// Keep the menu on screen once its size is known, and take focus so the arrow keys work.
 watch(menu, async (m) => {
+  active.value = -1
   if (!m) return
   pos.value = { left: m.x, top: m.y }
   await nextTick()
@@ -16,12 +24,25 @@ watch(menu, async (m) => {
     left: Math.max(4, Math.min(m.x, window.innerWidth - rect.width - 4)),
     top: Math.max(4, Math.min(m.y, window.innerHeight - rect.height - 4)),
   }
+  el.value?.focus({ preventScroll: true })
 })
 
 function choose(item: MenuItem) {
   if (item.disabled) return
   closeMenu()
-  item.run()
+  void item.run()
+}
+
+function onKey(e: KeyboardEvent) {
+  const list = choosable.value
+  if (!list.length) return
+  const at = list.indexOf(active.value)
+  if (e.key === 'ArrowDown') active.value = list[(at + 1) % list.length]
+  else if (e.key === 'ArrowUp') active.value = list[(at - 1 + list.length) % list.length]
+  else if (e.key === 'Enter' && active.value !== -1) choose(menu.value!.items[active.value] as MenuItem)
+  else return
+  e.preventDefault()
+  e.stopPropagation()
 }
 
 const onDown = (e: MouseEvent) => {
@@ -37,21 +58,47 @@ onBeforeUnmount(() => {
 
 <template>
   <Transition name="pop">
-    <div v-if="menu" ref="el" class="menu" :style="{ left: `${pos.left}px`, top: `${pos.top}px` }" @contextmenu.prevent>
-      <template v-for="(item, i) in menu.items" :key="i">
-        <div v-if="item === 'separator'" class="separator" />
-        <div v-else-if="'swatches' in item" class="swatches">
+    <div
+      v-if="menu"
+      ref="el"
+      class="menu"
+      role="menu"
+      tabindex="-1"
+      :style="{ left: `${pos.left}px`, top: `${pos.top}px` }"
+      @contextmenu.prevent
+      @keydown="onKey"
+      @mouseleave="active = -1"
+    >
+      <template v-for="(entry, i) in menu.items" :key="i">
+        <div v-if="entry === 'separator'" class="separator" />
+        <div v-else-if="'header' in entry" class="header">
+          <span class="title">{{ entry.header }}</span>
+          <span v-if="entry.detail" class="detail">{{ entry.detail }}</span>
+        </div>
+        <div v-else-if="'swatches' in entry" class="swatches">
           <button
-            v-for="s in item.swatches"
+            v-for="s in entry.swatches"
             :key="s.name"
             class="swatch"
-            :class="{ selected: s.color === item.selected, none: !s.color }"
+            :class="{ selected: s.color === entry.selected, none: !s.color }"
             :style="{ '--swatch': s.color ?? 'transparent' }"
             :title="s.name"
-            @click="(item.pick(s.color), closeMenu())"
+            @click="(entry.pick(s.color), closeMenu())"
           />
         </div>
-        <div v-else class="item" :class="{ disabled: item.disabled, danger: item.danger }" @click="choose(item)">{{ item.label }}</div>
+        <div
+          v-else
+          class="item"
+          role="menuitem"
+          :class="{ disabled: entry.disabled, danger: entry.danger, active: active === i }"
+          :aria-disabled="entry.disabled"
+          @mouseenter="active = entry.disabled ? -1 : i"
+          @click="choose(entry)"
+        >
+          <span v-if="hasIcons" class="icon-slot"><Icon v-if="entry.icon" :name="entry.icon" :size="14" /></span>
+          <span class="label">{{ entry.label }}</span>
+          <kbd v-if="entry.shortcut">{{ entry.shortcut }}</kbd>
+        </div>
       </template>
     </div>
   </Transition>

@@ -7,7 +7,8 @@ import { commands, overlays, runCommand } from '@/composables/commands'
 import { prefs } from '@/composables/prefs'
 import { useWorkspaces } from '@/composables/workspace'
 import FileIcon from './FileIcon.vue'
-import Icon, { type IconName } from './Icon.vue'
+import Icon from './Icon.vue'
+import type { IconName } from '@/lib/icons'
 
 interface Item {
   key: string

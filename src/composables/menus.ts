@@ -94,8 +94,10 @@ export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse,
   function commitMenu(c: Commit): MenuEntry[] {
     const s = shortHash(c.hash)
     return [
+      { header: c.subject, detail: `${s} · ${c.author}` },
       {
         label: 'Add Tag…',
+        icon: 'tag',
         run: async () => {
           const v = await ask({
             title: 'Add Tag',
@@ -117,6 +119,7 @@ export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse,
       },
       {
         label: 'Create Branch…',
+        icon: 'branch',
         run: async () => {
           const v = await ask({
             title: 'Create Branch',
@@ -144,10 +147,11 @@ export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse,
         },
       },
       'separator',
-      { label: 'Browse Files at this Commit', run: () => browse(c.hash) },
+      { label: 'Browse Files at this Commit', icon: 'files', run: () => browse(c.hash) },
       'separator',
       {
         label: 'Checkout…',
+        icon: 'checkout',
         run: async () => {
           if (await confirmAction('Checkout Commit', `Check out commit \`${s}\`? This leaves you in a detached HEAD state.`, 'Checkout'))
             await run(['checkout', c.hash], { done: `Checked out ${s}`, undo: { label: `checking out ${s}`, checkout: true } })
@@ -155,6 +159,7 @@ export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse,
       },
       {
         label: 'Cherry Pick…',
+        icon: 'cherry',
         run: async () => {
           if (await confirmAction('Cherry Pick', `Cherry pick commit \`${s}\` onto ${into()}?`, 'Cherry Pick'))
             await run(['cherry-pick', ...mainline(c), c.hash], {
@@ -165,15 +170,17 @@ export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse,
       },
       {
         label: 'Revert…',
+        icon: 'undo',
         run: async () => {
           if (await confirmAction('Revert', `Create a commit that reverts \`${s}\`?`, 'Revert'))
             await run(['revert', '--no-edit', ...mainline(c), c.hash], { done: `Reverted ${s}`, undo: { label: `the revert of ${s}`, head: 'keep' } })
         },
       },
-      { label: 'Merge into Current Branch…', disabled: c.hash === log.value?.head, run: () => merge(c.hash, `commit \`${s}\``) },
-      { label: 'Interactive Rebase from Here…', disabled: !isAncestorOfHead(c.hash), run: () => rebaseFrom(c.hash, s) },
+      { label: 'Merge into Current Branch…', icon: 'merge', disabled: c.hash === log.value?.head, run: () => merge(c.hash, `commit \`${s}\``) },
+      { label: 'Interactive Rebase from Here…', icon: 'rebase', disabled: !isAncestorOfHead(c.hash), run: () => rebaseFrom(c.hash, s) },
       {
         label: 'Reset Current Branch to this Commit…',
+        icon: 'reset',
         danger: true,
         run: async () => {
           const v = await ask({
@@ -199,18 +206,20 @@ export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse,
         },
       },
       'separator',
-      { label: 'Copy Commit Hash', run: () => copy(c.hash, 'commit hash') },
-      { label: 'Copy Commit Subject', run: () => copy(c.subject, 'commit subject') },
+      { label: 'Copy Commit Hash', icon: 'copy', run: () => copy(c.hash, 'commit hash') },
+      { label: 'Copy Commit Subject', icon: 'copy', run: () => copy(c.subject, 'commit subject') },
     ]
   }
 
   function stashMenu(stash: Stash): MenuEntry[] {
     const sel = stash.selector
     return [
-      { label: 'Apply Stash', run: () => run(['stash', 'apply', sel], { done: `Applied ${sel}` }) },
-      { label: 'Pop Stash', run: () => run(['stash', 'pop', sel], { done: `Popped ${sel}` }) },
+      { header: stash.subject, detail: sel },
+      { label: 'Apply Stash', icon: 'inbox', run: () => run(['stash', 'apply', sel], { done: `Applied ${sel}` }) },
+      { label: 'Pop Stash', icon: 'inbox', run: () => run(['stash', 'pop', sel], { done: `Popped ${sel}` }) },
       {
         label: 'Create Branch from Stash…',
+        icon: 'branch',
         run: async () => {
           const v = await ask({
             title: 'Create Branch from Stash',
@@ -221,10 +230,11 @@ export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse,
           if (v) await run(['stash', 'branch', v.name, sel], { done: `Created ${v.name}` })
         },
       },
-      { label: 'Browse Files in Stash', run: () => browse(stash.hash) },
+      { label: 'Browse Files in Stash', icon: 'files', run: () => browse(stash.hash) },
       'separator',
       {
         label: 'Drop Stash…',
+        icon: 'trash',
         danger: true,
         run: async () => {
           if (await confirmAction('Drop Stash', `Permanently delete \`${sel}\`?`, 'Drop', true)) {
@@ -238,15 +248,17 @@ export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse,
         },
       },
       'separator',
-      { label: 'Copy Stash Name', run: () => copy(sel, 'stash name') },
-      { label: 'Copy Commit Hash', run: () => copy(stash.hash, 'commit hash') },
+      { label: 'Copy Stash Name', icon: 'copy', run: () => copy(sel, 'stash name') },
+      { label: 'Copy Commit Hash', icon: 'copy', run: () => copy(stash.hash, 'commit hash') },
     ]
   }
 
   function uncommittedMenu(): MenuEntry[] {
     return [
+      { header: 'Uncommitted changes', detail: `${log.value?.uncommitted ?? 0} changed file${log.value?.uncommitted === 1 ? '' : 's'}` },
       {
         label: 'Stash Uncommitted Changes…',
+        icon: 'archive',
         run: async () => {
           const v = await ask({
             title: 'Stash',
@@ -275,6 +287,7 @@ export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse,
       },
       {
         label: 'Discard All Uncommitted Changes…',
+        icon: 'trash',
         danger: true,
         run: async () => {
           const v = await ask({
@@ -305,9 +318,11 @@ export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse,
   function branchMenu(name: string): MenuEntry[] {
     const isCurrent = name === currentBranch()
     return [
-      { label: 'Checkout Branch', disabled: isCurrent, run: () => checkoutBranch(name) },
+      { header: name, detail: isCurrent ? 'Current branch' : 'Local branch' },
+      { label: 'Checkout Branch', icon: 'checkout', disabled: isCurrent, run: () => checkoutBranch(name) },
       {
         label: 'Rename Branch…',
+        icon: 'pencil',
         run: async () => {
           const v = await ask({
             title: 'Rename Branch',
@@ -325,6 +340,7 @@ export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse,
       },
       {
         label: 'Delete Branch…',
+        icon: 'trash',
         disabled: isCurrent,
         danger: true,
         run: async () => {
@@ -346,9 +362,10 @@ export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse,
         },
       },
       'separator',
-      { label: 'Merge into Current Branch…', disabled: isCurrent, run: () => merge(name, `branch \`${name}\``) },
+      { label: 'Merge into Current Branch…', icon: 'merge', disabled: isCurrent, run: () => merge(name, `branch \`${name}\``) },
       {
         label: 'Rebase Current Branch on this Branch…',
+        icon: 'rebase',
         disabled: isCurrent || !currentBranch(),
         run: async () => {
           if (await confirmAction('Rebase', `Rebase ${into()} onto \`${name}\`?`, 'Rebase'))
@@ -357,6 +374,7 @@ export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse,
       },
       {
         label: 'Push Branch…',
+        icon: 'push',
         disabled: !remotes().length,
         run: async () => {
           const v = await ask({
@@ -377,17 +395,19 @@ export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse,
         },
       },
       'separator',
-      { label: 'Copy Branch Name', run: () => copy(name, 'branch name') },
+      { label: 'Copy Branch Name', icon: 'copy', run: () => copy(name, 'branch name') },
     ]
   }
 
   function remoteBranchMenu(remote: string, name: string): MenuEntry[] {
     const full = `${remote}/${name}`
     return [
-      { label: 'Checkout Branch…', run: () => checkoutRemoteBranch(remote, name) },
-      { label: 'Merge into Current Branch…', run: () => merge(full, `\`${full}\``) },
+      { header: full, detail: 'Remote branch' },
+      { label: 'Checkout Branch…', icon: 'checkout', run: () => checkoutRemoteBranch(remote, name) },
+      { label: 'Merge into Current Branch…', icon: 'merge', run: () => merge(full, `\`${full}\``) },
       {
         label: 'Delete Remote Branch…',
+        icon: 'trash',
         danger: true,
         run: async () => {
           if (
@@ -402,14 +422,16 @@ export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse,
         },
       },
       'separator',
-      { label: 'Copy Branch Name', run: () => copy(full, 'branch name') },
+      { label: 'Copy Branch Name', icon: 'copy', run: () => copy(full, 'branch name') },
     ]
   }
 
   function tagMenu(name: string): MenuEntry[] {
     return [
+      { header: name, detail: 'Tag' },
       {
         label: 'Push Tag…',
+        icon: 'push',
         disabled: !remotes().length,
         run: async () => {
           const v = await ask({ title: 'Push Tag', message: `Push tag \`${name}\` to a remote.`, fields: [remoteField()], confirm: 'Push' })
@@ -418,6 +440,7 @@ export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse,
       },
       {
         label: 'Delete Tag…',
+        icon: 'trash',
         danger: true,
         run: async () => {
           if (await confirmAction('Delete Tag', `Delete local tag \`${name}\`?`, 'Delete', true)) {
@@ -432,7 +455,7 @@ export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse,
         },
       },
       'separator',
-      { label: 'Copy Tag Name', run: () => copy(name, 'tag name') },
+      { label: 'Copy Tag Name', icon: 'copy', run: () => copy(name, 'tag name') },
     ]
   }
 

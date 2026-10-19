@@ -394,30 +394,98 @@ button:focus-visible {
   box-shadow: var(--shadow);
 }
 
+/* Menus: translucent and blurred like macOS menus, with an icon column and a tinted highlight. */
 .menu {
-  min-width: 200px;
-  max-width: 480px;
-  padding: 4px;
-  border: 1px solid var(--border);
+  min-width: 220px;
+  max-width: 420px;
+  padding: 5px;
+  border: 1px solid color-mix(in oklab, var(--fg) 9%, transparent);
   border-radius: 12px;
-  background: var(--popover);
-  box-shadow: var(--shadow);
+  background: color-mix(in oklab, var(--popover) 82%, transparent);
+  box-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 35%),
+    0 12px 32px rgb(0 0 0 / 35%),
+    0 2px 6px rgb(0 0 0 / 20%);
+  backdrop-filter: blur(22px) saturate(1.6);
+  -webkit-backdrop-filter: blur(22px) saturate(1.6);
+  outline: none;
 }
 
-.menu .item {
+.menu .header {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-width: 400px;
+  padding: 6px 10px 7px;
+}
+
+.menu .header .title {
   overflow: hidden;
-  padding: 6px 10px;
-  border-radius: 8px;
   font-size: 12.5px;
+  font-weight: 600;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.menu .item:hover:not(.disabled) {
-  background: var(--pill);
+.menu .header .detail {
+  overflow: hidden;
+  color: var(--fg-faint);
+  font: 11px var(--mono);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.menu .item.danger {
+.menu .item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 28px;
+  padding: 0 10px 0 8px;
+  border-radius: 7px;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: background 0.08s;
+}
+
+.menu .item .label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu .item .icon-slot {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  color: var(--fg-muted);
+}
+
+.menu .item kbd {
+  flex: none;
+  padding-left: 16px;
+  color: var(--fg-faint);
+  font: 12px var(--font);
+}
+
+.menu .item.active {
+  background: var(--accent-soft);
+}
+
+.menu .item.active .icon-slot {
+  color: var(--accent);
+}
+
+.menu .item.danger,
+.menu .item.danger .icon-slot {
+  color: var(--del);
+}
+
+.menu .item.danger.active {
+  background: color-mix(in oklab, var(--del) 14%, transparent);
+}
+
+.menu .item.danger.active .icon-slot {
   color: var(--del);
 }
 
@@ -427,8 +495,8 @@ button:focus-visible {
 
 .menu .separator {
   height: 1px;
-  margin: 4px 6px;
-  background: var(--border);
+  margin: 5px 8px;
+  background: color-mix(in oklab, var(--fg) 8%, transparent);
 }
 
 /* Motion: short, eased, and only where it explains what changed. */
