@@ -5,6 +5,8 @@
 
 A Git client for macOS, built with Tauri 2, Rust and Vue 3: a commit graph with a terminal beside each graph, source control, a file browser and a small editor.
 
+![Acantha showing its own history: the commit graph with a commit's details open, the source control sidebar, and a terminal](docs/screenshot.png)
+
 - Tabs in the titlebar, one per repository, restored on the next launch
 - A source control sidebar: write a commit message, stage, unstage and discard files, view staged or unstaged diffs, amend, push and pull
 - A terminal pane next to each graph, with its own tabs, starting in the repository (`portable-pty` + xterm.js)
