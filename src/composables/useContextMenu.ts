@@ -7,7 +7,14 @@ export interface MenuItem {
   danger?: boolean
 }
 
-export type MenuEntry = MenuItem | 'separator'
+/** A row of colour swatches, like the one for picking a tab's colour. A null colour means none. */
+export interface MenuSwatches {
+  swatches: { color: string | null; name: string }[]
+  selected: string | null
+  pick: (color: string | null) => void
+}
+
+export type MenuEntry = MenuItem | MenuSwatches | 'separator'
 
 const menu = shallowRef<{ x: number; y: number; items: MenuEntry[] } | null>(null)
 

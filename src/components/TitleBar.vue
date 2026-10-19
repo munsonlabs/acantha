@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { basename } from '@/lib/format'
 import { useWorkspaces, type Workspace } from '@/composables/workspace'
-import { openMenu } from '@/composables/useContextMenu'
+import { openMenu, type MenuEntry } from '@/composables/useContextMenu'
 import { folderOpenItems } from '@/composables/openers'
+import { prefs } from '@/composables/prefs'
+import { freshTabColor, TAB_COLORS, tabColor } from '@/lib/tabColors'
 import { useSlidingPill, useTabDrag } from '@/composables/tabs'
 import Icon from './Icon.vue'
 
@@ -30,15 +32,54 @@ function onTabDown(e: PointerEvent, ws: Workspace, index: number) {
   onPointerDown(e, index)
 }
 
+const colorOf = (ws: Workspace) => tabColor(ws.repo.repo.value, prefs.tabColors.value)
+const activeColor = computed(() => {
+  const ws = workspaces.value.find((w) => w.id === activeId.value)
+  return ws ? colorOf(ws) : null
+})
+
+// A repository opened for the first time gets a colour no other open tab has, saved so it keeps it.
+watch(
+  () => workspaces.value.map((w) => w.repo.repo.value),
+  (paths) => {
+    const picked = { ...prefs.tabColors.value }
+    let changed = false
+    for (const path of paths) {
+      if (!path || picked[path]) continue
+      const taken = paths.filter((p) => p && p !== path && picked[p] && picked[p] !== 'none').map((p) => picked[p!])
+      picked[path] = freshTabColor(path, taken)
+      changed = true
+    }
+    if (changed) prefs.tabColors.value = picked
+  },
+  { immediate: true },
+)
+
+function pickColor(path: string, color: string | null) {
+  prefs.tabColors.value = { ...prefs.tabColors.value, [path]: color ?? 'none' }
+}
+
 function tabMenu(e: MouseEvent, ws: Workspace) {
-  openMenu(e, [
-    { label: 'New Tab', run: () => addWorkspace() },
-    'separator',
-    ...(ws.repo.repo.value ? (['separator', ...folderOpenItems(ws.repo.repo.value, () => ws.terminals.add())] as const) : []),
+  const path = ws.repo.repo.value
+  const items: MenuEntry[] = []
+  if (path) {
+    items.push(
+      {
+        swatches: [...TAB_COLORS.map((c) => ({ color: c.value, name: c.name })), { color: null, name: 'No colour' }],
+        selected: colorOf(ws),
+        pick: (color) => pickColor(path, color),
+      },
+      'separator',
+    )
+  }
+  items.push({ label: 'New Tab', run: () => addWorkspace() })
+  if (path) items.push('separator', ...folderOpenItems(path, () => ws.terminals.add()))
+  items.push(
     'separator',
     { label: 'Close Tab', run: () => closeWorkspace(ws.id) },
     { label: 'Close Other Tabs', disabled: workspaces.value.length < 2, run: () => closeOtherWorkspaces(ws.id) },
-  ])
+  )
+  openMenu(e, items)
 }
 
 function onSearchKey(e: KeyboardEvent) {
@@ -54,7 +95,7 @@ defineExpose({ focusSearch: () => input.value?.select() })
 
 <template>
   <header class="titlebar" data-tauri-drag-region>
-    <div ref="strip" class="tabs pilled" data-tauri-drag-region>
+    <div ref="strip" class="tabs pilled" :class="{ tinted: activeColor }" :style="{ '--tab-color': activeColor ?? undefined }" data-tauri-drag-region>
       <span class="tab-pill" :style="pill.style.value" />
       <div
         v-for="(ws, i) in workspaces"
@@ -66,7 +107,8 @@ defineExpose({ focusSearch: () => input.value?.select() })
         @auxclick.middle="closeWorkspace(ws.id)"
         @contextmenu.prevent="tabMenu($event, ws)"
       >
-        <Icon :name="ws.repo.repo.value ? 'history' : 'folder'" :size="13" />
+        <span v-if="colorOf(ws)" class="dot" :style="{ background: colorOf(ws)! }" />
+        <Icon v-else :name="ws.repo.repo.value ? 'history' : 'folder'" :size="13" />
         <span class="name">{{ label(ws) }}</span>
         <span v-if="ws.repo.log.value?.headBranch" class="branch">· {{ ws.repo.log.value.headBranch }}</span>
         <span
@@ -107,6 +149,18 @@ defineExpose({ focusSearch: () => input.value?.select() })
   height: 100%;
   overflow-x: auto;
   scrollbar-width: none;
+}
+/* The active tab's highlight takes on its repository's colour. */
+.tabs.tinted .tab-pill {
+  background: color-mix(in oklab, var(--tab-color) 18%, var(--pill));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tab-color) 30%, transparent);
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  margin: 0 2px;
+  border-radius: 50%;
 }
 .tab .name {
   max-width: 180px;

@@ -18,6 +18,8 @@ export const prefs = {
   terminalFontSize: usePersisted('terminal-font-size', 12.5),
   /** Scale of the whole interface: 1 is 100%. */
   uiZoom: usePersisted('ui-zoom', 1),
+  /** Tab colours picked per repository path. 'none' turns the colour off. */
+  tabColors: usePersisted<Record<string, string>>('tab-colors', {}),
   /** Fetch every open repository in the background, every `autoFetchMinutes`. */
   autoFetch: usePersisted('auto-fetch', true),
   autoFetchMinutes: usePersisted('auto-fetch-minutes', 5),
