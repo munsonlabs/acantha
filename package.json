@@ -14,7 +14,8 @@
     "fmt": "vp fmt",
     "tauri": "tauri",
     "prepare": "vp config",
-    "test": "vp test"
+    "test": "vp test",
+    "icon": "node scripts/build-icon.mjs && tauri icon icon.svg -o src-tauri/icons && rm -rf src-tauri/icons/android src-tauri/icons/ios"
   },
   "dependencies": {
     "@codemirror/commands": "6.11.1",

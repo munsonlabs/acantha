@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import logo from '@/assets/logo.svg'
 import { basename } from '@/lib/format'
 import { prefs } from '@/composables/prefs'
 import { useWorkspace, useWorkspaces } from '@/composables/workspace'
@@ -14,13 +15,7 @@ const home = (path: string) => path.replace(/^\/Users\/[^/]+/, '~')
 <template>
   <div class="empty">
     <div class="card">
-      <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
-        <path d="M22 12v40" stroke="#6ea8e8" />
-        <path d="M22 20c0 8 20 6 20 14v4c0 6-20 4-20 14" stroke="#b98ce0" />
-        <circle cx="22" cy="12" r="4.5" fill="#6ea8e8" />
-        <circle cx="42" cy="34" r="4.5" fill="#b98ce0" />
-        <circle cx="22" cy="52" r="4.5" fill="#6ea8e8" />
-      </svg>
+      <img class="logo" :src="logo" alt="" />
       <h1>Open a repository</h1>
       <p>Pick a folder, drop one onto the window, or choose a recent repository.</p>
       <button class="primary" @click="pickRepo"><Icon name="folder" /> Open Folder… <kbd>⌘O</kbd></button>
@@ -54,11 +49,9 @@ const home = (path: string) => path.replace(/^\/Users\/[^/]+/, '~')
   text-align: center;
 }
 .logo {
-  width: 56px;
-  height: 56px;
-  fill: none;
-  stroke-width: 3.5;
-  stroke-linecap: round;
+  width: 64px;
+  height: 64px;
+  filter: drop-shadow(0 6px 14px rgb(0 0 0 / 30%));
 }
 h1 {
   margin: 10px 0 4px;

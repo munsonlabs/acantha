@@ -1,74 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="tile" x1="0.15" y1="0" x2="0.85" y2="1">
-      <stop offset="0" stop-color="#2b2f45"/>
-      <stop offset="0.55" stop-color="#16171f"/>
-      <stop offset="1" stop-color="#0c0c10"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="0.32" cy="0.22" r="0.75">
-      <stop offset="0" stop-color="#7c9cff" stop-opacity="0.32"/>
-      <stop offset="1" stop-color="#7c9cff" stop-opacity="0"/>
-    </radialGradient>
-    <!-- In user space: a gradient sized to a vertical line's zero-width box would not render. -->
-    <linearGradient id="blue" gradientUnits="userSpaceOnUse" x1="0" y1="200" x2="0" y2="820">
-      <stop offset="0" stop-color="#a8cdff"/>
-      <stop offset="1" stop-color="#5b8fe0"/>
-    </linearGradient>
-    <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#e3c4ff"/>
-      <stop offset="1" stop-color="#a36fe0"/>
-    </linearGradient>
-    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#a6f0c2"/>
-      <stop offset="1" stop-color="#4fb57a"/>
-    </linearGradient>
-    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.16"/>
-      <stop offset="0.4" stop-color="#ffffff" stop-opacity="0"/>
-    </linearGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="22"/>
-    </filter>
-    <filter id="bloom" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="16"/>
-    </filter>
-    <clipPath id="clip">
-      <rect x="100" y="100" width="824" height="824" rx="186"/>
-    </clipPath>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="20"/></filter>
   </defs>
-
-  <!-- Drop shadow under the tile, as macOS icons have. -->
-  <rect x="112" y="128" width="800" height="800" rx="180" fill="#000" opacity="0.45" filter="url(#shadow)"/>
-
-  <g clip-path="url(#clip)">
-    <rect x="100" y="100" width="824" height="824" fill="url(#tile)"/>
-    <rect x="100" y="100" width="824" height="824" fill="url(#glow)"/>
-
-    <g transform="translate(-48 -6)">
-    <!-- The graph, drawn twice: a blurred copy for the glow, then the crisp lines. -->
-    <g fill="none" stroke-linecap="round" stroke-width="58" opacity="0.75" filter="url(#bloom)">
-      <path d="M400 230V800" stroke="#6ea8e8"/>
-      <path d="M400 330C400 430 624 400 624 500V560C624 660 400 630 400 720" stroke="#b98ce0"/>
-      <path d="M400 470C400 540 720 520 720 610V690" stroke="#6ec48f"/>
+  <rect x="112" y="126" width="800" height="800" rx="180" fill="#000" opacity="0.4" filter="url(#shadow)"/>
+  <g transform="translate(100 100) scale(25.75)">
+  <defs>
+    <clipPath id="tile"><rect width="32" height="32" rx="7"/></clipPath>
+    <mask id="punch" maskUnits="userSpaceOnUse" x="0" y="0" width="32" height="32">
+      <rect x="23.4" y="1.6" width="7" height="7" rx="1.3" fill="#fff"/><path d="M25.6 3.6V6.6" fill="none" stroke="#000" stroke-width=".9" stroke-linecap="round" stroke-linejoin="round"/><path d="M28.2 4.1C28.2 5.3 25.6 5 25.6 6.2" fill="none" stroke="#000" stroke-width=".9" stroke-linecap="round" stroke-linejoin="round"/><path d="M25.6 2.6A.85 .85 0 1 0 25.6 4.3A.85 .85 0 1 0 25.6 2.6Z" fill="#000"/><path d="M25.6 6.1A.85 .85 0 1 0 25.6 7.8A.85 .85 0 1 0 25.6 6.1Z" fill="#000"/><path d="M28.2 2.9A.85 .85 0 1 0 28.2 4.6A.85 .85 0 1 0 28.2 2.9Z" fill="#000"/>
+    </mask>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect width="32" height="32" fill="#1a4d34"/>
+    <rect y="9" width="32" height="3.4" fill="#1d603f"/><rect y="14.3" width="32" height="3.4" fill="#22784d"/><rect y="19.6" width="32" height="3.4" fill="#1d603f"/>
+    <g transform="rotate(-8 16 16) translate(-0.9 -1.9)">
+      <g transform="translate(1.8 1.8)"><path d="M7 24V14.5a4.5 4.5 0 0 1 9 0V24M16 14.5a4.5 4.5 0 0 1 9 0V18.4" fill="none" stroke="#1a4d34" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="25" cy="24.1" r="4.1" fill="#1a4d34"/></g><path d="M7 24V14.5a4.5 4.5 0 0 1 9 0V24M16 14.5a4.5 4.5 0 0 1 9 0V18.4" fill="none" stroke="#1a4d34" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="25" cy="24.1" r="4.1" fill="#1a4d34"/><g transform="translate(1.8 1.8)"><path d="M7 24V14.5a4.5 4.5 0 0 1 9 0V24M16 14.5a4.5 4.5 0 0 1 9 0V18.4" fill="none" stroke="#e2a32e" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="25" cy="24.1" r="2.7" fill="#e2a32e"/></g><path d="M7 24V14.5a4.5 4.5 0 0 1 9 0V24M16 14.5a4.5 4.5 0 0 1 9 0V18.4" fill="none" stroke="#f8f1e1" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="25" cy="24.1" r="2.7" fill="#f8f1e1"/>
     </g>
-    <g fill="none" stroke-linecap="round" stroke-width="46">
-      <path d="M400 230V800" stroke="url(#blue)"/>
-      <path d="M400 330C400 430 624 400 624 500V560C624 660 400 630 400 720" stroke="url(#violet)"/>
-      <path d="M400 470C400 540 720 520 720 610V690" stroke="url(#green)"/>
-    </g>
-
-    <!-- Commits. The top one is HEAD, drawn as a ring. -->
-    <g stroke="#14151c" stroke-width="16">
-      <circle cx="400" cy="230" r="58" fill="#14151c" stroke="url(#blue)" stroke-width="30"/>
-      <circle cx="624" cy="530" r="50" fill="url(#violet)"/>
-      <circle cx="720" cy="690" r="50" fill="url(#green)"/>
-      <circle cx="400" cy="720" r="50" fill="url(#blue)"/>
-      <circle cx="400" cy="470" r="44" fill="url(#blue)"/>
-    </g>
-    </g>
-
-    <rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
   </g>
-  <!-- A hairline edge, light at the top, like Big Sur icons. -->
-  <rect x="102" y="102" width="820" height="820" rx="184" fill="none" stroke="#ffffff" stroke-opacity="0.1" stroke-width="4"/>
+  <g transform="translate(-1.6 1.6)">
+    <!-- The seal sits over the letter here, so a backing in the scheme's seal ink keeps the cut glyph one colour. -->
+    <rect x="23.4" y="1.6" width="7" height="7" rx="1.3" fill="#1a4d34"/>
+    <rect x="23.4" y="1.6" width="7" height="7" rx="1.3" fill="#e2a32e" mask="url(#punch)"/>
+  </g>
+  </g>
 </svg>
