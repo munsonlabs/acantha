@@ -1,11 +1,28 @@
-# Acantha · AI-generated, personal use
+<div align="center">
+
+<img src="docs/brand/acantha.svg" width="176" height="176" alt="Acantha">
+
+# Acantha
+
+A Git client for macOS: a commit graph, terminals, source control and an editor, side by side.
+
+**AI-generated and sense-checked · inspired by [Terax](https://github.com/crynta/terax-ai) · for personal use only**
+
+[**Download**](https://github.com/munsonlabs/acantha/releases/latest) ·
+[![CI](https://github.com/munsonlabs/acantha/actions/workflows/ci.yml/badge.svg)](https://github.com/munsonlabs/acantha/actions/workflows/ci.yml)
+[![Release](https://github.com/munsonlabs/acantha/actions/workflows/release.yml/badge.svg)](https://github.com/munsonlabs/acantha/actions/workflows/release.yml)
+[![PolyForm Strict](https://img.shields.io/badge/license-PolyForm%20Strict-blue)](LICENSE)
+
+</div>
 
 > [!IMPORTANT]
 > **This project is entirely AI-generated**, written with Claude and sense-checked by a person rather than written by hand. It's **inspired by [Terax](https://github.com/crynta/terax-ai)**, whose look and layout it follows, and by the VS Code Git Graph extension. It was built **for personal use only**: it is not a supported product, and comes with no guarantees. The licence, [PolyForm Strict 1.0.0](LICENSE), allows personal and other non-commercial use only, and no redistribution or modified versions.
 
-A Git client for macOS, built with Tauri 2, Rust and Vue 3: a commit graph with a terminal beside each graph, source control, a file browser and a small editor.
-
 ![Acantha showing its own history: the commit graph with a commit's details open, the source control sidebar, and a terminal](docs/screenshot.png)
+
+## Features
+
+Built with Tauri 2, Rust and Vue 3.
 
 - Tabs in the titlebar, one per repository, restored on the next launch
 - A source control sidebar: write a commit message, stage, unstage and discard files, view staged or unstaged diffs, amend, push and pull
@@ -47,6 +64,10 @@ A Git client for macOS, built with Tauri 2, Rust and Vue 3: a commit graph with 
 | ⌘K            | Clear the terminal                                  |
 | ⌘F / ⌘R / ⌘O  | Search commits / refresh / open a repository        |
 
+## Install
+
+Download the `.dmg` for your Mac from [Releases](https://github.com/munsonlabs/acantha/releases): **aarch64** for Apple Silicon, **x64** for Intel. The app isn't notarised yet, so the first time, right-click Acantha in Applications and choose **Open**.
+
 ## Develop
 
 Requires Node (see `.node-version`), Rust (`rustup`) and git.
@@ -66,10 +87,6 @@ Open a specific repo on launch by passing its path to the binary:
 ```bash
 "src-tauri/target/release/bundle/macos/Acantha.app/Contents/MacOS/acantha" ~/code/my-repo
 ```
-
-## Install
-
-Download the `.dmg` for your Mac from [Releases](https://github.com/munsonlabs/acantha/releases): **aarch64** for Apple Silicon, **x64** for Intel. The app isn't notarised yet, so the first time, right-click Acantha in Applications and choose **Open**.
 
 ## Releasing
 

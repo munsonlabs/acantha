@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="176" height="176" viewBox="-4 -4 40 40" role="img" aria-label="Munson Labs Acantha">
+  <style>
+    .ink { stroke: #1f2328; fill: #1f2328; }
+    .green { stroke: #2e9460; fill: #2e9460; }
+    @media (prefers-color-scheme: dark) {
+      .ink { stroke: #f0f6fc; fill: #f0f6fc; }
+      .green { stroke: #4cb07c; fill: #4cb07c; }
+    }
+  </style>
+  <defs>
+    <mask id="behind-all" maskUnits="userSpaceOnUse" x="-4" y="-4" width="40" height="40">
+      <rect x="-4" y="-4" width="40" height="40" fill="#fff"/>
+      <g transform="rotate(-8 16 16) translate(-0.9 -1.9)" fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+        <g transform="translate(1.8 1.8)"><path d="M7 24V14.5a4.5 4.5 0 0 1 9 0V24M16 14.5a4.5 4.5 0 0 1 9 0V18.4" stroke-width="8"/><circle cx="25" cy="24.1" r="4.1" fill="#000" stroke="none"/></g>
+        <path d="M7 24V14.5a4.5 4.5 0 0 1 9 0V24M16 14.5a4.5 4.5 0 0 1 9 0V18.4" stroke-width="8"/><circle cx="25" cy="24.1" r="4.1" fill="#000" stroke="none"/>
+      </g>
+    </mask>
+    <mask id="punch" maskUnits="userSpaceOnUse" x="0" y="0" width="32" height="32">
+      <rect x="23.4" y="1.6" width="7" height="7" rx="1.3" fill="#fff"/>
+      <path d="M25.6 3.6V6.6" fill="none" stroke="#000" stroke-width=".9" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M28.2 4.1C28.2 5.3 25.6 5 25.6 6.2" fill="none" stroke="#000" stroke-width=".9" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M25.6 2.6A.85 .85 0 1 0 25.6 4.3A.85 .85 0 1 0 25.6 2.6Z" fill="#000"/>
+      <path d="M25.6 6.1A.85 .85 0 1 0 25.6 7.8A.85 .85 0 1 0 25.6 6.1Z" fill="#000"/>
+      <path d="M28.2 2.9A.85 .85 0 1 0 28.2 4.6A.85 .85 0 1 0 28.2 2.9Z" fill="#000"/>
+    </mask>
+  </defs>
+  <g mask="url(#behind-all)">
+    <rect y="9" width="32" height="3.4" fill="#e2a32e"/>
+    <rect class="green" y="14.3" width="32" height="3.4" style="stroke:none"/>
+    <rect y="19.6" width="32" height="3.4" fill="#1a4d34"/>
+  </g>
+  <g transform="rotate(-8 16 16) translate(-0.9 -1.9) translate(1.8 1.8)" class="green" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7 24V14.5a4.5 4.5 0 0 1 9 0V24M16 14.5a4.5 4.5 0 0 1 9 0V18.4" style="fill:none"/><circle cx="25" cy="24.1" r="2.7" style="stroke:none"/>
+  </g>
+  <g transform="rotate(-8 16 16) translate(-0.9 -1.9)" class="ink" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7 24V14.5a4.5 4.5 0 0 1 9 0V24M16 14.5a4.5 4.5 0 0 1 9 0V18.4" style="fill:none"/><circle cx="25" cy="24.1" r="2.7" style="stroke:none"/>
+  </g>
+  <rect class="green" x="23.4" y="1.6" width="7" height="7" rx="1.3" style="stroke:none" mask="url(#punch)"/>
+</svg>
