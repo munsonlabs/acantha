@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, shallowRef, watch } from 'vue'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { git, type Commit, type CommitDetails, type FileChange } from '@/lib/git'
-import { formatDate, shortHash, splitPath } from '@/lib/format'
+import { formatDate, reflowMessage, shortHash, splitPath } from '@/lib/format'
 import { commitUrl } from '@/lib/remote'
 import { displayDate } from '@/composables/dates'
 import { showToast } from '@/composables/useToast'
@@ -28,7 +28,7 @@ const pos = ref({ left: props.x, top: props.y })
 
 const stat = computed(() => stats.value.get(props.commit.hash))
 const link = computed(() => commitUrl(log.value?.remoteUrl ?? null, props.commit.hash))
-const body = computed(() => details.value?.body.split('\n').slice(1).join('\n').trim() ?? '')
+const body = computed(() => reflowMessage(details.value?.body.split('\n').slice(1).join('\n').trim() ?? ''))
 
 watch(
   () => props.commit.hash,

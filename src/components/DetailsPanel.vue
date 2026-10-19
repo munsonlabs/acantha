@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
+import type { Details } from '@/composables/details'
 import type { FileChange } from '@/lib/git'
-import { formatDate, shortHash, splitPath } from '@/lib/format'
+import { formatDate, reflowMessage, shortHash, splitPath } from '@/lib/format'
 import { prefs } from '@/composables/prefs'
 import { useWorkspace } from '@/composables/workspace'
 import FileIcon from './FileIcon.vue'
@@ -14,17 +15,33 @@ const { openDiff } = ws.diff
 const { browse } = ws
 const height = prefs.detailsHeight
 
+/**
+ * What the panel shows. It holds on to the last commit while the panel slides closed, so the content doesn't vanish
+ * before the slide finishes. The height only animates while opening or closing: dragging to resize follows the mouse.
+ */
+const shown = shallowRef<Details | null>(details.value)
+const isOpen = computed(() => !!details.value)
+const sliding = ref(false)
+watch(details, (d) => d && (shown.value = d))
+watch(isOpen, () => (sliding.value = true), { flush: 'sync' })
+
+function doneSliding(e: TransitionEvent) {
+  if (e.propertyName !== 'height') return
+  sliding.value = false
+  if (!isOpen.value) shown.value = null
+}
+
 const STATUS: Record<string, string> = { A: 'Added', M: 'Modified', D: 'Deleted', R: 'Renamed', C: 'Copied', T: 'Type changed', '?': 'Untracked' }
 
 const title = computed(() => {
-  const d = details.value!
+  const d = shown.value!
   if (d.kind === 'uncommitted') return 'Uncommitted Changes'
   if (d.kind === 'compare') return `Comparing ${shortHash(d.from!)} → ${d.to === '*' ? 'working tree' : shortHash(d.to)}`
   return d.commit?.body.split('\n')[0] ?? shortHash(d.to)
 })
 
 const totals = computed(() =>
-  details.value!.files.reduce((t, f) => ({ add: t.add + (f.additions ?? 0), del: t.del + (f.deletions ?? 0) }), { add: 0, del: 0 }),
+  shown.value!.files.reduce((t, f) => ({ add: t.add + (f.additions ?? 0), del: t.del + (f.deletions ?? 0) }), { add: 0, del: 0 }),
 )
 
 function startResize(e: MouseEvent) {
@@ -41,105 +58,121 @@ function startResize(e: MouseEvent) {
   window.addEventListener('mouseup', up)
 }
 
-const open = (f: FileChange) => openDiff(f, details.value!.from, details.value!.to)
+const open = (f: FileChange) => openDiff(f, shown.value!.from, shown.value!.to)
 </script>
 
 <template>
-  <Transition name="rise">
-    <section v-if="details" class="details" :style="{ height: `${height}px` }">
-      <div class="resize" @mousedown.prevent="startResize" />
-      <header>
-        <h2 :title="title">{{ title }}</h2>
-        <button v-if="details.kind !== 'compare'" class="ghost browse" @click="browse(details.kind === 'uncommitted' ? null : details.to)">
-          <Icon name="files" :size="13" /> Browse Files
-        </button>
-        <button class="ghost icon-btn" title="Close (Esc)" @click="closeDetails"><Icon name="x" /></button>
-      </header>
-      <div class="body">
-        <div class="meta">
-          <template v-if="details.commit">
-            <dl>
-              <dt>Commit</dt>
-              <dd class="mono">{{ details.commit.hash }}</dd>
-              <dt>Parents</dt>
-              <dd class="mono">
-                <template v-if="details.commit.parents.length">
-                  <a v-for="p in details.commit.parents" :key="p" href="#" @click.prevent="select(p)">{{ shortHash(p) }}</a>
-                </template>
-                <span v-else class="muted">None (root commit)</span>
-              </dd>
-              <dt>Author</dt>
-              <dd>
-                {{ details.commit.author }} <span class="muted">&lt;{{ details.commit.email }}&gt;</span>
-              </dd>
-              <dt>Date</dt>
-              <dd>{{ formatDate(details.commit.authorDate) }}</dd>
-              <template v-if="details.commit.committer !== details.commit.author || details.commit.commitDate !== details.commit.authorDate">
-                <dt>Committer</dt>
-                <dd>
-                  {{ details.commit.committer }}
-                  <span class="muted">&lt;{{ details.commit.committerEmail }}&gt; · {{ formatDate(details.commit.commitDate) }}</span>
+  <!-- Opens and closes by animating the slot's height, like the side panels, so the graph above glides. -->
+  <div
+    class="details-slot"
+    :class="{ sliding, shut: !isOpen }"
+    :style="{ height: isOpen ? `${height + 10}px` : '0px' }"
+    @transitionend.self="doneSliding"
+  >
+    <template v-if="shown">
+      <!-- The gap above the pane is its resize handle. -->
+      <div class="resize" title="Drag to resize" @mousedown.prevent="startResize" />
+      <section class="pane details" :style="{ height: `${height}px` }">
+        <header class="pane-header">
+          <h2 :title="title">{{ title }}</h2>
+          <button v-if="shown.kind !== 'compare'" class="ghost browse" @click="browse(shown.kind === 'uncommitted' ? null : shown.to)">
+            <Icon name="files" :size="13" /> Browse Files
+          </button>
+          <button class="ghost icon-btn" title="Close (Esc)" @click="closeDetails"><Icon name="x" /></button>
+        </header>
+        <div class="body">
+          <div class="meta">
+            <template v-if="shown.commit">
+              <dl>
+                <dt>Commit</dt>
+                <dd class="mono">{{ shown.commit.hash }}</dd>
+                <dt>Parents</dt>
+                <dd class="mono">
+                  <template v-if="shown.commit.parents.length">
+                    <a v-for="p in shown.commit.parents" :key="p" href="#" @click.prevent="select(p)">{{ shortHash(p) }}</a>
+                  </template>
+                  <span v-else class="muted">None (root commit)</span>
                 </dd>
-              </template>
-            </dl>
-            <pre class="message">{{ details.commit.body }}</pre>
-          </template>
-          <p v-else-if="details.kind === 'uncommitted'" class="muted">
-            Working tree and index compared to HEAD. Right-click the row to stash or discard.
-          </p>
-          <p v-else-if="details.kind === 'compare'" class="muted">
-            Changes between the two selected commits. Cmd/Ctrl-click another row to change the comparison.
-          </p>
-        </div>
-        <div class="files">
-          <div class="files-head">
-            <span>{{ details.loading ? 'Loading…' : `${details.files.length} file${details.files.length === 1 ? '' : 's'} changed` }}</span>
-            <span v-if="!details.loading" class="stat"
-              ><span class="add">+{{ totals.add }}</span> <span class="del">−{{ totals.del }}</span></span
-            >
+                <dt>Author</dt>
+                <dd>
+                  {{ shown.commit.author }} <span class="muted">&lt;{{ shown.commit.email }}&gt;</span>
+                </dd>
+                <dt>Date</dt>
+                <dd>{{ formatDate(shown.commit.authorDate) }}</dd>
+                <template v-if="shown.commit.committer !== shown.commit.author || shown.commit.commitDate !== shown.commit.authorDate">
+                  <dt>Committer</dt>
+                  <dd>
+                    {{ shown.commit.committer }}
+                    <span class="muted">&lt;{{ shown.commit.committerEmail }}&gt; · {{ formatDate(shown.commit.commitDate) }}</span>
+                  </dd>
+                </template>
+              </dl>
+              <pre class="message">{{ reflowMessage(shown.commit.body) }}</pre>
+            </template>
+            <p v-else-if="shown.kind === 'uncommitted'" class="muted">
+              Working tree and index compared to HEAD. Right-click the row to stash or discard.
+            </p>
+            <p v-else-if="shown.kind === 'compare'" class="muted">
+              Changes between the two selected commits. Cmd/Ctrl-click another row to change the comparison.
+            </p>
           </div>
-          <Skeleton v-if="details.loading" :lines="5" :gap="14" />
-          <ul>
-            <li v-for="f in details.files" :key="f.path" :title="STATUS[f.status] ?? f.status" @click="open(f)">
-              <span class="status" :class="`s-${f.status === '?' ? 'U' : f.status}`">{{ f.status === '?' ? 'U' : f.status }}</span>
-              <FileIcon :path="f.path" />
-              <span class="path">
-                <span class="dir">{{ splitPath(f.path).dir }}</span
-                >{{ splitPath(f.path).name }}
-                <span v-if="f.oldPath" class="muted"> ← {{ f.oldPath }}</span>
-              </span>
-              <span v-if="f.additions != null" class="stat"
-                ><span class="add">+{{ f.additions }}</span> <span class="del">−{{ f.deletions }}</span></span
+          <div class="files">
+            <div class="files-head">
+              <span>{{ shown.loading ? 'Loading…' : `${shown.files.length} file${shown.files.length === 1 ? '' : 's'} changed` }}</span>
+              <span v-if="!shown.loading" class="stat"
+                ><span class="add">+{{ totals.add }}</span> <span class="del">−{{ totals.del }}</span></span
               >
-            </li>
-          </ul>
+            </div>
+            <Skeleton v-if="shown.loading" :lines="5" :gap="14" />
+            <ul>
+              <li v-for="f in shown.files" :key="f.path" :title="STATUS[f.status] ?? f.status" @click="open(f)">
+                <span class="status" :class="`s-${f.status === '?' ? 'U' : f.status}`">{{ f.status === '?' ? 'U' : f.status }}</span>
+                <FileIcon :path="f.path" />
+                <span class="path">
+                  <span class="dir">{{ splitPath(f.path).dir }}</span
+                  >{{ splitPath(f.path).name }}
+                  <span v-if="f.oldPath" class="muted"> ← {{ f.oldPath }}</span>
+                </span>
+                <span v-if="f.additions != null" class="stat"
+                  ><span class="add">+{{ f.additions }}</span> <span class="del">−{{ f.deletions }}</span></span
+                >
+              </li>
+            </ul>
+          </div>
         </div>
-      </div>
-    </section>
-  </Transition>
+      </section>
+    </template>
+  </div>
 </template>
 
 <style scoped>
+.details-slot {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+}
+.details-slot.sliding {
+  overflow: hidden;
+  transition: height 0.26s var(--ease-out);
+}
+.details-slot.shut {
+  overflow: hidden;
+  pointer-events: none;
+}
+.resize {
+  flex: none;
+  height: 10px;
+  cursor: row-resize;
+}
 .details {
-  position: relative;
   display: flex;
   flex: none;
   flex-direction: column;
   min-height: 0;
-  border-top: 1px solid var(--border);
-}
-.resize {
-  position: absolute;
-  inset: -3px 0 auto;
-  height: 6px;
-  cursor: row-resize;
 }
 header {
-  display: flex;
-  align-items: center;
   gap: 8px;
-  padding: 6px 8px 6px 14px;
-  border-bottom: 1px solid var(--border);
+  padding-left: 14px;
 }
 .browse {
   display: flex;
@@ -171,7 +204,7 @@ h2 {
   padding: 10px 12px;
 }
 .meta {
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--divider);
 }
 dl {
   display: grid;
