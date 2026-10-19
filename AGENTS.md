@@ -15,6 +15,7 @@
 
 ## Conventions
 
+- `status.ts` polls `git status` (from `App.vue`) while the window is focused. When the status changes it reloads the graph, which is how commits made in the terminal appear.
 - Terminals stay mounted (`v-show`) while hidden or in a background tab: unmounting a `TerminalView` kills its shell.
 - Theme tokens in `src/styles/main.css` mirror Terax's default theme, including the ANSI palette the terminal reads.
 

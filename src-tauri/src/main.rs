@@ -18,6 +18,8 @@ fn main() {
             git::get_changes,
             git::get_file_diff,
             git::run_action,
+            git::get_status,
+            git::get_status_diff,
             pty::pty_spawn,
             pty::pty_write,
             pty::pty_resize,

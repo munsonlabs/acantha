@@ -14,7 +14,7 @@ const props = defineProps<{ session: TerminalSession; active: boolean }>()
 const emit = defineEmits<{ exit: []; title: [title: string] }>()
 
 /** App shortcuts that should reach the window instead of the shell. */
-const APP_KEYS = new Set(['t', 'w', 'j', 'f', 'r', 'o', '[', ']', '{', '}', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
+const APP_KEYS = new Set(['t', 'w', 'j', 'b', 'f', 'r', 'o', '[', ']', '{', '}', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
 
 const el = ref<HTMLElement>()
 let term: Terminal | null = null

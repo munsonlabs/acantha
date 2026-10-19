@@ -11,6 +11,7 @@ const { diff, closeDiff } = useWorkspace().diff
       <header>
         <h2 class="mono">
           {{ diff.file.path }}<span v-if="diff.file.oldPath" class="muted"> ← {{ diff.file.oldPath }}</span>
+          <span v-if="diff.label" class="label">{{ diff.label }}</span>
         </h2>
         <button class="ghost icon-btn" title="Close (Esc)" @click="closeDiff"><Icon name="x" /></button>
       </header>
@@ -61,6 +62,14 @@ h2 {
   font-weight: 500;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.label {
+  margin-left: 8px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--pill);
+  color: var(--fg-muted);
+  font: 500 10.5px var(--font);
 }
 .body {
   flex: 1;

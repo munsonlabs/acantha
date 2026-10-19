@@ -52,6 +52,9 @@ function onKeydown(e: KeyboardEvent) {
     e.preventDefault()
     if (ws && inTerminal(document.activeElement)) ws.terminals.closeActive()
     else if (ws) closeWorkspace(ws.id)
+  } else if (mod && key === 'b') {
+    e.preventDefault()
+    prefs.sidebarOpen.value = !prefs.sidebarOpen.value
   } else if (mod && key === 'j') {
     e.preventDefault()
     if (ws?.repo.repo.value) ws.terminals.toggle()
@@ -76,6 +79,11 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 let lastFocusReload = 0
+
+// Catch changes made from the terminal or an editor while the window is in use.
+const poll = setInterval(() => {
+  if (document.hasFocus() && !document.hidden) void active.value?.status.refresh()
+}, 2500)
 
 onMounted(async () => {
   window.addEventListener('keydown', onKeydown)
@@ -111,6 +119,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  clearInterval(poll)
   window.removeEventListener('keydown', onKeydown)
   unlisten.forEach((fn) => fn())
 })

@@ -49,6 +49,25 @@ export interface FileChange {
   deletions: number | null
 }
 
+export interface StatusFile {
+  path: string
+  oldPath: string | null
+  /** Staged state, "." when unchanged. */
+  index: string
+  /** Working tree state, "." when unchanged. */
+  worktree: string
+  kind: 'changed' | 'untracked' | 'conflict'
+}
+
+export interface Status {
+  branch: string | null
+  oid: string | null
+  upstream: string | null
+  ahead: number
+  behind: number
+  files: StatusFile[]
+}
+
 export interface LogOptions {
   limit: number
   branch: string | null
@@ -71,4 +90,7 @@ export const git = {
   changes: (repo: string, from: string | null, to: string) => invoke<FileChange[]>('get_changes', { repo, from, to }),
   fileDiff: (repo: string, opts: FileDiffOptions) => invoke<string>('get_file_diff', { repo, ...opts }),
   action: (repo: string, args: string[]) => invoke<string>('run_action', { repo, args }),
+  status: (repo: string) => invoke<Status>('get_status', { repo }),
+  statusDiff: (repo: string, file: StatusFile, staged: boolean) =>
+    invoke<string>('get_status_diff', { repo, path: file.path, oldPath: file.oldPath, staged, untracked: file.kind === 'untracked' }),
 }

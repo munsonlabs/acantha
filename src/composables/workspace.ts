@@ -7,6 +7,7 @@ import { prefs } from './prefs'
 import { createRepo } from './repo'
 import { createReveal } from './reveal'
 import { createSearch } from './search'
+import { createStatus } from './status'
 import { createTerminals } from './terminals'
 
 /** Everything belonging to one top-level tab: a repository's graph and the terminals beside it. */
@@ -15,12 +16,14 @@ function createWorkspace(id: number) {
   const parts = scope.run(() => {
     const repo = createRepo()
     const reveal = createReveal()
+    const diff = createDiff(repo)
     return {
       repo,
       reveal,
       details: createDetails(repo, reveal),
       search: createSearch(repo, reveal),
-      diff: createDiff(repo),
+      diff,
+      status: createStatus(repo),
       menus: createMenus(repo),
       terminals: createTerminals(repo),
     }

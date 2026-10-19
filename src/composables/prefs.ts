@@ -7,6 +7,8 @@ export const prefs = {
   detailsHeight: usePersisted('details-height', 280),
   terminalWidth: usePersisted('terminal-width', 0.42),
   terminalOpen: usePersisted('terminal-open', true),
+  sidebarWidth: usePersisted('sidebar-width', 300),
+  sidebarOpen: usePersisted('sidebar-open', true),
   workspaces: usePersisted<string[]>('workspaces', []),
 }
 

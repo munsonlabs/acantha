@@ -24,6 +24,10 @@ const ACTIONS: &[&str] = &[
     "pull",
     "stash",
     "clean",
+    "add",
+    "restore",
+    "rm",
+    "commit",
 ];
 
 #[derive(Serialize)]
@@ -81,6 +85,30 @@ pub struct FileChange {
     old_path: Option<String>,
     additions: Option<u32>,
     deletions: Option<u32>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatusFile {
+    path: String,
+    old_path: Option<String>,
+    /// Index (staged) state from porcelain v2, "." when unchanged.
+    index: String,
+    /// Working tree state, "." when unchanged.
+    worktree: String,
+    /// "changed" | "untracked" | "conflict"
+    kind: &'static str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Status {
+    branch: Option<String>,
+    oid: Option<String>,
+    upstream: Option<String>,
+    ahead: u32,
+    behind: u32,
+    files: Vec<StatusFile>,
 }
 
 fn run<I, S>(repo: &str, args: I) -> Result<Output, String>
@@ -225,6 +253,96 @@ fn parse_numstat(out: &str) -> HashMap<String, (Option<u32>, Option<u32>)> {
         stats.insert(path, (a.parse().ok(), d.parse().ok()));
     }
     stats
+}
+
+/// Parses `git status --porcelain=v2 --branch -z`.
+fn parse_status(out: &str) -> Status {
+    let mut status = Status {
+        branch: None,
+        oid: None,
+        upstream: None,
+        ahead: 0,
+        behind: 0,
+        files: Vec::new(),
+    };
+    let mut it = out.split('\0');
+    while let Some(entry) = it.next() {
+        if let Some(header) = entry.strip_prefix("# ") {
+            let (key, value) = header.split_once(' ').unwrap_or((header, ""));
+            match key {
+                "branch.head" if value != "(detached)" => status.branch = Some(value.into()),
+                "branch.oid" if value != "(initial)" => status.oid = Some(value.into()),
+                "branch.upstream" => status.upstream = Some(value.into()),
+                "branch.ab" => {
+                    for n in value.split(' ') {
+                        if let Some(a) = n.strip_prefix('+') {
+                            status.ahead = a.parse().unwrap_or(0);
+                        } else if let Some(b) = n.strip_prefix('-') {
+                            status.behind = b.parse().unwrap_or(0);
+                        }
+                    }
+                }
+                _ => {}
+            }
+            continue;
+        }
+        let file = |xy: &str, path: &str, old_path: Option<&str>, kind| StatusFile {
+            path: path.into(),
+            old_path: old_path.map(String::from),
+            index: xy[..1].into(),
+            worktree: xy[1..2].into(),
+            kind,
+        };
+        match entry.chars().next() {
+            Some('1') => {
+                let f: Vec<&str> = entry.splitn(9, ' ').collect();
+                if f.len() == 9 {
+                    status.files.push(file(f[1], f[8], None, "changed"));
+                }
+            }
+            Some('2') => {
+                // Renames carry the original path as the next NUL-separated field.
+                let f: Vec<&str> = entry.splitn(10, ' ').collect();
+                let old = it.next();
+                if f.len() == 10 {
+                    status.files.push(file(f[1], f[9], old, "changed"));
+                }
+            }
+            Some('u') => {
+                let f: Vec<&str> = entry.splitn(11, ' ').collect();
+                if f.len() == 11 {
+                    status.files.push(file(f[1], f[10], None, "conflict"));
+                }
+            }
+            Some('?') => status.files.push(file("??", &entry[2..], None, "untracked")),
+            _ => {}
+        }
+    }
+    status
+}
+
+#[tauri::command]
+pub async fn get_status(repo: String) -> Result<Status, String> {
+    Ok(parse_status(&git(
+        &repo,
+        ["status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all"],
+    )?))
+}
+
+/// Diff of one file in the working tree, against the index (unstaged) or of the index against HEAD (staged).
+#[tauri::command]
+pub async fn get_status_diff(repo: String, path: String, old_path: Option<String>, staged: bool, untracked: bool) -> Result<String, String> {
+    if untracked {
+        return git_with(&repo, ["diff", "--no-index", "--", "/dev/null", &path], &[0, 1]);
+    }
+    let mut args = vec!["diff".to_string(), "-M".into()];
+    if staged {
+        args.push("--cached".into());
+    }
+    args.push("--".into());
+    args.extend(old_path);
+    args.push(path);
+    git(&repo, args)
 }
 
 #[tauri::command]
@@ -476,6 +594,21 @@ mod tests {
         ))
         .unwrap();
         assert!(diff.contains("+x"));
+
+        let status = block_on(get_status(repo.clone())).unwrap();
+        assert_eq!(status.branch.as_deref(), Some("main"));
+        assert_eq!(status.oid, log.head);
+        assert_eq!((status.files[0].kind, status.files[0].path.as_str()), ("untracked", "new.txt"));
+
+        // Stage it, then edit it again so it is both staged and modified.
+        block_on(run_action(repo.clone(), vec!["add".into(), "--".into(), "new.txt".into()])).unwrap();
+        std::fs::write(std::path::Path::new(&repo).join("new.txt"), "x\ny\n").unwrap();
+        let status = block_on(get_status(repo.clone())).unwrap();
+        assert_eq!((status.files[0].index.as_str(), status.files[0].worktree.as_str()), ("A", "M"));
+        let staged = block_on(get_status_diff(repo.clone(), "new.txt".into(), None, true, false)).unwrap();
+        let unstaged = block_on(get_status_diff(repo.clone(), "new.txt".into(), None, false, false)).unwrap();
+        assert!(staged.contains("+x") && !staged.contains("+y"));
+        assert!(unstaged.contains("+y"));
 
         assert!(block_on(run_action(repo.clone(), vec!["gc".into()])).is_err());
         let _ = std::fs::remove_dir_all(&repo);

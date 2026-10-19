@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { prefs } from '@/composables/prefs'
 import { useWorkspaces } from '@/composables/workspace'
 import Icon from './Icon.vue'
 
@@ -32,6 +33,11 @@ const crumbs = computed(() => {
     <span v-else class="item">No repository</span>
     <div class="spacer" />
     <span v-if="log" class="item">{{ log.commits.length }}{{ log.hasMore ? '+' : '' }} commits</span>
+    <button v-if="repo" class="ghost status-btn" :class="{ on: prefs.sidebarOpen.value }" @click="prefs.sidebarOpen.value = !prefs.sidebarOpen.value">
+      <Icon name="scm" :size="12" /> Source Control
+      <span v-if="active?.status.files.value.length" class="badge">{{ active.status.files.value.length }}</span>
+      <kbd>⌘B</kbd>
+    </button>
     <button v-if="active && repo" class="ghost status-btn" :class="{ on: active.terminals.open.value }" @click="active.terminals.toggle()">
       <Icon name="terminal" :size="12" /> Terminal <kbd>⌘J</kbd>
     </button>
@@ -75,6 +81,13 @@ const crumbs = computed(() => {
 }
 .status-btn.on {
   color: var(--fg);
+}
+.badge {
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--pill);
+  color: var(--fg);
+  font-size: 10px;
 }
 kbd {
   font: 10.5px var(--font);
