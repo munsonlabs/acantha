@@ -6,8 +6,9 @@ A standalone desktop take on the VS Code Git Graph extension, built with Tauri 2
 - A source control sidebar: write a commit message, stage, unstage and discard files, view staged or unstaged diffs, amend, push and pull
 - A terminal pane next to each graph, with its own tabs, starting in the repository (`portable-pty` + xterm.js)
 - A file browser for the working tree or any commit, with highlighted code, rendered Markdown, images, blame and file history
+- A small editor (CodeMirror, optional Vim keys) for working-tree files: ⌘S to save, Save & Stage, a warning before losing unsaved changes or overwriting edits made elsewhere, and Open in VS Code, Cursor, Zed or another app
 - Branch filter: show any set of branches, or all of them; stashes in the graph, which can be hidden
-- A merge conflict resolver (accept current, incoming or both per conflict) with Continue/Abort for merges, rebases and cherry-picks
+- A merge conflict resolver (accept current, incoming or both per conflict, or edit it by hand) with Continue/Abort for merges, rebases and cherry-picks
 - Interactive rebase: reorder by dragging, then pick, reword, edit, squash, fixup or drop
 - Commit graph across all branches, remotes and tags, with the working tree shown as an "Uncommitted Changes" row
 - Commit details with changed files and a line-numbered diff view

@@ -11,6 +11,9 @@ export const prefs = {
   sidebarWidth: usePersisted('sidebar-width', 300),
   sidebarOpen: usePersisted('sidebar-open', true),
   workspaces: usePersisted<string[]>('workspaces', []),
+  editorVim: usePersisted('editor-vim', false),
+  /** App used by "Open in Editor". Empty means the system default for the file type. */
+  externalEditor: usePersisted('external-editor', ''),
 }
 
 export function addRecent(path: string) {

@@ -42,6 +42,12 @@ const choose = (block: ConflictBlock, resolution: Resolution | null) => {
 }
 const chooseAll = (resolution: Resolution) => blocks.value.forEach((b) => (b.resolution = resolution))
 
+/** Hand-editing starts from whatever the block resolves to now, or both sides when it isn't resolved yet. */
+function editBlock(block: ConflictBlock, text?: string) {
+  block.custom = text ?? (block.resolution ? resolvedLines(block) : [...block.current, ...block.incoming]).join('\n')
+  block.resolution = 'custom'
+}
+
 async function save() {
   const file = conflict.value
   if (!file || !repo.value) return
@@ -104,14 +110,25 @@ const close = () => (conflict.value = null)
               <div class="both">
                 <button class="ghost" @click="choose(seg, 'both')">Accept Both (current first)</button>
                 <button class="ghost" @click="choose(seg, 'both-reversed')">Accept Both (incoming first)</button>
+                <button class="ghost" @click="editBlock(seg)">Edit Manually</button>
               </div>
             </template>
             <template v-else>
               <div class="side-head">
-                <span><Icon name="check" :size="12" /> Resolved: {{ seg.resolution.replace('-', ' ') }}</span>
+                <span
+                  ><Icon name="check" :size="12" /> Resolved:
+                  {{ seg.resolution === 'custom' ? 'edited by hand' : seg.resolution.replace('-', ' ') }}</span
+                >
                 <button class="ghost" @click="choose(seg, null)">Undo</button>
               </div>
-              <pre>{{ resolvedLines(seg).join('\n') || '(empty)' }}</pre>
+              <!-- Any resolution can be tweaked by hand; typing turns it into a custom one. -->
+              <textarea
+                class="resolved"
+                :value="resolvedLines(seg).join('\n')"
+                :rows="Math.max(resolvedLines(seg).length, 1)"
+                spellcheck="false"
+                @input="editBlock(seg, ($event.target as HTMLTextAreaElement).value)"
+              />
             </template>
           </div>
         </template>
@@ -247,5 +264,21 @@ pre {
 }
 .note {
   color: var(--fg-muted);
+}
+.resolved {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  font: 12px/1.6 var(--mono);
+  resize: vertical;
+  outline: none;
+  user-select: text;
+}
+.resolved:focus {
+  background: var(--hover);
 }
 </style>

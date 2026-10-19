@@ -33,7 +33,9 @@ function onKeydown(e: KeyboardEvent) {
   const ws = active.value
   const mod = e.metaKey || e.ctrlKey
   const key = e.key.toLowerCase()
-  const typing = (e.target as HTMLElement).matches('input, select, textarea')
+  // The editor is a contenteditable, and uses Escape (Vim) and ⌘F (search) itself.
+  const inEditor = !!(e.target as HTMLElement).closest('.cm-editor')
+  const typing = inEditor || (e.target as HTMLElement).matches('input, select, textarea')
 
   if (e.ctrlKey && e.shiftKey && e.code === 'Backquote') {
     e.preventDefault()
@@ -51,14 +53,14 @@ function onKeydown(e: KeyboardEvent) {
   } else if (mod && key === 'w') {
     e.preventDefault()
     if (ws && inTerminal(document.activeElement)) ws.terminals.closeActive()
-    else if (ws) closeWorkspace(ws.id)
+    else if (ws) void closeWorkspace(ws.id)
   } else if (mod && key === 'b') {
     e.preventDefault()
     prefs.sidebarOpen.value = !prefs.sidebarOpen.value
   } else if (mod && key === 'j') {
     e.preventDefault()
     if (ws?.repo.repo.value) ws.terminals.toggle()
-  } else if (mod && key === 'f' && ws?.repo.repo.value) {
+  } else if (mod && key === 'f' && ws?.repo.repo.value && !inEditor) {
     e.preventDefault()
     titlebar.value?.focusSearch()
   } else if (mod && key === 'r') {
@@ -68,12 +70,13 @@ function onKeydown(e: KeyboardEvent) {
     e.preventDefault()
     void pickRepo()
   } else if (e.key === 'Escape') {
+    if (inEditor) return
     if (dialog.value) closeDialog(null)
     else if (ws?.diff.diff.value) ws.diff.closeDiff()
     else if (ws?.ui.conflict.value) ws.ui.conflict.value = null
     else if (ws?.ui.rebase.value) ws.ui.rebase.value = null
     else if (menu.value) closeMenu()
-    else if (!typing && ws?.files.preview.value) ws.files.closePreview()
+    else if (!typing && ws?.files.preview.value) void ws.files.closePreview()
     else if (!typing && ws?.details.details.value) ws.details.closeDetails()
   } else if (!typing && !dialog.value && !ws?.diff.diff.value && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && ws?.details.details.value) {
     e.preventDefault()
@@ -107,7 +110,7 @@ onMounted(async () => {
   const saved = [...prefs.workspaces.value]
   for (const path of saved) {
     const ws = await addWorkspace(path, { quiet: true })
-    if (!ws.repo.repo.value) closeWorkspace(ws.id)
+    if (!ws.repo.repo.value) void closeWorkspace(ws.id)
   }
   const initial = await git.initialRepo()
   if (initial) {

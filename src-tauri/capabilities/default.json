@@ -11,6 +11,14 @@
     "core:window:allow-start-dragging",
     "core:window:allow-internal-toggle-maximize",
     "dialog:default",
-    "opener:allow-open-url"
+    "opener:allow-open-url",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
+    }
   ]
 }

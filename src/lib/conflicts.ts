@@ -1,4 +1,4 @@
-export type Resolution = 'current' | 'incoming' | 'both' | 'both-reversed'
+export type Resolution = 'current' | 'incoming' | 'both' | 'both-reversed' | 'custom'
 
 export interface ConflictBlock {
   type: 'conflict'
@@ -7,6 +7,8 @@ export interface ConflictBlock {
   currentLabel: string
   incomingLabel: string
   resolution: Resolution | null
+  /** Text typed by hand, for the "custom" resolution. */
+  custom?: string
 }
 
 export type Segment = { type: 'text'; lines: string[] } | ConflictBlock
@@ -54,6 +56,8 @@ export function resolvedLines(block: ConflictBlock): string[] {
       return [...block.current, ...block.incoming]
     case 'both-reversed':
       return [...block.incoming, ...block.current]
+    case 'custom':
+      return (block.custom ?? '').split('\n')
     default:
       return []
   }
