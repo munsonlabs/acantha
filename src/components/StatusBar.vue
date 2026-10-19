@@ -35,7 +35,7 @@ const crumbs = computed(() => {
     <div class="spacer" />
     <span v-if="log" class="item">{{ log.commits.length }}{{ log.hasMore ? '+' : '' }} commits</span>
     <button v-if="repo" class="ghost status-btn" :class="{ on: prefs.sidebarOpen.value }" @click="prefs.sidebarOpen.value = !prefs.sidebarOpen.value">
-      <Icon name="scm" :size="12" /> Source Control
+      <Icon name="scm" :size="12" /> Git
       <span v-if="active?.status.files.value.length" class="badge">{{ active.status.files.value.length }}</span>
       <kbd>⌘B</kbd>
     </button>
@@ -74,9 +74,7 @@ const crumbs = computed(() => {
 }
 .operation {
   color: var(--del);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-weight: 550;
 }
 .status-btn {
   display: flex;

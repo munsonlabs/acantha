@@ -61,7 +61,7 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
   display: flex;
   flex: 1;
   min-height: 0;
-  padding: 0 8px;
+  padding: 0 10px;
 }
 .graph {
   flex: 1;
@@ -76,7 +76,7 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
 }
 .gutter {
   flex: none;
-  width: 8px;
+  width: 10px;
   cursor: col-resize;
 }
 </style>

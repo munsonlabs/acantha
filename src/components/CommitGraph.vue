@@ -55,16 +55,28 @@ const nodes = computed(() =>
       rx="1.5"
       :stroke="n.color"
     />
+    <!-- A soft glow behind HEAD, so "you are here" stands out. -->
     <circle
-      v-for="n in nodes.filter((n) => n.kind !== 'stash')"
-      :key="n.key"
-      :class="[n.kind, { on: n.lane === highlight }]"
+      v-for="n in nodes.filter((n) => n.kind === 'head')"
+      :key="`glow-${n.key}`"
+      class="glow"
       :cx="n.cx"
       :cy="n.cy"
-      :r="n.kind === 'commit' ? NODE_R : NODE_R + 0.5"
-      :fill="n.kind === 'commit' ? n.color : undefined"
-      :stroke="n.color"
+      :r="NODE_R + 6"
+      :fill="n.color"
     />
+    <g v-for="n in nodes.filter((n) => n.kind !== 'stash')" :key="n.key" :class="{ on: n.lane === highlight }" class="node">
+      <!-- A ring of the background colour cuts each node out of the lines running through it. -->
+      <circle class="halo" :cx="n.cx" :cy="n.cy" :r="NODE_R + 2.5" />
+      <circle
+        :class="n.kind"
+        :cx="n.cx"
+        :cy="n.cy"
+        :r="n.kind === 'commit' ? NODE_R : NODE_R + 0.5"
+        :fill="n.kind === 'commit' ? n.color : undefined"
+        :stroke="n.color"
+      />
+    </g>
   </svg>
 </template>
 
@@ -74,10 +86,11 @@ const nodes = computed(() =>
 }
 path {
   fill: none;
-  stroke-width: 2;
+  stroke-width: 2.5;
   stroke-linecap: round;
 }
 path,
+.node,
 circle,
 rect {
   transition:
@@ -86,17 +99,24 @@ rect {
 }
 /* Hovering a commit brings its branch line forward and fades the others. */
 .focused path:not(.on),
-.focused circle:not(.on),
-.focused rect:not(.on) {
+.focused .node:not(.on),
+.focused rect:not(.on),
+.focused .glow {
   opacity: 0.28;
 }
 .focused path.on {
-  stroke-width: 2.5;
+  stroke-width: 3;
+}
+.halo {
+  fill: var(--bg);
+}
+.glow {
+  opacity: 0.22;
 }
 circle.head,
 circle.uncommitted,
 rect.stash {
   fill: var(--bg);
-  stroke-width: 2;
+  stroke-width: 2.5;
 }
 </style>

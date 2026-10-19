@@ -1,9 +1,9 @@
 import { UNCOMMITTED, type Commit } from './git'
 
-export const ROW_H = 26
-export const COL_W = 14
-export const PAD_X = 12
-export const NODE_R = 4
+export const ROW_H = 32
+export const COL_W = 18
+export const PAD_X = 16
+export const NODE_R = 5
 
 const PALETTE = ['#6ea8e8', '#b98ce0', '#6ec48f', '#e0b34d', '#5fc6cc', '#e35d5d', '#8dbcf2', '#cba5ee', '#85d9a4', '#eec469', '#7bdbe0', '#f27f7f']
 const UNCOMMITTED_COLOR = '#6e6e6e'

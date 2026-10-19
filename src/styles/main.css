@@ -1,20 +1,25 @@
-/* Tokens follow Terax's default theme: a near-black canvas, hairline borders, and panes floating on a slightly lighter frame. */
+/* Panes float on a darker canvas, separated by tone and soft shadow rather than borders. Munson Labs green is the one accent. */
 :root {
   --font: 'Inter Variable', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
-  --bg: #141414;
-  --frame: #222222;
-  --popover: #1d1d1d;
+  --bg: #17171a;
+  --frame: #0e0e10;
+  --popover: #1f1f23;
   --fg: #f7f7f7;
   --fg-muted: #a3a3a3;
   --fg-faint: #6e6e6e;
-  --border: rgb(255 255 255 / 9%);
-  --border-strong: rgb(255 255 255 / 13%);
-  --ring: #8a8a8a;
+  --border: rgb(255 255 255 / 6%);
+  --border-strong: rgb(255 255 255 / 11%);
+  --divider: rgb(255 255 255 / 3.5%);
+  --accent: #4cb07c;
+  --accent-strong: #62c490;
+  --accent-fg: #06140c;
+  --accent-soft: rgb(76 176 124 / 15%);
+  --ring: rgb(76 176 124 / 60%);
   --hover: rgb(255 255 255 / 5%);
   --pill: rgb(255 255 255 / 7%);
-  --selected: rgb(255 255 255 / 8%);
+  --selected: var(--accent-soft);
   --match: rgb(224 179 77 / 12%);
   --input-bg: rgb(255 255 255 / 4%);
   --scrollbar: rgb(255 255 255 / 14%);
@@ -27,7 +32,7 @@
   --diff-del: rgb(227 93 93 / 12%);
   --diff-hunk: rgb(255 255 255 / 4%);
   --shadow: 0 12px 32px rgb(0 0 0 / 45%);
-  --pane-shadow: inset 0 1px 0 rgb(255 255 255 / 3.5%);
+  --pane-shadow: 0 0 0 1px rgb(255 255 255 / 5%), 0 12px 32px rgb(0 0 0 / 35%), inset 0 1px 0 rgb(255 255 255 / 4%);
   --term-selection: rgb(255 255 255 / 18%);
 
   --ansi-black: #3f3f3f;
@@ -53,16 +58,22 @@
 @media (prefers-color-scheme: light) {
   :root {
     --bg: #ffffff;
-    --frame: #ececec;
+    --frame: #e8e8eb;
     --popover: #ffffff;
     --fg: #111111;
     --fg-muted: #656565;
     --fg-faint: #8a8a8a;
-    --border: rgb(0 0 0 / 9%);
-    --border-strong: rgb(0 0 0 / 13%);
+    --border: rgb(0 0 0 / 7%);
+    --border-strong: rgb(0 0 0 / 12%);
+    --divider: rgb(0 0 0 / 4.5%);
+    --accent: #2e9460;
+    --accent-strong: #22784d;
+    --accent-fg: #ffffff;
+    --accent-soft: rgb(46 148 96 / 12%);
+    --ring: rgb(46 148 96 / 55%);
     --hover: rgb(0 0 0 / 4%);
     --pill: rgb(0 0 0 / 6%);
-    --selected: rgb(0 0 0 / 6%);
+    --selected: var(--accent-soft);
     --match: rgb(163 116 19 / 12%);
     --input-bg: rgb(0 0 0 / 3%);
     --scrollbar: rgb(0 0 0 / 18%);
@@ -75,7 +86,7 @@
     --diff-del: rgb(192 57 47 / 10%);
     --diff-hunk: rgb(0 0 0 / 3%);
     --shadow: 0 12px 32px rgb(0 0 0 / 14%);
-    --pane-shadow: none;
+    --pane-shadow: 0 0 0 1px rgb(0 0 0 / 5%), 0 8px 24px rgb(0 0 0 / 6%);
     --term-selection: rgb(0 0 0 / 12%);
 
     --ansi-black: #111111;
@@ -111,6 +122,7 @@ body {
 
 body {
   overflow: hidden;
+  font-feature-settings: 'cv11', 'ss01';
   background: var(--frame);
   color: var(--fg);
   font: 13px/1.4 var(--font);
@@ -156,7 +168,6 @@ dd {
 .pane {
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--bg);
   box-shadow: var(--pane-shadow);
@@ -167,9 +178,10 @@ dd {
   flex: none;
   align-items: center;
   gap: 4px;
-  height: 38px;
-  padding: 0 6px;
-  border-bottom: 1px solid var(--border);
+  height: 44px;
+  padding: 0 8px;
+  /* A super faint divider: there if you look for it, never boxy. */
+  border-bottom: 1px solid var(--divider);
 }
 
 /* Tabs, shared by the window tabs and the terminal tabs. */
@@ -307,13 +319,16 @@ button.icon-btn {
 
 button.primary {
   border-color: transparent;
-  background: var(--fg);
-  color: var(--bg);
-  font-weight: 500;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 18%),
+    0 2px 8px color-mix(in oklab, var(--accent) 30%, transparent);
 }
 
 button.primary:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--fg) 88%, var(--bg));
+  background: var(--accent-strong);
 }
 
 button.danger {
@@ -350,13 +365,13 @@ optgroup {
 }
 
 button:focus-visible {
-  outline: 1px solid var(--ring);
+  outline: 2px solid var(--ring);
   outline-offset: 1px;
 }
 
 .check input {
   margin: 0;
-  accent-color: var(--fg);
+  accent-color: var(--accent);
 }
 
 .overlay {

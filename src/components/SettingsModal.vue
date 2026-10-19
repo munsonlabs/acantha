@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { overlays } from '@/composables/commands'
+import { overlays, ZOOM_MAX, ZOOM_MIN } from '@/composables/commands'
 import { prefs } from '@/composables/prefs'
 import { useWorkspaces } from '@/composables/workspace'
 import Icon from './Icon.vue'
@@ -23,6 +23,17 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
       <div class="body">
         <section>
           <h3>Appearance</h3>
+          <div class="row">
+            <div>
+              <span class="label">Interface size</span>
+              <span class="hint">Scales all text and controls. ⌘+ and ⌘− work too.</span>
+            </div>
+            <span class="number">
+              <input v-model.number="prefs.uiZoom.value" type="range" :min="ZOOM_MIN" :max="ZOOM_MAX" step="0.05" />
+              <span class="value">{{ Math.round(prefs.uiZoom.value * 100) }}%</span>
+              <button class="ghost reset" :disabled="prefs.uiZoom.value === 1" title="Actual size (⌘0)" @click="prefs.uiZoom.value = 1">Reset</button>
+            </span>
+          </div>
           <div class="row">
             <div>
               <span class="label">Dates</span>
@@ -124,10 +135,8 @@ section + section {
 h3 {
   margin: 16px 0 4px;
   color: var(--fg-faint);
-  font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 11.5px;
+  font-weight: 550;
 }
 .row {
   display: flex;
@@ -163,7 +172,16 @@ h3 {
 }
 .number input {
   width: 140px;
-  accent-color: var(--fg);
+  accent-color: var(--accent);
+}
+.value {
+  min-width: 38px;
+  text-align: right;
+}
+.reset {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11.5px;
 }
 .segmented {
   display: flex;
@@ -212,10 +230,10 @@ h3 {
     background 0.15s;
 }
 .switch:checked {
-  background: var(--fg);
+  background: var(--accent);
 }
 .switch:checked::after {
-  background: var(--bg);
+  background: var(--accent-fg);
   transform: translateX(12px);
 }
 </style>

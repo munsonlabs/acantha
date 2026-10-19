@@ -81,8 +81,8 @@ function onKeydown(e: KeyboardEvent) {
       >
 
       <div class="lists">
-        <StatusSection title="Merge Conflicts" :files="conflicts" mode="conflict" />
-        <StatusSection title="Staged Changes" :files="staged" mode="staged" />
+        <StatusSection title="Merge conflicts" :files="conflicts" mode="conflict" />
+        <StatusSection title="Staged changes" :files="staged" mode="staged" />
         <StatusSection title="Changes" :files="unstaged" mode="unstaged" />
         <p v-if="clean" class="clean"><Icon name="check" :size="13" /> Working tree clean</p>
       </div>
@@ -102,7 +102,7 @@ function onKeydown(e: KeyboardEvent) {
   min-width: 0;
   overflow: hidden;
   padding: 0 6px;
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
   text-overflow: ellipsis;
 }

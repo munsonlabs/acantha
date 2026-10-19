@@ -169,7 +169,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="c-author" :title="c.email">
             <template v-if="c.hash !== UNCOMMITTED">
-              <Avatar :name="c.author" :email="c.email" />
+              <Avatar :name="c.author" :email="c.email" :size="18" />
               <span class="author">{{ c.author }}</span>
             </template>
           </div>
@@ -205,12 +205,10 @@ onBeforeUnmount(() => {
 }
 .header {
   flex: none;
-  height: 26px;
+  height: 30px;
   color: var(--fg-faint);
-  font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 11.5px;
+  font-weight: 550;
 }
 .scroller {
   flex: 1;
@@ -232,17 +230,22 @@ onBeforeUnmount(() => {
 .commit {
   cursor: default;
 }
+.commit {
+  transition: background 0.12s;
+}
 .commit:hover {
   background: var(--hover);
 }
+/* Selection uses the accent: a tint plus a bar on the left edge. */
 .commit.selected {
   background: var(--selected);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 .commit.match {
   background: var(--match);
 }
 .commit.match-current {
-  box-shadow: inset 2px 0 0 var(--fg);
+  box-shadow: inset 2px 0 0 var(--tag);
 }
 .sha {
   color: var(--fg-faint);
@@ -253,6 +256,8 @@ onBeforeUnmount(() => {
 }
 .subject {
   overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 450;
   text-overflow: ellipsis;
 }
 .commit.stash .subject {
@@ -263,11 +268,11 @@ onBeforeUnmount(() => {
   flex: none;
   align-items: center;
   gap: 4px;
-  height: 18px;
+  height: 20px;
   margin-right: 6px;
-  padding: 0 6px 0 5px;
+  padding: 0 8px 0 7px;
   border: 1px dashed var(--border-strong);
-  border-radius: 5px;
+  border-radius: 999px;
   color: var(--fg-muted);
   font-size: 11px;
 }
@@ -285,7 +290,7 @@ onBeforeUnmount(() => {
 }
 .c-date {
   justify-content: flex-end;
-  color: var(--fg-muted);
+  color: var(--fg-faint);
   font-size: 12px;
 }
 .c-changes {

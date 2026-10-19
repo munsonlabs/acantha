@@ -4,7 +4,7 @@
 
 # Acantha
 
-A Git client for macOS: a commit graph, terminals, source control and an editor, side by side.
+A Git client for macOS: a commit graph, terminals, a Git panel and an editor, side by side.
 
 **AI-generated and sense-checked · inspired by [Terax](https://github.com/crynta/terax-ai) · for personal use only**
 
@@ -18,14 +18,14 @@ A Git client for macOS: a commit graph, terminals, source control and an editor,
 > [!IMPORTANT]
 > **This project is entirely AI-generated**, written with Claude and sense-checked by a person rather than written by hand. It's **inspired by [Terax](https://github.com/crynta/terax-ai)**, whose look and layout it follows, and by the VS Code Git Graph extension. It was built **for personal use only**: it is not a supported product, and comes with no guarantees. The licence, [PolyForm Strict 1.0.0](LICENSE), allows personal and other non-commercial use only, and no redistribution or modified versions.
 
-![Acantha showing its own history: the commit graph with a commit's details open, the source control sidebar, and a terminal](docs/screenshot.png)
+![Acantha showing its own history: the commit graph with a commit's details open, the Git panel, and a terminal](docs/screenshot.png)
 
 ## Features
 
 Built with Tauri 2, Rust and Vue 3.
 
 - Tabs in the titlebar, one per repository, restored on the next launch
-- A source control sidebar: write a commit message, stage, unstage and discard files, view staged or unstaged diffs, amend, push and pull
+- A Git panel: write a commit message, stage, unstage and discard files, view staged or unstaged diffs, amend, push and pull
 - A terminal pane next to each graph, with its own tabs, starting in the repository (`portable-pty` + xterm.js)
 - A file browser for the working tree or any commit, with highlighted code, rendered Markdown, images, blame and file history
 - A small editor (CodeMirror, optional Vim keys) for working-tree files: ⌘S to save, Save & Stage, a warning before losing unsaved changes or overwriting edits made elsewhere, and Open in VS Code, Cursor, Zed or another app
@@ -57,7 +57,8 @@ Built with Tauri 2, Rust and Vue 3.
 | ⌘P            | Command palette                                     |
 | ⌘,            | Settings                                            |
 | ⌘/            | Keyboard shortcuts                                  |
-| ⌘B            | Show or hide the source control sidebar             |
+| ⌘B            | Show or hide the sidebar (Files and Git)            |
+| ⌘+ / ⌘− / ⌘0  | Interface size: bigger, smaller, actual size        |
 | ⌘↵            | Commit (in the message box)                         |
 | ⌘J            | Show or hide the terminal                           |
 | ⌃⇧`           | New terminal tab                                    |

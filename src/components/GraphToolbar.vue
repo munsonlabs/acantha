@@ -40,7 +40,7 @@ const { fetchAll } = ws.menus
   align-items: center;
   gap: 6px;
   padding: 0 6px;
-  font-weight: 500;
+  font-weight: 600;
 }
 .icon-btn:not(.on):not(:hover) {
   color: var(--fg-faint);

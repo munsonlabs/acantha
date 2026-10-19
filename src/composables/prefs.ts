@@ -16,6 +16,8 @@ export const prefs = {
   /** Author pictures from GitHub and Gravatar. Gravatar gets a hash of the email, never the address. */
   avatars: usePersisted('avatars', true),
   terminalFontSize: usePersisted('terminal-font-size', 12.5),
+  /** Scale of the whole interface: 1 is 100%. */
+  uiZoom: usePersisted('ui-zoom', 1),
   /** Shell for new terminals. Empty means the login shell. */
   shell: usePersisted('shell', ''),
   /** App used by "Open in Editor". Empty means the system default for the file type. */

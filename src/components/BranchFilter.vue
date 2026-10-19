@@ -161,10 +161,8 @@ onBeforeUnmount(() => {
 .group {
   padding: 6px 6px 2px;
   color: var(--fg-faint);
-  font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 11.5px;
+  font-weight: 550;
 }
 .option {
   display: flex;
@@ -179,7 +177,7 @@ onBeforeUnmount(() => {
 }
 .option input {
   margin: 0;
-  accent-color: var(--fg);
+  accent-color: var(--accent);
 }
 .option span {
   overflow: hidden;

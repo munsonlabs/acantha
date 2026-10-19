@@ -21,7 +21,7 @@ const pill = useSlidingPill(nav, () => [sidebarTab.value, files.value.length])
       <span class="tab-pill" :style="pill.style.value" />
       <button class="ghost" :class="{ active: sidebarTab === 'files' }" @click="sidebarTab = 'files'"><Icon name="files" :size="13" /> Files</button>
       <button class="ghost" :class="{ active: sidebarTab === 'scm' }" @click="sidebarTab = 'scm'">
-        <Icon name="scm" :size="13" /> Source Control
+        <Icon name="scm" :size="13" /> Git
         <span v-if="files.length" class="count">{{ files.length }}</span>
       </button>
     </nav>

@@ -114,7 +114,7 @@ watch(status, (now, before) => {
   gap: 6px;
   min-width: 0;
   padding: 0 6px;
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
 }
 .hash {

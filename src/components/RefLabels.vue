@@ -50,20 +50,20 @@ defineProps<{ refs: RefGroup | undefined; color: string; headBranch: string | nu
 </template>
 
 <style scoped>
+/* Soft pills: tinted with the branch's lane colour, no borders. */
 .ref {
   display: inline-flex;
   flex: none;
   align-items: center;
   gap: 4px;
-  height: 18px;
+  height: 20px;
   margin-right: 6px;
-  padding: 0 6px 0 5px;
-  border: 1px solid color-mix(in oklab, var(--ref-color, var(--fg-muted)) 35%, transparent);
-  border-radius: 5px;
-  background: color-mix(in oklab, var(--ref-color, var(--fg-muted)) 12%, transparent);
-  color: color-mix(in oklab, var(--ref-color, var(--fg-muted)) 65%, var(--fg));
-  font-size: 11px;
-  font-weight: 500;
+  padding: 0 8px 0 7px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--ref-color, var(--fg-muted)) 18%, transparent);
+  color: color-mix(in oklab, var(--ref-color, var(--fg-muted)) 60%, var(--fg));
+  font-size: 11.5px;
+  font-weight: 550;
   line-height: 1;
   white-space: nowrap;
 }
@@ -73,32 +73,32 @@ defineProps<{ refs: RefGroup | undefined; color: string; headBranch: string | nu
   flex: none;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.7;
+  stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+/* The checked-out branch: stronger tint and a ring. */
 .ref.current {
-  border-color: color-mix(in oklab, var(--ref-color) 70%, transparent);
-  background: color-mix(in oklab, var(--ref-color) 22%, transparent);
+  background: color-mix(in oklab, var(--ref-color) 30%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ref-color) 55%, transparent);
   color: var(--fg);
 }
 .ref.remote {
-  border-style: dashed;
-  background: transparent;
-  font-weight: 400;
+  background: color-mix(in oklab, var(--ref-color, var(--fg-muted)) 8%, transparent);
+  font-weight: 450;
 }
 .ref.tag {
   --ref-color: var(--tag);
 }
 .ref.detached {
   --ref-color: var(--fg-muted);
-  padding: 0 6px;
+  padding: 0 8px;
 }
 .ref-remote {
-  margin-left: 2px;
-  padding-left: 5px;
+  margin-left: 3px;
+  padding-left: 6px;
   border-left: 1px solid color-mix(in oklab, var(--ref-color) 35%, transparent);
-  font-weight: 400;
+  font-weight: 450;
   opacity: 0.75;
 }
 </style>

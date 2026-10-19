@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { git } from '@/lib/git'
 import { basename } from '@/lib/format'
@@ -24,6 +25,16 @@ const { current: dialog } = useDialog()
 const { menu, closeMenu } = useContextMenu()
 const appWindow = getCurrentWindow()
 const unlisten: UnlistenFn[] = []
+
+// The interface size scales the whole webview, so text stays sharp and menus still open under the mouse.
+watch(
+  prefs.uiZoom,
+  (zoom) =>
+    void getCurrentWebview()
+      .setZoom(zoom)
+      .catch(() => {}),
+  { immediate: true },
+)
 
 watch(
   () => active.value?.repo.repo.value,
@@ -55,6 +66,10 @@ function onKeydown(e: KeyboardEvent) {
   if (e.ctrlKey && e.shiftKey && e.code === 'Backquote') {
     e.preventDefault()
     runCommand('new-terminal')
+  } else if (mod && (e.key === '=' || e.key === '+' || e.key === '-' || e.key === '0')) {
+    // ⌘+ is ⌘⇧= on most layouts, so these are matched with or without Shift.
+    e.preventDefault()
+    runCommand(e.key === '-' ? 'zoom-out' : e.key === '0' ? 'zoom-reset' : 'zoom-in')
   } else if (e.metaKey && /^[1-9]$/.test(e.key)) {
     e.preventDefault()
     activateTabNumber(Number(e.key))

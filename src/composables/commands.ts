@@ -62,6 +62,9 @@ export const commands: Command[] = [
     run: withRepo((ws) => ws.repo.setShowRemotes(!ws.repo.showRemotes.value)),
   },
   { id: 'toggle-stashes', label: 'Toggle Stashes', group: 'View', run: () => (prefs.showStashes.value = !prefs.showStashes.value) },
+  { id: 'zoom-in', label: 'Zoom In', group: 'View', keys: '⌘+', run: () => stepZoom(1) },
+  { id: 'zoom-out', label: 'Zoom Out', group: 'View', keys: '⌘−', run: () => stepZoom(-1) },
+  { id: 'zoom-reset', label: 'Actual Size', group: 'View', keys: '⌘0', run: () => (prefs.uiZoom.value = 1) },
 
   { id: 'fetch', label: 'Fetch', group: 'Repository', run: withRepo((ws) => ws.menus.fetchAll()) },
   { id: 'pull', label: 'Pull', group: 'Repository', run: withRepo((ws) => ws.status.pull()) },
@@ -74,7 +77,7 @@ export const commands: Command[] = [
   },
   {
     id: 'source-control',
-    label: 'Source Control',
+    label: 'Git Panel',
     group: 'Repository',
     run: withRepo((ws) => {
       ws.ui.sidebarTab.value = 'scm'
@@ -82,6 +85,16 @@ export const commands: Command[] = [
     }),
   },
 ]
+
+/** Interface size steps, like a browser's zoom levels. */
+export const ZOOM_MIN = 0.8
+export const ZOOM_MAX = 1.5
+const ZOOM_STEP = 0.1
+
+function stepZoom(direction: number) {
+  const next = Math.round((prefs.uiZoom.value + direction * ZOOM_STEP) * 100) / 100
+  prefs.uiZoom.value = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next))
+}
 
 const byId = new Map(commands.map((c) => [c.id, c]))
 const lastRun = new Map<string, number>()

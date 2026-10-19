@@ -67,6 +67,10 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &sep()?,
             &item("refresh", "Refresh", Some("CmdOrCtrl+R"))?,
             &sep()?,
+            &item("zoom-in", "Zoom In", Some("CmdOrCtrl+="))?,
+            &item("zoom-out", "Zoom Out", Some("CmdOrCtrl+-"))?,
+            &item("zoom-reset", "Actual Size", Some("CmdOrCtrl+0"))?,
+            &sep()?,
             &PredefinedMenuItem::fullscreen(app, None)?,
         ],
     )?;
@@ -80,7 +84,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &item("push", "Push", None)?,
             &sep()?,
             &item("browse-files", "Browse Files", None)?,
-            &item("source-control", "Source Control", None)?,
+            &item("source-control", "Git Panel", None)?,
         ],
     )?;
     let window = Submenu::with_items(
