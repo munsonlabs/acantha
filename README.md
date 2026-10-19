@@ -1,7 +1,7 @@
 # Acantha · AI-generated, personal use
 
 > [!IMPORTANT]
-> **This project is entirely AI-generated**, written with Claude and sense-checked by a person rather than written by hand. It's **inspired by [Terax](https://github.com/crynta/terax-ai)**, whose look and layout it follows, and by the VS Code Git Graph extension. It was built **for personal use only**: it is not a supported product, and comes with no guarantees.
+> **This project is entirely AI-generated**, written with Claude and sense-checked by a person rather than written by hand. It's **inspired by [Terax](https://github.com/crynta/terax-ai)**, whose look and layout it follows, and by the VS Code Git Graph extension. It was built **for personal use only**: it is not a supported product, and comes with no guarantees. The licence, [PolyForm Strict 1.0.0](LICENSE), allows personal and other non-commercial use only, and no redistribution or modified versions.
 
 A Git client for macOS, built with Tauri 2, Rust and Vue 3: a commit graph with a terminal beside each graph, source control, a file browser and a small editor.
 
@@ -78,3 +78,7 @@ git tag v0.2.0 && git push origin v0.2.0
 ```
 
 The Release workflow builds the app for Apple Silicon and Intel on GitHub's macOS runners and publishes both `.dmg` files to the Releases page. CI runs the checks and tests on every push.
+
+## Licence
+
+[PolyForm Strict 1.0.0](LICENSE): free for personal and other non-commercial use. It doesn't allow commercial use, redistributing the app, or publishing modified versions.

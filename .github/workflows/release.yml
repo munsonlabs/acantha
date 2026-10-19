@@ -50,7 +50,7 @@ jobs:
           generateReleaseNotes: true
           args: --target ${{ matrix.target }}
           releaseBody: |
-            AI-generated and sense-checked, inspired by [Terax](https://github.com/crynta/terax-ai). Built for personal use only, with no guarantees.
+            AI-generated and sense-checked, inspired by [Terax](https://github.com/crynta/terax-ai). Built for personal use only, with no guarantees, under the PolyForm Strict 1.0.0 licence (personal and non-commercial use only).
 
             Download the `.dmg` for your Mac: **aarch64** for Apple Silicon (M1 and later), **x64** for Intel.
 
