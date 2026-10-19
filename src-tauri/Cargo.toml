@@ -1,7 +1,7 @@
 [package]
-name = "git-graph"
+name = "acantha"
 version = "0.1.0"
-description = "A standalone Git Graph viewer"
+description = "A Git client with a commit graph, terminals and an editor"
 edition = "2021"
 
 [build-dependencies]

@@ -1,6 +1,6 @@
 import { ref, watch, type Ref } from 'vue'
 
-const PREFIX = 'git-graph:'
+const PREFIX = 'acantha:'
 
 /** A ref backed by localStorage. Falls back to `initial` when storage is unavailable. */
 export function usePersisted<T>(key: string, initial: T): Ref<T> {

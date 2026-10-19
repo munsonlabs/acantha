@@ -1,0 +1,56 @@
+name: Release
+
+# Push a tag like v0.2.0 to build the app and publish it on the Releases page.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            label: Apple Silicon
+          - target: x86_64-apple-darwin
+            label: Intel
+    name: macOS (${{ matrix.label }})
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ${{ matrix.target }}
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Acantha ${{ github.ref_name }}
+          releaseDraft: false
+          generateReleaseNotes: true
+          args: --target ${{ matrix.target }}
+          releaseBody: |
+            Download the `.dmg` for your Mac: **aarch64** for Apple Silicon (M1 and later), **x64** for Intel.
+
+            Open it and drag Acantha into Applications. The app isn't notarised by Apple yet, so the first time,
+            right-click Acantha in Applications and choose **Open** (or allow it under System Settings → Privacy & Security).

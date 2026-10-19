@@ -80,7 +80,7 @@ pub fn pty_spawn(
     cmd.cwd(&cwd);
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
-    cmd.env("TERM_PROGRAM", "GitGraph");
+    cmd.env("TERM_PROGRAM", "Acantha");
     if std::env::var("LANG").is_err() {
         cmd.env("LANG", "en_US.UTF-8");
     }

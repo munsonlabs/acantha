@@ -660,7 +660,7 @@ mod tests {
     use tauri::async_runtime::block_on;
 
     fn repo() -> String {
-        let dir = std::env::temp_dir().join(format!("git-graph-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("acantha-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.to_string_lossy().into_owned();

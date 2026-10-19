@@ -10,10 +10,10 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 
     let app_menu = Submenu::with_items(
         app,
-        "Git Graph",
+        "Acantha",
         true,
         &[
-            &PredefinedMenuItem::about(app, Some("About Git Graph"), None)?,
+            &PredefinedMenuItem::about(app, Some("About Acantha"), None)?,
             &sep()?,
             &item("settings", "Settings…", Some("CmdOrCtrl+,"))?,
             &sep()?,

@@ -27,7 +27,7 @@ const unlisten: UnlistenFn[] = []
 
 watch(
   () => active.value?.repo.repo.value,
-  (r) => appWindow.setTitle(r ? `${basename(r)} · Git Graph` : 'Git Graph').catch(() => {}),
+  (r) => appWindow.setTitle(r ? `${basename(r)} · Acantha` : 'Acantha').catch(() => {}),
 )
 
 /** ⌘ + key → command. The native menu sends most of these too; `runCommand` ignores the duplicate. */

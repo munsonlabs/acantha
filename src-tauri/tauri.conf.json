@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Git Graph",
+  "productName": "Acantha",
   "version": "0.1.0",
-  "identifier": "com.munaibh.gitgraph",
+  "identifier": "com.munsonlabs.acantha",
   "build": {
     "beforeDevCommand": "vp dev",
     "devUrl": "http://localhost:1420",
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Git Graph",
+        "title": "Acantha",
         "width": 1440,
         "height": 900,
         "minWidth": 720,
@@ -40,6 +40,13 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "A Git client with a commit graph, terminals and an editor",
+    "copyright": "\u00a9 2026 Munson Labs",
+    "macOS": {
+      "signingIdentity": "-",
+      "minimumSystemVersion": "12.0"
+    }
   }
 }

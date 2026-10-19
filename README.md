@@ -1,6 +1,6 @@
-# Git Graph
+# Acantha
 
-A standalone desktop take on the VS Code Git Graph extension, built with Tauri 2, Rust and Vue 3, with a terminal beside each graph. The look follows [Terax](https://github.com/crynta/terax-ai).
+A Git client for macOS, built with Tauri 2, Rust and Vue 3: a commit graph in the spirit of the VS Code Git Graph extension, with a terminal beside each graph. The look follows [Terax](https://github.com/crynta/terax-ai).
 
 - Tabs in the titlebar, one per repository, restored on the next launch
 - A source control sidebar: write a commit message, stage, unstage and discard files, view staged or unstaged diffs, amend, push and pull
@@ -59,5 +59,19 @@ Backend tests run against a throwaway repo: `cd src-tauri && cargo test`.
 Open a specific repo on launch by passing its path to the binary:
 
 ```bash
-"src-tauri/target/release/bundle/macos/Git Graph.app/Contents/MacOS/git-graph" ~/code/my-repo
+"src-tauri/target/release/bundle/macos/Acantha.app/Contents/MacOS/acantha" ~/code/my-repo
 ```
+
+## Install
+
+Download the `.dmg` for your Mac from [Releases](https://github.com/munsonlabs/acantha/releases): **aarch64** for Apple Silicon, **x64** for Intel. The app isn't notarised yet, so the first time, right-click Acantha in Applications and choose **Open**.
+
+## Releasing
+
+Bump `version` in `src-tauri/tauri.conf.json` and `package.json`, commit, then tag and push:
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+The Release workflow builds the app for Apple Silicon and Intel on GitHub's macOS runners and publishes both `.dmg` files to the Releases page. CI runs the checks and tests on every push.

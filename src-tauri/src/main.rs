@@ -39,7 +39,7 @@ fn main() {
             pty::pty_kill,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building Git Graph")
+        .expect("error while building Acantha")
         .run(|app, event| {
             // Don't leave shells running after the window goes away.
             if let tauri::RunEvent::Exit = event {

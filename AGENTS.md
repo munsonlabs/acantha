@@ -1,4 +1,4 @@
-# Git Graph — Agent Guide
+# Acantha — Agent Guide
 
 ## Layout
 

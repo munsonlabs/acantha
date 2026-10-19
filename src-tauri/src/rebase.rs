@@ -55,7 +55,7 @@ pub async fn interactive_rebase(repo: String, base: Option<String>, todo: Vec<To
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    let dir = std::env::temp_dir().join(format!("git-graph-rebase-{}-{nanos}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("acantha-rebase-{}-{nanos}", std::process::id()));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let todo_path = dir.join("todo");
     std::fs::write(&todo_path, build_todo(&todo, &dir)?).map_err(|e| e.to_string())?;
@@ -93,7 +93,7 @@ mod tests {
     }
 
     fn repo(name: &str) -> String {
-        let dir = std::env::temp_dir().join(format!("git-graph-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("acantha-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.to_string_lossy().into_owned();
