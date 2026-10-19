@@ -35,39 +35,41 @@ function submit() {
 </script>
 
 <template>
-  <div v-if="current" class="overlay" @mousedown.self="closeDialog(null)">
-    <form ref="form" class="modal dialog" @submit.prevent="submit">
-      <h2>{{ current.title }}</h2>
-      <p v-if="current.message">
-        <template v-for="(s, i) in segments(current.message)" :key="i">
-          <code v-if="s.code">{{ s.text }}</code>
-          <template v-else>{{ s.text }}</template>
+  <Transition name="modal">
+    <div v-if="current" class="overlay" @mousedown.self="closeDialog(null)">
+      <form ref="form" class="modal dialog" @submit.prevent="submit">
+        <h2>{{ current.title }}</h2>
+        <p v-if="current.message">
+          <template v-for="(s, i) in segments(current.message)" :key="i">
+            <code v-if="s.code">{{ s.text }}</code>
+            <template v-else>{{ s.text }}</template>
+          </template>
+        </p>
+        <template v-for="f in current.fields ?? []" :key="f.name">
+          <label v-if="f.type === 'checkbox'" class="check"><input v-model="values[f.name]" type="checkbox" /> {{ f.label }}</label>
+          <label v-else class="field" :class="{ invalid: missing === f.name }">
+            <span>{{ f.label }}</span>
+            <select v-if="f.type === 'select'" v-model="values[f.name]">
+              <option v-for="o in f.options" :key="o.value" :value="o.value">{{ o.label }}</option>
+            </select>
+            <input
+              v-else
+              v-model="values[f.name]"
+              type="text"
+              :placeholder="f.placeholder"
+              spellcheck="false"
+              autocomplete="off"
+              autocapitalize="off"
+            />
+          </label>
         </template>
-      </p>
-      <template v-for="f in current.fields ?? []" :key="f.name">
-        <label v-if="f.type === 'checkbox'" class="check"><input v-model="values[f.name]" type="checkbox" /> {{ f.label }}</label>
-        <label v-else class="field" :class="{ invalid: missing === f.name }">
-          <span>{{ f.label }}</span>
-          <select v-if="f.type === 'select'" v-model="values[f.name]">
-            <option v-for="o in f.options" :key="o.value" :value="o.value">{{ o.label }}</option>
-          </select>
-          <input
-            v-else
-            v-model="values[f.name]"
-            type="text"
-            :placeholder="f.placeholder"
-            spellcheck="false"
-            autocomplete="off"
-            autocapitalize="off"
-          />
-        </label>
-      </template>
-      <div class="actions">
-        <button type="button" @click="closeDialog(null)">Cancel</button>
-        <button type="submit" :class="current.danger ? 'danger' : 'primary'">{{ current.confirm ?? 'OK' }}</button>
-      </div>
-    </form>
-  </div>
+        <div class="actions">
+          <button type="button" @click="closeDialog(null)">Cancel</button>
+          <button type="submit" :class="current.danger ? 'danger' : 'primary'">{{ current.confirm ?? 'OK' }}</button>
+        </div>
+      </form>
+    </div>
+  </Transition>
 </template>
 
 <style scoped>

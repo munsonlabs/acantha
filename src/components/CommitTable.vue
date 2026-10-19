@@ -21,6 +21,28 @@ const { branchMenu, checkoutBranch, checkoutRemoteBranch, commitMenu, remoteBran
 const { menu } = useContextMenu()
 
 const scroller = ref<HTMLElement>()
+
+/**
+ * Commits that just appeared at the top (after a fetch, a commit, or work in the terminal) slide in with a brief
+ * highlight. The first load, switching repos and "load more" (which adds older commits below) don't count.
+ */
+const fresh = shallowRef(new Set<string>())
+let known: Set<string> | null = null
+let freshTimer: ReturnType<typeof setTimeout> | undefined
+watch(ws.repo.repo, () => (known = null))
+watch(rows, (now) => {
+  const hashes = now.map((c) => c.hash).filter((h) => h !== UNCOMMITTED)
+  if (known) {
+    const firstKnown = hashes.findIndex((h) => known!.has(h))
+    const added = hashes.slice(0, firstKnown === -1 ? 0 : firstKnown)
+    if (added.length && added.length < 50) {
+      fresh.value = new Set(added)
+      clearTimeout(freshTimer)
+      freshTimer = setTimeout(() => (fresh.value = new Set()), 1200)
+    }
+  }
+  known = new Set(hashes)
+})
 const graphWidth = computed(() => Math.min(Math.max(layout.value.width, 40), 400))
 
 /** The row under the mouse, whose branch line the graph highlights. */
@@ -139,6 +161,7 @@ onBeforeUnmount(() => {
             head: c.hash === log!.head,
             match: matchSet.has(i),
             'match-current': current === i,
+            fresh: fresh.has(c.hash),
           }"
           @click="onClick($event, c)"
           @dblclick="onDoubleClick"
@@ -240,6 +263,24 @@ onBeforeUnmount(() => {
 .commit.selected {
   background: var(--selected);
   box-shadow: inset 2px 0 0 var(--accent);
+}
+.commit.fresh {
+  animation: row-in 0.9s var(--ease-out) both;
+}
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+    background: var(--accent-soft);
+  }
+  25% {
+    opacity: 1;
+    transform: none;
+    background: var(--accent-soft);
+  }
+  to {
+    background: transparent;
+  }
 }
 .commit.match {
   background: var(--match);

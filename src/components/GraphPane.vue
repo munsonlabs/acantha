@@ -14,7 +14,9 @@ const { preview } = ws.files
 
 <template>
   <section class="pane graph-pane">
-    <FilePreview v-if="preview" class="graph-body" />
+    <Transition name="slide">
+      <FilePreview v-if="preview" class="graph-body" />
+    </Transition>
     <!-- The table stays mounted under a preview so its scroll position survives. -->
     <template v-if="repo">
       <GraphToolbar v-show="!preview" />

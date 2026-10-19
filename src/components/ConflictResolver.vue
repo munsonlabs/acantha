@@ -69,80 +69,82 @@ const close = () => (conflict.value = null)
 </script>
 
 <template>
-  <div v-if="conflict" class="overlay" @mousedown.self="close">
-    <div class="modal resolver" role="dialog" aria-modal="true">
-      <header>
-        <h2>
-          <Icon name="warning" :size="14" />
-          <FileIcon :path="conflict.path" />
-          <span class="mono">{{ conflict.path }}</span>
-        </h2>
-        <span class="progress">{{ resolved }} of {{ blocks.length }} resolved</span>
-        <button class="ghost" :disabled="!blocks.length" @click="chooseAll('current')">Accept All Current</button>
-        <button class="ghost" :disabled="!blocks.length" @click="chooseAll('incoming')">Accept All Incoming</button>
-        <button class="ghost icon-btn" title="Close (Esc)" @click="close"><Icon name="x" /></button>
-      </header>
+  <Transition name="modal">
+    <div v-if="conflict" class="overlay" @mousedown.self="close">
+      <div class="modal resolver" role="dialog" aria-modal="true">
+        <header>
+          <h2>
+            <Icon name="warning" :size="14" />
+            <FileIcon :path="conflict.path" />
+            <span class="mono">{{ conflict.path }}</span>
+          </h2>
+          <span class="progress">{{ resolved }} of {{ blocks.length }} resolved</span>
+          <button class="ghost" :disabled="!blocks.length" @click="chooseAll('current')">Accept All Current</button>
+          <button class="ghost" :disabled="!blocks.length" @click="chooseAll('incoming')">Accept All Incoming</button>
+          <button class="ghost icon-btn" title="Close (Esc)" @click="close"><Icon name="x" /></button>
+        </header>
 
-      <div class="body">
-        <p v-if="error" class="note">{{ error }}</p>
-        <template v-for="(seg, i) in segments" :key="i">
-          <pre v-if="seg.type === 'text'" class="context">{{ seg.lines.join('\n') }}</pre>
-          <div v-else class="conflict" :class="{ done: seg.resolution }">
-            <template v-if="!seg.resolution">
-              <div class="side current">
+        <div class="body">
+          <p v-if="error" class="note">{{ error }}</p>
+          <template v-for="(seg, i) in segments" :key="i">
+            <pre v-if="seg.type === 'text'" class="context">{{ seg.lines.join('\n') }}</pre>
+            <div v-else class="conflict" :class="{ done: seg.resolution }">
+              <template v-if="!seg.resolution">
+                <div class="side current">
+                  <div class="side-head">
+                    <span
+                      >Current <em>{{ seg.currentLabel }}</em></span
+                    >
+                    <button class="ghost" @click="choose(seg, 'current')">Accept Current</button>
+                  </div>
+                  <pre>{{ seg.current.join('\n') || ' ' }}</pre>
+                </div>
+                <div class="side incoming">
+                  <div class="side-head">
+                    <span
+                      >Incoming <em>{{ seg.incomingLabel }}</em></span
+                    >
+                    <button class="ghost" @click="choose(seg, 'incoming')">Accept Incoming</button>
+                  </div>
+                  <pre>{{ seg.incoming.join('\n') || ' ' }}</pre>
+                </div>
+                <div class="both">
+                  <button class="ghost" @click="choose(seg, 'both')">Accept Both (current first)</button>
+                  <button class="ghost" @click="choose(seg, 'both-reversed')">Accept Both (incoming first)</button>
+                  <button class="ghost" @click="editBlock(seg)">Edit Manually</button>
+                </div>
+              </template>
+              <template v-else>
                 <div class="side-head">
                   <span
-                    >Current <em>{{ seg.currentLabel }}</em></span
+                    ><Icon name="check" :size="12" /> Resolved:
+                    {{ seg.resolution === 'custom' ? 'edited by hand' : seg.resolution.replace('-', ' ') }}</span
                   >
-                  <button class="ghost" @click="choose(seg, 'current')">Accept Current</button>
+                  <button class="ghost" @click="choose(seg, null)">Undo</button>
                 </div>
-                <pre>{{ seg.current.join('\n') || ' ' }}</pre>
-              </div>
-              <div class="side incoming">
-                <div class="side-head">
-                  <span
-                    >Incoming <em>{{ seg.incomingLabel }}</em></span
-                  >
-                  <button class="ghost" @click="choose(seg, 'incoming')">Accept Incoming</button>
-                </div>
-                <pre>{{ seg.incoming.join('\n') || ' ' }}</pre>
-              </div>
-              <div class="both">
-                <button class="ghost" @click="choose(seg, 'both')">Accept Both (current first)</button>
-                <button class="ghost" @click="choose(seg, 'both-reversed')">Accept Both (incoming first)</button>
-                <button class="ghost" @click="editBlock(seg)">Edit Manually</button>
-              </div>
-            </template>
-            <template v-else>
-              <div class="side-head">
-                <span
-                  ><Icon name="check" :size="12" /> Resolved:
-                  {{ seg.resolution === 'custom' ? 'edited by hand' : seg.resolution.replace('-', ' ') }}</span
-                >
-                <button class="ghost" @click="choose(seg, null)">Undo</button>
-              </div>
-              <!-- Any resolution can be tweaked by hand; typing turns it into a custom one. -->
-              <textarea
-                class="resolved"
-                :value="resolvedLines(seg).join('\n')"
-                :rows="Math.max(resolvedLines(seg).length, 1)"
-                spellcheck="false"
-                @input="editBlock(seg, ($event.target as HTMLTextAreaElement).value)"
-              />
-            </template>
-          </div>
-        </template>
+                <!-- Any resolution can be tweaked by hand; typing turns it into a custom one. -->
+                <textarea
+                  class="resolved"
+                  :value="resolvedLines(seg).join('\n')"
+                  :rows="Math.max(resolvedLines(seg).length, 1)"
+                  spellcheck="false"
+                  @input="editBlock(seg, ($event.target as HTMLTextAreaElement).value)"
+                />
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <footer>
+          <span class="hint">The file is saved and staged. Continue the merge or rebase from the sidebar.</span>
+          <button @click="close">Cancel</button>
+          <button class="primary" :disabled="saving || resolved < blocks.length" @click="save">
+            {{ blocks.length ? 'Save & Mark Resolved' : 'Mark Resolved' }}
+          </button>
+        </footer>
       </div>
-
-      <footer>
-        <span class="hint">The file is saved and staged. Continue the merge or rebase from the sidebar.</span>
-        <button @click="close">Cancel</button>
-        <button class="primary" :disabled="saving || resolved < blocks.length" @click="save">
-          {{ blocks.length ? 'Save & Mark Resolved' : 'Mark Resolved' }}
-        </button>
-      </footer>
     </div>
-  </div>
+  </Transition>
 </template>
 
 <style scoped>

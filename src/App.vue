@@ -60,8 +60,9 @@ function onKeydown(e: KeyboardEvent) {
   const mod = e.metaKey || e.ctrlKey
   const key = e.key.toLowerCase()
   // The editor is a contenteditable, and uses Escape (Vim) and ⌘F (search) itself.
-  const inEditor = !!(e.target as HTMLElement).closest('.cm-editor')
-  const typing = inEditor || (e.target as HTMLElement).matches('input, select, textarea')
+  const target = e.target instanceof Element ? e.target : null
+  const inEditor = !!target?.closest('.cm-editor')
+  const typing = inEditor || !!target?.matches('input, select, textarea')
 
   if (e.ctrlKey && e.shiftKey && e.code === 'Backquote') {
     e.preventDefault()

@@ -75,29 +75,31 @@ onBeforeUnmount(() => {
       <span>{{ label }}</span>
       <Icon name="chevron" :size="11" class="chev" />
     </button>
-    <div v-if="open" class="popover menu">
-      <input v-model="query" type="text" placeholder="Filter branches" spellcheck="false" autocomplete="off" autofocus />
-      <div class="quick">
-        <button class="ghost" :class="{ on: !branches.length }" @click="setBranches([])">All branches</button>
-        <button class="ghost" :disabled="!log?.headBranch" @click="onlyCurrent">Current only</button>
+    <Transition name="pop">
+      <div v-if="open" class="popover menu">
+        <input v-model="query" type="text" placeholder="Filter branches" spellcheck="false" autocomplete="off" autofocus />
+        <div class="quick">
+          <button class="ghost" :class="{ on: !branches.length }" @click="setBranches([])">All branches</button>
+          <button class="ghost" :disabled="!log?.headBranch" @click="onlyCurrent">Current only</button>
+        </div>
+        <div class="list">
+          <template
+            v-for="group in [
+              { title: 'Local', items: options.local },
+              { title: 'Remote', items: options.remote },
+            ]"
+            :key="group.title"
+          >
+            <div v-if="group.items.length" class="group">{{ group.title }}</div>
+            <label v-for="o in group.items" :key="o.rev" class="option">
+              <input type="checkbox" :checked="branches.includes(o.rev)" @change="toggle(o.rev)" />
+              <span>{{ o.label }}</span>
+            </label>
+          </template>
+          <p v-if="!options.local.length && !options.remote.length" class="none">No matching branches</p>
+        </div>
       </div>
-      <div class="list">
-        <template
-          v-for="group in [
-            { title: 'Local', items: options.local },
-            { title: 'Remote', items: options.remote },
-          ]"
-          :key="group.title"
-        >
-          <div v-if="group.items.length" class="group">{{ group.title }}</div>
-          <label v-for="o in group.items" :key="o.rev" class="option">
-            <input type="checkbox" :checked="branches.includes(o.rev)" @change="toggle(o.rev)" />
-            <span>{{ o.label }}</span>
-          </label>
-        </template>
-        <p v-if="!options.local.length && !options.remote.length" class="none">No matching branches</p>
-      </div>
-    </div>
+    </Transition>
   </div>
 </template>
 

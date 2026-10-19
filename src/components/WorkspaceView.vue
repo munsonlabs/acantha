@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { prefs } from '@/composables/prefs'
 import { provideWorkspace, type Workspace } from '@/composables/workspace'
 import DiffModal from './DiffModal.vue'
@@ -18,6 +18,22 @@ const el = ref<HTMLElement>()
 const width = prefs.terminalWidth
 const sidebarWidth = prefs.sidebarWidth
 const sidebarOpen = prefs.sidebarOpen
+
+/** The terminal is sized as a share of the workspace, worked out in pixels so it keeps its width while sliding. */
+const workspaceWidth = ref(0)
+const terminalPx = computed(() => Math.max(280, Math.round(workspaceWidth.value * width.value)))
+const observer = new ResizeObserver(([entry]) => (workspaceWidth.value = entry.contentRect.width))
+onMounted(() => el.value && observer.observe(el.value))
+onBeforeUnmount(() => observer.disconnect())
+
+/**
+ * Side panels open and close by animating the width of a slot around them, so the graph glides rather than jumps.
+ * The transition is only switched on while toggling: resizing a panel or the window should follow the mouse.
+ */
+const sliding = ref<'sidebar' | 'terminal' | null>(null)
+watch(sidebarOpen, () => (sliding.value = 'sidebar'), { flush: 'sync' })
+watch(open, () => (sliding.value = 'terminal'), { flush: 'sync' })
+const doneSliding = (e: TransitionEvent) => e.propertyName === 'width' && (sliding.value = null)
 
 /** Drags a gutter: the sidebar is sized in pixels from the left, the terminal as a fraction from the right. */
 function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
@@ -40,16 +56,28 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
 
 <template>
   <div v-show="visible" ref="el" class="workspace">
-    <template v-if="repo">
-      <Sidebar v-show="sidebarOpen" class="sidebar" :style="{ width: `${sidebarWidth}px` }" />
-      <div v-show="sidebarOpen" class="gutter" @mousedown="startResize($event, 'sidebar')" />
-    </template>
+    <div
+      v-if="repo"
+      class="slot left"
+      :class="{ sliding: sliding === 'sidebar', shut: !sidebarOpen }"
+      :style="{ width: sidebarOpen ? `${sidebarWidth + 10}px` : '0px' }"
+      @transitionend.self="doneSliding"
+    >
+      <Sidebar class="sidebar" :style="{ width: `${sidebarWidth}px` }" />
+      <div class="gutter" @mousedown="startResize($event, 'sidebar')" />
+    </div>
     <GraphPane class="graph" />
     <!-- Terminals stay mounted while hidden so their shells keep running. -->
-    <template v-if="repo && sessions.length">
-      <div v-show="open" class="gutter" @mousedown="startResize($event, 'terminal')" />
-      <TerminalPane v-show="open" class="terminal" :style="{ width: `${width * 100}%` }" :visible="visible && open" />
-    </template>
+    <div
+      v-if="repo && sessions.length"
+      class="slot right"
+      :class="{ sliding: sliding === 'terminal', shut: !open }"
+      :style="{ width: open ? `${terminalPx + 10}px` : '0px' }"
+      @transitionend.self="doneSliding"
+    >
+      <div class="gutter" @mousedown="startResize($event, 'terminal')" />
+      <TerminalPane class="terminal" :style="{ width: `${terminalPx}px` }" :visible="visible && open" />
+    </div>
     <DiffModal />
     <ConflictResolver />
     <RebaseModal />
@@ -67,12 +95,25 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
   flex: 1;
   min-width: 320px;
 }
-.sidebar {
+.slot {
+  display: flex;
   flex: none;
 }
+/* Panels keep their own width inside the slot, so they slide out of view rather than squash. */
+.slot.left {
+  justify-content: flex-end;
+}
+.slot.sliding {
+  overflow: hidden;
+  transition: width 0.26s var(--ease-out);
+}
+.slot.shut {
+  overflow: hidden;
+  pointer-events: none;
+}
+.sidebar,
 .terminal {
   flex: none;
-  min-width: 280px;
 }
 .gutter {
   flex: none;

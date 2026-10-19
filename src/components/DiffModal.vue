@@ -7,39 +7,41 @@ const { diff, closeDiff } = useWorkspace().diff
 </script>
 
 <template>
-  <div v-if="diff" class="overlay" @mousedown.self="closeDiff">
-    <div class="modal" role="dialog" aria-modal="true">
-      <header>
-        <FileIcon :path="diff.file.path" />
-        <h2 class="mono">
-          {{ diff.file.path }}<span v-if="diff.file.oldPath" class="muted"> ← {{ diff.file.oldPath }}</span>
-          <span v-if="diff.label" class="label">{{ diff.label }}</span>
-        </h2>
-        <button class="ghost icon-btn" title="Close (Esc)" @click="closeDiff"><Icon name="x" /></button>
-      </header>
-      <div class="body">
-        <p v-if="diff.error" class="note error">{{ diff.error }}</p>
-        <p v-else-if="!diff.result" class="note">Loading…</p>
-        <p v-else-if="diff.result.binary" class="note">Binary file, no text diff available.</p>
-        <p v-else-if="!diff.result.lines.length" class="note">No content changes (mode or rename only).</p>
-        <table v-else>
-          <tbody>
-            <tr v-for="(l, i) in diff.result.lines" :key="i" :class="l.kind">
-              <template v-if="l.kind === 'hunk'">
-                <td colspan="3">{{ l.text }}</td>
-              </template>
-              <template v-else>
-                <td class="no">{{ l.oldNo }}</td>
-                <td class="no">{{ l.newNo }}</td>
-                <td class="code">{{ l.text || ' ' }}</td>
-              </template>
-            </tr>
-          </tbody>
-        </table>
-        <p v-if="diff.result?.truncated" class="note">Diff truncated, it is too large to show in full.</p>
+  <Transition name="modal">
+    <div v-if="diff" class="overlay" @mousedown.self="closeDiff">
+      <div class="modal" role="dialog" aria-modal="true">
+        <header>
+          <FileIcon :path="diff.file.path" />
+          <h2 class="mono">
+            {{ diff.file.path }}<span v-if="diff.file.oldPath" class="muted"> ← {{ diff.file.oldPath }}</span>
+            <span v-if="diff.label" class="label">{{ diff.label }}</span>
+          </h2>
+          <button class="ghost icon-btn" title="Close (Esc)" @click="closeDiff"><Icon name="x" /></button>
+        </header>
+        <div class="body">
+          <p v-if="diff.error" class="note error">{{ diff.error }}</p>
+          <p v-else-if="!diff.result" class="note">Loading…</p>
+          <p v-else-if="diff.result.binary" class="note">Binary file, no text diff available.</p>
+          <p v-else-if="!diff.result.lines.length" class="note">No content changes (mode or rename only).</p>
+          <table v-else>
+            <tbody>
+              <tr v-for="(l, i) in diff.result.lines" :key="i" :class="l.kind">
+                <template v-if="l.kind === 'hunk'">
+                  <td colspan="3">{{ l.text }}</td>
+                </template>
+                <template v-else>
+                  <td class="no">{{ l.oldNo }}</td>
+                  <td class="no">{{ l.newNo }}</td>
+                  <td class="code">{{ l.text || ' ' }}</td>
+                </template>
+              </tr>
+            </tbody>
+          </table>
+          <p v-if="diff.result?.truncated" class="note">Diff truncated, it is too large to show in full.</p>
+        </div>
       </div>
     </div>
-  </div>
+  </Transition>
 </template>
 
 <style scoped>

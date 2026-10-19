@@ -36,12 +36,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="menu" ref="el" class="menu" :style="{ left: `${pos.left}px`, top: `${pos.top}px` }" @contextmenu.prevent>
-    <template v-for="(item, i) in menu.items" :key="i">
-      <div v-if="item === 'separator'" class="separator" />
-      <div v-else class="item" :class="{ disabled: item.disabled, danger: item.danger }" @click="choose(item)">{{ item.label }}</div>
-    </template>
-  </div>
+  <Transition name="pop">
+    <div v-if="menu" ref="el" class="menu" :style="{ left: `${pos.left}px`, top: `${pos.top}px` }" @contextmenu.prevent>
+      <template v-for="(item, i) in menu.items" :key="i">
+        <div v-if="item === 'separator'" class="separator" />
+        <div v-else class="item" :class="{ disabled: item.disabled, danger: item.danger }" @click="choose(item)">{{ item.label }}</div>
+      </template>
+    </div>
+  </Transition>
 </template>
 
 <style scoped>

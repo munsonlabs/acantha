@@ -15,8 +15,10 @@ const pill = useSlidingPill(nav, () => [sidebarTab.value, files.value.length])
 
 <template>
   <section class="pane sidebar-pane">
-    <FileBrowser v-if="sidebarTab === 'files'" class="content" />
-    <SourceControl v-else class="content" />
+    <Transition name="fade" mode="out-in">
+      <FileBrowser v-if="sidebarTab === 'files'" class="content" />
+      <SourceControl v-else class="content" />
+    </Transition>
     <nav ref="nav" class="switcher">
       <span class="tab-pill" :style="pill.style.value" />
       <button class="ghost" :class="{ active: sidebarTab === 'files' }" @click="sidebarTab = 'files'"><Icon name="files" :size="13" /> Files</button>

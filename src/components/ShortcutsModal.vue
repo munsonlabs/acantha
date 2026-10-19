@@ -28,23 +28,25 @@ const groups = computed(() => {
 </script>
 
 <template>
-  <div v-if="open" class="overlay" @mousedown.self="open = false">
-    <div class="modal sheet" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
-      <header>
-        <h2>Keyboard Shortcuts</h2>
-        <button class="ghost icon-btn" title="Close (Esc)" @click="open = false"><Icon name="x" /></button>
-      </header>
-      <div class="body">
-        <section v-for="[group, items] in groups" :key="group">
-          <h3>{{ group }}</h3>
-          <div v-for="item in items" :key="item.label" class="row">
-            <span>{{ item.label }}</span>
-            <kbd>{{ item.keys }}</kbd>
-          </div>
-        </section>
+  <Transition name="modal">
+    <div v-if="open" class="overlay" @mousedown.self="open = false">
+      <div class="modal sheet" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+        <header>
+          <h2>Keyboard Shortcuts</h2>
+          <button class="ghost icon-btn" title="Close (Esc)" @click="open = false"><Icon name="x" /></button>
+        </header>
+        <div class="body">
+          <section v-for="[group, items] in groups" :key="group">
+            <h3>{{ group }}</h3>
+            <div v-for="item in items" :key="item.label" class="row">
+              <span>{{ item.label }}</span>
+              <kbd>{{ item.keys }}</kbd>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
-  </div>
+  </Transition>
 </template>
 
 <style scoped>

@@ -119,66 +119,68 @@ const close = () => (rebase.value = null)
 </script>
 
 <template>
-  <div v-if="rebase" class="overlay" @mousedown.self="close">
-    <div class="modal rebase" role="dialog" aria-modal="true">
-      <header>
-        <h2><Icon name="rebase" :size="14" /> Interactive Rebase</h2>
-        <span class="muted"
-          >onto <code>{{ rebase.label }}</code> · oldest first · drag to reorder</span
-        >
-        <div class="spacer" />
-        <button class="ghost icon-btn" title="Close (Esc)" @click="close"><Icon name="x" /></button>
-      </header>
-
-      <div class="body">
-        <p v-if="loading" class="note">Loading…</p>
-        <p v-else-if="!items.length" class="note">No commits after this one.</p>
-        <ol v-else>
-          <li
-            v-for="(item, i) in items"
-            :key="item.commit.hash"
-            :class="[item.action, { dragging: dragging === i }]"
-            draggable="true"
-            @dragstart="dragging = i"
-            @dragend="dragging = null"
-            @dragover.prevent="onDragOver(i)"
+  <Transition name="modal">
+    <div v-if="rebase" class="overlay" @mousedown.self="close">
+      <div class="modal rebase" role="dialog" aria-modal="true">
+        <header>
+          <h2><Icon name="rebase" :size="14" /> Interactive Rebase</h2>
+          <span class="muted"
+            >onto <code>{{ rebase.label }}</code> · oldest first · drag to reorder</span
           >
-            <span class="grip" title="Drag to reorder"><Icon name="grip" :size="14" /></span>
-            <select
-              :value="item.action"
-              :title="ACTIONS.find((a) => a.value === item.action)?.hint"
-              @change="setAction(item, ($event.target as HTMLSelectElement).value as RebaseAction)"
-            >
-              <option v-for="a in ACTIONS" :key="a.value" :value="a.value">{{ a.label }}</option>
-            </select>
-            <span class="sha">{{ shortHash(item.commit.hash) }}</span>
-            <div class="message">
-              <textarea v-if="item.action === 'reword'" v-model="item.message" rows="2" spellcheck="true" />
-              <span v-else class="subject">{{ item.commit.subject }}</span>
-            </div>
-            <span class="author">{{ item.commit.author }}</span>
-            <span class="arrows">
-              <button class="ghost icon-btn" title="Move up" :disabled="i === 0" @click="move(i, -1)">
-                <Icon name="chevron" :size="11" class="up" />
-              </button>
-              <button class="ghost icon-btn" title="Move down" :disabled="i === items.length - 1" @click="move(i, 1)">
-                <Icon name="chevron" :size="11" class="down" />
-              </button>
-            </span>
-          </li>
-        </ol>
-      </div>
+          <div class="spacer" />
+          <button class="ghost icon-btn" title="Close (Esc)" @click="close"><Icon name="x" /></button>
+        </header>
 
-      <footer>
-        <span class="problem" :class="{ shown: problem }">
-          <template v-if="problem"><Icon name="warning" :size="12" /> {{ problem }}</template>
-          <template v-else>Uncommitted changes are stashed and restored automatically.</template>
-        </span>
-        <button @click="close">Cancel</button>
-        <button class="primary" :disabled="running || !!problem || !changed" @click="start">Start Rebase</button>
-      </footer>
+        <div class="body">
+          <p v-if="loading" class="note">Loading…</p>
+          <p v-else-if="!items.length" class="note">No commits after this one.</p>
+          <ol v-else>
+            <li
+              v-for="(item, i) in items"
+              :key="item.commit.hash"
+              :class="[item.action, { dragging: dragging === i }]"
+              draggable="true"
+              @dragstart="dragging = i"
+              @dragend="dragging = null"
+              @dragover.prevent="onDragOver(i)"
+            >
+              <span class="grip" title="Drag to reorder"><Icon name="grip" :size="14" /></span>
+              <select
+                :value="item.action"
+                :title="ACTIONS.find((a) => a.value === item.action)?.hint"
+                @change="setAction(item, ($event.target as HTMLSelectElement).value as RebaseAction)"
+              >
+                <option v-for="a in ACTIONS" :key="a.value" :value="a.value">{{ a.label }}</option>
+              </select>
+              <span class="sha">{{ shortHash(item.commit.hash) }}</span>
+              <div class="message">
+                <textarea v-if="item.action === 'reword'" v-model="item.message" rows="2" spellcheck="true" />
+                <span v-else class="subject">{{ item.commit.subject }}</span>
+              </div>
+              <span class="author">{{ item.commit.author }}</span>
+              <span class="arrows">
+                <button class="ghost icon-btn" title="Move up" :disabled="i === 0" @click="move(i, -1)">
+                  <Icon name="chevron" :size="11" class="up" />
+                </button>
+                <button class="ghost icon-btn" title="Move down" :disabled="i === items.length - 1" @click="move(i, 1)">
+                  <Icon name="chevron" :size="11" class="down" />
+                </button>
+              </span>
+            </li>
+          </ol>
+        </div>
+
+        <footer>
+          <span class="problem" :class="{ shown: problem }">
+            <template v-if="problem"><Icon name="warning" :size="12" /> {{ problem }}</template>
+            <template v-else>Uncommitted changes are stashed and restored automatically.</template>
+          </span>
+          <button @click="close">Cancel</button>
+          <button class="primary" :disabled="running || !!problem || !changed" @click="start">Start Rebase</button>
+        </footer>
+      </div>
     </div>
-  </div>
+  </Transition>
 </template>
 
 <style scoped>

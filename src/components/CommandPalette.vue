@@ -147,40 +147,42 @@ function onKey(e: KeyboardEvent) {
 </script>
 
 <template>
-  <div v-if="open" class="overlay top" @mousedown.self="open = false">
-    <div class="modal palette" role="dialog" aria-modal="true" aria-label="Command palette">
-      <div class="search">
-        <Icon name="search" :size="14" />
-        <input
-          ref="input"
-          v-model="query"
-          type="text"
-          placeholder="Search commands, branches, files and commits"
-          spellcheck="false"
-          autocomplete="off"
-          @keydown="onKey"
-        />
-      </div>
-      <div ref="list" class="results">
-        <div
-          v-for="(item, i) in results"
-          :key="item.key"
-          class="item"
-          :class="{ selected: i === index }"
-          @mousemove="index = i"
-          @click="choose(item)"
-        >
-          <FileIcon v-if="item.file" :path="item.file" />
-          <Icon v-else :name="item.icon ?? 'chevron'" :size="14" class="kind" />
-          <span class="label">{{ item.label }}</span>
-          <span v-if="item.detail" class="detail">{{ item.detail }}</span>
-          <kbd v-if="item.keys">{{ item.keys }}</kbd>
-          <span v-else class="group">{{ item.group }}</span>
+  <Transition name="modal">
+    <div v-if="open" class="overlay top" @mousedown.self="open = false">
+      <div class="modal palette" role="dialog" aria-modal="true" aria-label="Command palette">
+        <div class="search">
+          <Icon name="search" :size="14" />
+          <input
+            ref="input"
+            v-model="query"
+            type="text"
+            placeholder="Search commands, branches, files and commits"
+            spellcheck="false"
+            autocomplete="off"
+            @keydown="onKey"
+          />
         </div>
-        <p v-if="!results.length" class="none">No matches</p>
+        <div ref="list" class="results">
+          <div
+            v-for="(item, i) in results"
+            :key="item.key"
+            class="item"
+            :class="{ selected: i === index }"
+            @mousemove="index = i"
+            @click="choose(item)"
+          >
+            <FileIcon v-if="item.file" :path="item.file" />
+            <Icon v-else :name="item.icon ?? 'chevron'" :size="14" class="kind" />
+            <span class="label">{{ item.label }}</span>
+            <span v-if="item.detail" class="detail">{{ item.detail }}</span>
+            <kbd v-if="item.keys">{{ item.keys }}</kbd>
+            <span v-else class="group">{{ item.group }}</span>
+          </div>
+          <p v-if="!results.length" class="none">No matches</p>
+        </div>
       </div>
     </div>
-  </div>
+  </Transition>
 </template>
 
 <style scoped>

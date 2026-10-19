@@ -5,10 +5,12 @@ const { toast, hideToast } = useToast()
 </script>
 
 <template>
-  <div v-if="toast" class="toast" :class="toast.kind" role="status" @click="hideToast">
-    <span v-if="toast.kind === 'busy'" class="spinner" />
-    {{ toast.message }}
-  </div>
+  <Transition name="rise">
+    <div v-if="toast" class="toast" :class="toast.kind" role="status" @click="hideToast">
+      <span v-if="toast.kind === 'busy'" class="spinner" />
+      {{ toast.message }}
+    </div>
+  </Transition>
 </template>
 
 <style scoped>

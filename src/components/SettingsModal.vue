@@ -14,96 +14,100 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
 </script>
 
 <template>
-  <div v-if="open" class="overlay" @mousedown.self="open = false">
-    <div class="modal settings" role="dialog" aria-modal="true" aria-label="Settings">
-      <header>
-        <h2>Settings</h2>
-        <button class="ghost icon-btn" title="Close (Esc)" @click="open = false"><Icon name="x" /></button>
-      </header>
-      <div class="body">
-        <section>
-          <h3>Appearance</h3>
-          <div class="row">
-            <div>
-              <span class="label">Interface size</span>
-              <span class="hint">Scales all text and controls. ⌘+ and ⌘− work too.</span>
+  <Transition name="modal">
+    <div v-if="open" class="overlay" @mousedown.self="open = false">
+      <div class="modal settings" role="dialog" aria-modal="true" aria-label="Settings">
+        <header>
+          <h2>Settings</h2>
+          <button class="ghost icon-btn" title="Close (Esc)" @click="open = false"><Icon name="x" /></button>
+        </header>
+        <div class="body">
+          <section>
+            <h3>Appearance</h3>
+            <div class="row">
+              <div>
+                <span class="label">Interface size</span>
+                <span class="hint">Scales all text and controls. ⌘+ and ⌘− work too.</span>
+              </div>
+              <span class="number">
+                <input v-model.number="prefs.uiZoom.value" type="range" :min="ZOOM_MIN" :max="ZOOM_MAX" step="0.05" />
+                <span class="value">{{ Math.round(prefs.uiZoom.value * 100) }}%</span>
+                <button class="ghost reset" :disabled="prefs.uiZoom.value === 1" title="Actual size (⌘0)" @click="prefs.uiZoom.value = 1">
+                  Reset
+                </button>
+              </span>
             </div>
-            <span class="number">
-              <input v-model.number="prefs.uiZoom.value" type="range" :min="ZOOM_MIN" :max="ZOOM_MAX" step="0.05" />
-              <span class="value">{{ Math.round(prefs.uiZoom.value * 100) }}%</span>
-              <button class="ghost reset" :disabled="prefs.uiZoom.value === 1" title="Actual size (⌘0)" @click="prefs.uiZoom.value = 1">Reset</button>
-            </span>
-          </div>
-          <div class="row">
-            <div>
-              <span class="label">Dates</span>
-              <span class="hint">Recent commits as “2h ago”, or always the full date.</span>
+            <div class="row">
+              <div>
+                <span class="label">Dates</span>
+                <span class="hint">Recent commits as “2h ago”, or always the full date.</span>
+              </div>
+              <div class="segmented">
+                <button :class="{ on: prefs.dateStyle.value === 'relative' }" @click="prefs.dateStyle.value = 'relative'">Relative</button>
+                <button :class="{ on: prefs.dateStyle.value === 'absolute' }" @click="prefs.dateStyle.value = 'absolute'">Absolute</button>
+              </div>
             </div>
-            <div class="segmented">
-              <button :class="{ on: prefs.dateStyle.value === 'relative' }" @click="prefs.dateStyle.value = 'relative'">Relative</button>
-              <button :class="{ on: prefs.dateStyle.value === 'absolute' }" @click="prefs.dateStyle.value = 'absolute'">Absolute</button>
-            </div>
-          </div>
-          <label class="row">
-            <div>
-              <span class="label">Author pictures</span>
-              <span class="hint">From GitHub, or Gravatar (sent a hash of the email, not the address).</span>
-            </div>
-            <input v-model="prefs.avatars.value" type="checkbox" class="switch" />
-          </label>
-        </section>
+            <label class="row">
+              <div>
+                <span class="label">Author pictures</span>
+                <span class="hint">From GitHub, or Gravatar (sent a hash of the email, not the address).</span>
+              </div>
+              <input v-model="prefs.avatars.value" type="checkbox" class="switch" />
+            </label>
+          </section>
 
-        <section>
-          <h3>Graph</h3>
-          <label class="row">
-            <span class="label">Show remote branches</span>
-            <input
-              type="checkbox"
-              class="switch"
-              :checked="prefs.showRemotes.value"
-              @change="setRemotes(($event.target as HTMLInputElement).checked)"
-            />
-          </label>
-          <label class="row">
-            <span class="label">Show stashes</span>
-            <input v-model="prefs.showStashes.value" type="checkbox" class="switch" />
-          </label>
-        </section>
+          <section>
+            <h3>Graph</h3>
+            <label class="row">
+              <span class="label">Show remote branches</span>
+              <input
+                type="checkbox"
+                class="switch"
+                :checked="prefs.showRemotes.value"
+                @change="setRemotes(($event.target as HTMLInputElement).checked)"
+              />
+            </label>
+            <label class="row">
+              <span class="label">Show stashes</span>
+              <input v-model="prefs.showStashes.value" type="checkbox" class="switch" />
+            </label>
+          </section>
 
-        <section>
-          <h3>Editor</h3>
-          <label class="row">
-            <span class="label">Vim key bindings</span>
-            <input v-model="prefs.editorVim.value" type="checkbox" class="switch" />
-          </label>
-          <label class="row">
-            <span class="label">Open files with</span>
-            <select v-model="prefs.externalEditor.value">
-              <option v-for="app in EDITORS" :key="app" :value="app">{{ app || 'Default app' }}</option>
-            </select>
-          </label>
-        </section>
+          <section>
+            <h3>Editor</h3>
+            <label class="row">
+              <span class="label">Vim key bindings</span>
+              <input v-model="prefs.editorVim.value" type="checkbox" class="switch" />
+            </label>
+            <label class="row">
+              <span class="label">Open files with</span>
+              <select v-model="prefs.externalEditor.value">
+                <option v-for="app in EDITORS" :key="app" :value="app">{{ app || 'Default app' }}</option>
+              </select>
+            </label>
+          </section>
 
-        <section>
-          <h3>Terminal</h3>
-          <label class="row">
-            <span class="label">Font size</span>
-            <span class="number">
-              <input v-model.number="prefs.terminalFontSize.value" type="range" min="10" max="20" step="0.5" />
-              <span>{{ prefs.terminalFontSize.value }}px</span>
-            </span>
-          </label>
-          <label class="row">
-            <div>
-              <span class="label">Shell</span>
-              <span class="hint">For new terminals. Leave empty for your login shell.</span>
-            </div>
-            <input v-model.trim="prefs.shell.value" type="text" placeholder="$SHELL" spellcheck="false" autocomplete="off" />
-          </label>
-        </section>
+          <section>
+            <h3>Terminal</h3>
+            <label class="row">
+              <span class="label">Font size</span>
+              <span class="number">
+                <input v-model.number="prefs.terminalFontSize.value" type="range" min="10" max="20" step="0.5" />
+                <span>{{ prefs.terminalFontSize.value }}px</span>
+              </span>
+            </label>
+            <label class="row">
+              <div>
+                <span class="label">Shell</span>
+                <span class="hint">For new terminals. Leave empty for your login shell.</span>
+              </div>
+              <input v-model.trim="prefs.shell.value" type="text" placeholder="$SHELL" spellcheck="false" autocomplete="off" />
+            </label>
+          </section>
+        </div>
       </div>
     </div>
-  </div>
+  </Transition>
 </template>
 
 <style scoped>
