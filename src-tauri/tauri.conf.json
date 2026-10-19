@@ -48,5 +48,10 @@
       "signingIdentity": "-",
       "minimumSystemVersion": "12.0"
     }
+  },
+  "plugins": {
+    "opener": {
+      "requireLiteralLeadingDot": false
+    }
   }
 }
