@@ -1,0 +1,483 @@
+use serde::Serialize;
+use std::collections::HashMap;
+use std::ffi::OsStr;
+use std::process::{Command, Output};
+
+const EMPTY_TREE_SHA1: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+const EMPTY_TREE_SHA256: &str = "6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321";
+
+/// Pseudo-hash the frontend uses for the working tree.
+const UNCOMMITTED: &str = "*";
+
+/// Subcommands the UI is allowed to run through `run_action`.
+const ACTIONS: &[&str] = &[
+    "checkout",
+    "branch",
+    "tag",
+    "merge",
+    "rebase",
+    "cherry-pick",
+    "revert",
+    "reset",
+    "fetch",
+    "push",
+    "pull",
+    "stash",
+    "clean",
+];
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Commit {
+    hash: String,
+    parents: Vec<String>,
+    author: String,
+    email: String,
+    date: i64,
+    subject: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitRef {
+    /// "branch" | "remote" | "tag"
+    kind: &'static str,
+    name: String,
+    remote: Option<String>,
+    hash: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Log {
+    commits: Vec<Commit>,
+    refs: Vec<GitRef>,
+    remotes: Vec<String>,
+    head: Option<String>,
+    head_branch: Option<String>,
+    uncommitted: usize,
+    has_more: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitDetails {
+    hash: String,
+    parents: Vec<String>,
+    author: String,
+    email: String,
+    author_date: i64,
+    committer: String,
+    committer_email: String,
+    commit_date: i64,
+    body: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileChange {
+    status: String,
+    path: String,
+    old_path: Option<String>,
+    additions: Option<u32>,
+    deletions: Option<u32>,
+}
+
+fn run<I, S>(repo: &str, args: I) -> Result<Output, String>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    // Apps launched from Finder get a minimal PATH, which breaks credential helpers and hooks.
+    let path = std::env::var("PATH").unwrap_or_default();
+    Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["-c", "core.quotepath=false", "-c", "color.ui=false", "-c", "log.showSignature=false"])
+        .args(args)
+        .env("PATH", format!("{path}:/opt/homebrew/bin:/usr/local/bin"))
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_EDITOR", "true")
+        .output()
+        .map_err(|e| format!("Failed to run git: {e}"))
+}
+
+fn stderr_or_code(out: &Output) -> String {
+    let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    if err.is_empty() {
+        format!("git exited with code {}", out.status.code().unwrap_or(-1))
+    } else {
+        err
+    }
+}
+
+fn git_with<I, S>(repo: &str, args: I, ok_codes: &[i32]) -> Result<String, String>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    let out = run(repo, args)?;
+    if ok_codes.contains(&out.status.code().unwrap_or(-1)) {
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    } else {
+        Err(stderr_or_code(&out))
+    }
+}
+
+fn git<I, S>(repo: &str, args: I) -> Result<String, String>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    git_with(repo, args, &[0])
+}
+
+fn empty_tree(hash: &str) -> &'static str {
+    if hash.len() == 64 {
+        EMPTY_TREE_SHA256
+    } else {
+        EMPTY_TREE_SHA1
+    }
+}
+
+fn trimmed(s: Result<String, String>) -> Option<String> {
+    s.ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+}
+
+fn parse_refs(out: &str) -> Vec<GitRef> {
+    let mut refs = Vec::new();
+    for line in out.lines() {
+        let mut f = line.split('\x1f');
+        let (Some(obj), Some(peeled), Some(name)) = (f.next(), f.next(), f.next()) else {
+            continue;
+        };
+        // Annotated tags point at a tag object; the peeled hash is the commit.
+        let hash = if peeled.is_empty() { obj } else { peeled }.to_string();
+        if let Some(n) = name.strip_prefix("refs/heads/") {
+            refs.push(GitRef {
+                kind: "branch",
+                name: n.into(),
+                remote: None,
+                hash,
+            });
+        } else if let Some(n) = name.strip_prefix("refs/remotes/") {
+            let Some((remote, branch)) = n.split_once('/') else { continue };
+            if branch == "HEAD" {
+                continue;
+            }
+            refs.push(GitRef {
+                kind: "remote",
+                name: branch.into(),
+                remote: Some(remote.into()),
+                hash,
+            });
+        } else if let Some(n) = name.strip_prefix("refs/tags/") {
+            refs.push(GitRef {
+                kind: "tag",
+                name: n.into(),
+                remote: None,
+                hash,
+            });
+        }
+    }
+    refs
+}
+
+/// Parses `git diff --name-status -z` output.
+fn parse_name_status(out: &str) -> Vec<FileChange> {
+    let mut files = Vec::new();
+    let mut it = out.split('\0').filter(|s| !s.is_empty());
+    while let Some(status) = it.next() {
+        let renamed = status.starts_with('R') || status.starts_with('C');
+        let (old_path, path) = if renamed {
+            (it.next().map(String::from), it.next())
+        } else {
+            (None, it.next())
+        };
+        let Some(path) = path else { break };
+        files.push(FileChange {
+            status: status[..1].to_string(),
+            path: path.into(),
+            old_path,
+            additions: None,
+            deletions: None,
+        });
+    }
+    files
+}
+
+/// Parses `git diff --numstat -z` output into path -> (additions, deletions). Binary files have no counts.
+fn parse_numstat(out: &str) -> HashMap<String, (Option<u32>, Option<u32>)> {
+    let mut stats = HashMap::new();
+    let mut it = out.split('\0');
+    while let Some(tok) = it.next() {
+        let mut parts = tok.splitn(3, '\t');
+        let (Some(a), Some(d), Some(p)) = (parts.next(), parts.next(), parts.next()) else {
+            continue;
+        };
+        // Renames leave the path empty and follow it with the old and new paths.
+        let path = if p.is_empty() {
+            it.next();
+            it.next().unwrap_or_default().to_string()
+        } else {
+            p.to_string()
+        };
+        stats.insert(path, (a.parse().ok(), d.parse().ok()));
+    }
+    stats
+}
+
+#[tauri::command]
+pub fn initial_repo() -> Option<String> {
+    let arg = std::env::args().skip(1).find(|a| !a.starts_with('-'))?;
+    std::fs::canonicalize(arg).ok().map(|p| p.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+pub async fn resolve_repo(path: String) -> Result<String, String> {
+    trimmed(git(&path, ["rev-parse", "--show-toplevel"])).ok_or_else(|| format!("{path} is not a git repository"))
+}
+
+#[tauri::command]
+pub async fn get_log(repo: String, limit: usize, branch: Option<String>, show_remotes: bool) -> Result<Log, String> {
+    let head = trimmed(git(&repo, ["rev-parse", "--verify", "-q", "HEAD"]));
+    let head_branch = trimmed(git(&repo, ["symbolic-ref", "--short", "-q", "HEAD"]));
+    let refs = parse_refs(&git(
+        &repo,
+        [
+            "for-each-ref",
+            "--format=%(objectname)%1f%(*objectname)%1f%(refname)",
+            "refs/heads",
+            "refs/remotes",
+            "refs/tags",
+        ],
+    )?);
+    let remotes = git(&repo, ["remote"])?.lines().map(String::from).collect();
+    let uncommitted = git(&repo, ["status", "--porcelain", "--untracked-files=all"])?.lines().count();
+
+    let mut commits = Vec::new();
+    if head.is_some() || !refs.is_empty() {
+        let mut args = vec![
+            "log".to_string(),
+            "--date-order".into(),
+            format!("--max-count={}", limit + 1),
+            "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%s%x1e".into(),
+        ];
+        match branch {
+            Some(b) => args.push(b),
+            None => {
+                args.extend(["--branches".into(), "--tags".into()]);
+                if show_remotes {
+                    args.push("--remotes".into());
+                }
+                if head.is_some() {
+                    args.push("HEAD".into());
+                }
+            }
+        }
+        args.push("--".into());
+
+        for record in git(&repo, &args)?.split('\x1e') {
+            let record = record.trim_start_matches('\n');
+            let f: Vec<&str> = record.splitn(6, '\x1f').collect();
+            if f.len() < 6 {
+                continue;
+            }
+            commits.push(Commit {
+                hash: f[0].into(),
+                parents: f[1].split_whitespace().map(String::from).collect(),
+                author: f[2].into(),
+                email: f[3].into(),
+                date: f[4].parse().unwrap_or(0),
+                subject: f[5].into(),
+            });
+        }
+    }
+
+    let has_more = commits.len() > limit;
+    commits.truncate(limit);
+    Ok(Log {
+        commits,
+        refs,
+        remotes,
+        head,
+        head_branch,
+        uncommitted,
+        has_more,
+    })
+}
+
+#[tauri::command]
+pub async fn get_commit(repo: String, hash: String) -> Result<CommitDetails, String> {
+    let out = git(
+        &repo,
+        ["show", "-s", "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%cn%x1f%ce%x1f%ct%x1f%B", &hash],
+    )?;
+    let f: Vec<&str> = out.splitn(9, '\x1f').collect();
+    if f.len() < 9 {
+        return Err(format!("Could not read commit {hash}"));
+    }
+    Ok(CommitDetails {
+        hash: f[0].into(),
+        parents: f[1].split_whitespace().map(String::from).collect(),
+        author: f[2].into(),
+        email: f[3].into(),
+        author_date: f[4].parse().unwrap_or(0),
+        committer: f[5].into(),
+        committer_email: f[6].into(),
+        commit_date: f[7].parse().unwrap_or(0),
+        body: f[8].trim_end().into(),
+    })
+}
+
+/// Files changed between `from` (or the empty tree) and `to`, where `to` may be the working tree.
+#[tauri::command]
+pub async fn get_changes(repo: String, from: Option<String>, to: String) -> Result<Vec<FileChange>, String> {
+    let mut revs = vec![from.unwrap_or_else(|| empty_tree(&to).to_string())];
+    if to != UNCOMMITTED {
+        revs.push(to.clone());
+    }
+    let diff = |mode: &str| {
+        let args = ["diff", mode, "-z", "-M"]
+            .into_iter()
+            .map(String::from)
+            .chain(revs.iter().cloned())
+            .chain(["--".to_string()]);
+        git(&repo, args)
+    };
+
+    let mut files = parse_name_status(&diff("--name-status")?);
+    let stats = parse_numstat(&diff("--numstat")?);
+    for f in &mut files {
+        if let Some(&(a, d)) = stats.get(&f.path) {
+            f.additions = a;
+            f.deletions = d;
+        }
+    }
+
+    if to == UNCOMMITTED {
+        let untracked = git(&repo, ["ls-files", "--others", "--exclude-standard", "-z"])?;
+        files.extend(untracked.split('\0').filter(|p| !p.is_empty()).map(|p| FileChange {
+            status: "?".into(),
+            path: p.into(),
+            old_path: None,
+            additions: None,
+            deletions: None,
+        }));
+    }
+    Ok(files)
+}
+
+#[tauri::command]
+pub async fn get_file_diff(
+    repo: String,
+    from: Option<String>,
+    to: String,
+    path: String,
+    old_path: Option<String>,
+    untracked: bool,
+) -> Result<String, String> {
+    if untracked {
+        // --no-index exits with 1 when the files differ, which they always do here.
+        return git_with(&repo, ["diff", "--no-index", "--", "/dev/null", &path], &[0, 1]);
+    }
+    let mut args = vec!["diff".to_string(), "-M".into(), from.unwrap_or_else(|| empty_tree(&to).to_string())];
+    if to != UNCOMMITTED {
+        args.push(to);
+    }
+    args.push("--".into());
+    args.extend(old_path);
+    args.push(path);
+    git(&repo, args)
+}
+
+#[tauri::command]
+pub async fn run_action(repo: String, args: Vec<String>) -> Result<String, String> {
+    match args.first() {
+        Some(cmd) if ACTIONS.contains(&cmd.as_str()) => {}
+        _ => return Err("Unsupported git command".into()),
+    }
+    let out = run(&repo, &args)?;
+    if !out.status.success() {
+        return Err(stderr_or_code(&out));
+    }
+    // Commands like fetch and push report progress on stderr even when they succeed.
+    let text = [out.stdout, out.stderr]
+        .iter()
+        .map(|b| String::from_utf8_lossy(b).trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>();
+    Ok(text.join("\n"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tauri::async_runtime::block_on;
+
+    fn repo() -> String {
+        let dir = std::env::temp_dir().join(format!("git-graph-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.to_string_lossy().into_owned();
+        let sh = |args: &[&str]| git(&path, args).unwrap();
+        sh(&["init", "-q", "-b", "main"]);
+        sh(&["config", "user.name", "Test"]);
+        sh(&["config", "user.email", "test@example.com"]);
+        std::fs::write(dir.join("a.txt"), "one\n").unwrap();
+        sh(&["add", "-A"]);
+        sh(&["commit", "-qm", "first"]);
+        sh(&["tag", "-a", "v1", "-m", "v1"]);
+        sh(&["checkout", "-qb", "feature"]);
+        std::fs::rename(dir.join("a.txt"), dir.join("b.txt")).unwrap();
+        sh(&["add", "-A"]);
+        sh(&["commit", "-qm", "rename"]);
+        sh(&["checkout", "-q", "main"]);
+        sh(&["merge", "-q", "--no-ff", "feature", "-m", "merge"]);
+        std::fs::write(dir.join("new.txt"), "x\n").unwrap();
+        path
+    }
+
+    #[test]
+    fn reads_log_refs_and_changes() {
+        let repo = repo();
+        let log = block_on(get_log(repo.clone(), 100, None, true)).unwrap();
+        assert_eq!(
+            log.commits.iter().map(|c| c.subject.as_str()).collect::<Vec<_>>(),
+            ["merge", "rename", "first"]
+        );
+        assert_eq!(log.commits[0].parents.len(), 2);
+        assert_eq!(log.head_branch.as_deref(), Some("main"));
+        assert_eq!(log.uncommitted, 1);
+        // The annotated tag resolves to the commit, not the tag object.
+        let tag = log.refs.iter().find(|r| r.kind == "tag").unwrap();
+        assert_eq!(tag.hash, log.commits[2].hash);
+
+        let rename = &log.commits[1];
+        let files = block_on(get_changes(repo.clone(), Some(rename.parents[0].clone()), rename.hash.clone())).unwrap();
+        assert_eq!(files.len(), 1);
+        assert_eq!(
+            (files[0].status.as_str(), files[0].path.as_str(), files[0].old_path.as_deref()),
+            ("R", "b.txt", Some("a.txt"))
+        );
+
+        let root = block_on(get_changes(repo.clone(), None, log.commits[2].hash.clone())).unwrap();
+        assert_eq!((root[0].status.as_str(), root[0].additions), ("A", Some(1)));
+
+        let working = block_on(get_changes(repo.clone(), log.head.clone(), UNCOMMITTED.into())).unwrap();
+        assert_eq!(working[0].status, "?");
+        let diff = block_on(get_file_diff(
+            repo.clone(),
+            log.head.clone(),
+            UNCOMMITTED.into(),
+            "new.txt".into(),
+            None,
+            true,
+        ))
+        .unwrap();
+        assert!(diff.contains("+x"));
+
+        assert!(block_on(run_action(repo.clone(), vec!["gc".into()])).is_err());
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+}
