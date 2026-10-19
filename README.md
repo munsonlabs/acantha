@@ -1,6 +1,9 @@
-# Acantha
+# Acantha · AI-generated, personal use
 
-A Git client for macOS, built with Tauri 2, Rust and Vue 3: a commit graph in the spirit of the VS Code Git Graph extension, with a terminal beside each graph. The look follows [Terax](https://github.com/crynta/terax-ai).
+> [!IMPORTANT]
+> **This project is entirely AI-generated**, written with Claude and sense-checked by a person rather than written by hand. It's **inspired by [Terax](https://github.com/crynta/terax-ai)**, whose look and layout it follows, and by the VS Code Git Graph extension. It was built **for personal use only**: it is not a supported product, and comes with no guarantees.
+
+A Git client for macOS, built with Tauri 2, Rust and Vue 3: a commit graph with a terminal beside each graph, source control, a file browser and a small editor.
 
 - Tabs in the titlebar, one per repository, restored on the next launch
 - A source control sidebar: write a commit message, stage, unstage and discard files, view staged or unstaged diffs, amend, push and pull

@@ -50,6 +50,8 @@ jobs:
           generateReleaseNotes: true
           args: --target ${{ matrix.target }}
           releaseBody: |
+            AI-generated and sense-checked, inspired by [Terax](https://github.com/crynta/terax-ai). Built for personal use only, with no guarantees.
+
             Download the `.dmg` for your Mac: **aarch64** for Apple Silicon (M1 and later), **x64** for Intel.
 
             Open it and drag Acantha into Applications. The app isn't notarised by Apple yet, so the first time,
