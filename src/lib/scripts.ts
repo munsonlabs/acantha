@@ -36,8 +36,8 @@ interface Folder {
 }
 
 /**
- * The scripts as a folder tree, flattened into rows: the root's scripts first, then each folder (alphabetically) with
- * its scripts under it. A folder holding nothing but one other folder is shown together with it (`packages/web`), as
+ * The scripts as a folder tree, flattened into rows: the repository root's scripts in a folder called "root" (path ''),
+ * then each folder (alphabetically) with its scripts under it. A folder holding nothing but one other folder is shown together with it (`packages/web`), as
  * VS Code compacts folders. Folders whose path is in `collapsed` hide what's in them.
  */
 export function scriptRows(scripts: Script[], collapsed: Set<string> = new Set()): ScriptRow[] {
@@ -53,7 +53,12 @@ export function scriptRows(scripts: Script[], collapsed: Set<string> = new Set()
   }
   const rows: ScriptRow[] = []
   const walk = (folder: Folder, path: string, depth: number) => {
-    for (const script of folder.scripts) rows.push({ kind: 'script', script, depth })
+    if (!path && folder.scripts.length) {
+      rows.push({ kind: 'folder', path: '', label: 'root', depth })
+      if (!collapsed.has('')) for (const script of folder.scripts) rows.push({ kind: 'script', script, depth: depth + 1 })
+    } else {
+      for (const script of folder.scripts) rows.push({ kind: 'script', script, depth })
+    }
     for (const name of [...folder.children.keys()].sort((a, b) => a.localeCompare(b))) {
       let node = folder.children.get(name)!
       let label = name

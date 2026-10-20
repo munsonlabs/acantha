@@ -24,12 +24,12 @@ describe('scriptRows', () => {
     rows.map((r) => `${'  '.repeat(r.depth)}${r.kind === 'folder' ? `${r.label}/` : r.script.name}`)
   const scripts = [s('', 'build'), s('web', 'dev'), s('packages/api', 'start'), s('packages/api', 'test'), s('', 'lint')]
 
-  it('nests folders under the root scripts, compacting single-folder chains', () => {
-    expect(show(scriptRows(scripts))).toEqual(['build', 'lint', 'packages/api/', '  start', '  test', 'web/', '  dev'])
+  it('puts the root scripts in a "root" folder, then each folder, compacting single-folder chains', () => {
+    expect(show(scriptRows(scripts))).toEqual(['root/', '  build', '  lint', 'packages/api/', '  start', '  test', 'web/', '  dev'])
   })
 
-  it('hides what a collapsed folder holds', () => {
-    expect(show(scriptRows(scripts, new Set(['packages/api'])))).toEqual(['build', 'lint', 'packages/api/', 'web/', '  dev'])
+  it('hides what a collapsed folder holds, root included', () => {
+    expect(show(scriptRows(scripts, new Set(['packages/api', ''])))).toEqual(['root/', 'packages/api/', 'web/', '  dev'])
   })
 
   it('keeps folders that hold more than one folder', () => {

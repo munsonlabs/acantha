@@ -94,9 +94,15 @@ function run(s: Script) {
       <p v-else-if="!data.scripts.length" class="note">No scripts found: no Vite+ tasks, and no package.json with scripts.</p>
       <p v-else-if="!rows.length" class="note">Nothing matches.</p>
       <template v-for="r in rows" :key="r.kind === 'folder' ? `f:${r.path}` : `s:${r.script.dir}:${r.script.name}`">
-        <div v-if="r.kind === 'folder'" class="row folder" :style="{ paddingLeft: `${6 + r.depth * 14}px` }" :title="r.path" @click="toggle(r.path)">
+        <div
+          v-if="r.kind === 'folder'"
+          class="row folder"
+          :style="{ paddingLeft: `${6 + r.depth * 14}px` }"
+          :title="r.path || 'The repository root'"
+          @click="toggle(r.path)"
+        >
           <Icon name="chevron" :size="11" class="chev" :class="{ open: !collapsed.has(r.path) || filter.trim() }" />
-          <FileIcon :path="r.path" folder :open="!collapsed.has(r.path)" />
+          <FileIcon :path="r.path || 'root'" folder :open="!collapsed.has(r.path)" />
           <span class="folder-name">{{ r.label }}</span>
         </div>
         <div v-else class="row" :class="{ open: terminalFor(r.script) }" :style="{ paddingLeft: `${8 + r.depth * 14}px` }">
