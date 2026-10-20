@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { git } from '@/lib/git'
+import { resolveName } from '@/lib/paths'
 import { shortHash } from '@/lib/format'
 import { useWorkspace } from '@/composables/workspace'
 import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
 import { openMenu } from '@/composables/useContextMenu'
 import { fileOpenItems, folderOpenItems } from '@/composables/openers'
-import { ask, confirmAction } from '@/composables/useDialog'
+import { confirmAction } from '@/composables/useDialog'
 import { showToast } from '@/composables/useToast'
 import type { MenuEntry } from '@/composables/useContextMenu'
 import Skeleton from './Skeleton.vue'
 
 const ws = useWorkspace()
-const { rev, list, loading, filter, expanded, newFolders, preview, load, browse, toggle, open, closePreview, leaveEditor } = ws.files
+const { rev, list, folders, loading, filter, expanded, newFolders, preview, load, browse, toggle, open, closePreview, leaveEditor } = ws.files
 const { rows } = ws.repo
 const { status } = ws.status
 
@@ -23,7 +24,8 @@ interface Dir {
 }
 
 interface Row {
-  kind: 'dir' | 'file'
+  /** 'new' is the row a new file or folder is being named in. */
+  kind: 'dir' | 'file' | 'new'
   path: string
   name: string
   depth: number
@@ -41,9 +43,9 @@ const tree = computed(() => {
     }
     dir.files.push(path)
   }
-  // Folders made here that git can't list yet, being empty.
+  // Folders git can't list through their files: new and empty ones, from git and made here.
   if (rev.value === null)
-    for (const path of newFolders.value) {
+    for (const path of [...folders.value, ...newFolders.value]) {
       let dir = root
       for (const part of path.split('/')) {
         let next = dir.dirs.get(part)
@@ -71,62 +73,95 @@ async function afterChange() {
   void ws.status.refresh()
 }
 
-/** New File… or New Folder… in `dir` ('' for the top). A name with slashes makes the folders on the way. */
-async function create(kind: 'file' | 'folder', dir: string) {
-  const v = await ask({
-    title: kind === 'file' ? 'New File' : 'New Folder',
-    message: dir ? `In \`${dir}/\`.` : 'At the top of the repository.',
-    fields: [{ name: 'name', label: 'Name', required: true, placeholder: kind === 'file' ? 'notes.md, or src/new.ts' : 'components' }],
-    confirm: 'Create',
-  })
-  const name = String(v?.name ?? '')
-    .trim()
-    .replace(/^\/+|\/+$/g, '')
-  if (!v || !name) return
-  const path = dir ? `${dir}/${name}` : name
+const inside = (path: string, dir: string) => path === dir || path.startsWith(`${dir}/`)
+const parentOf = (path: string) => path.split('/').slice(0, -1).join('/')
+
+/** Naming a new file or folder, or renaming one, in place in the tree. */
+type Editing =
+  | { mode: 'rename'; path: string; kind: 'dir' | 'file'; value: string; error: string }
+  | { mode: 'file' | 'folder'; dir: string; value: string; error: string }
+const editing = ref<Editing | null>(null)
+const editInput = ref<HTMLInputElement[]>()
+let committing = false
+
+/** Focuses the name box: a file's name is selected without its extension, as Finder does. */
+async function focusEdit() {
+  await nextTick()
+  const el = editInput.value?.[0]
+  const e = editing.value
+  if (!el || !e) return
+  el.focus()
+  const dot = e.mode === 'rename' && e.kind === 'file' ? e.value.lastIndexOf('.') : -1
+  el.setSelectionRange(0, dot > 0 ? dot : e.value.length)
+}
+
+function startCreate(kind: 'file' | 'folder', dir: string) {
+  if (!working.value) return
+  filter.value = ''
+  if (dir) reveal(dir, true)
+  editing.value = { mode: kind, dir, value: '', error: '' }
+  void focusEdit()
+}
+
+function startRename(r: Row) {
+  if (!working.value || r.kind === 'new') return
+  filter.value = ''
+  editing.value = { mode: 'rename', path: r.path, kind: r.kind, value: r.path.split('/').pop()!, error: '' }
+  void focusEdit()
+}
+
+const cancelEdit = () => (editing.value = null)
+const onEditBlur = () => !committing && cancelEdit()
+const isEditing = (r: Row) =>
+  (r.kind === 'new' && editing.value?.mode !== 'rename') || (editing.value?.mode === 'rename' && editing.value.path === r.path)
+
+async function commitEdit() {
+  const e = editing.value
+  if (!e || committing) return
+  const typed = e.value.trim()
+  if (!typed) return cancelEdit()
+  const target = resolveName(e.mode === 'rename' ? parentOf(e.path) : e.dir, typed)
+  if (!target) return void (editing.value = { ...e, error: "That doesn't name a file or folder" })
+  if (e.mode === 'rename' && target === e.path) return cancelEdit()
+  committing = true
   try {
-    if (kind === 'file') {
-      await git.createFile(repoRoot(), path)
+    if (e.mode === 'rename') await moveTo(e.path, e.kind, target)
+    else if (e.mode === 'file') {
+      await git.createFile(repoRoot(), target)
+      editing.value = null
       await afterChange()
-      reveal(path)
-      await open(path)
+      reveal(target)
+      await open(target)
     } else {
-      await git.createFolder(repoRoot(), path)
-      newFolders.value = new Set([...newFolders.value, path])
-      reveal(path, true)
+      await git.createFolder(repoRoot(), target)
+      newFolders.value = new Set([...newFolders.value, target])
+      editing.value = null
+      await afterChange()
+      reveal(target, true)
     }
-  } catch (e) {
-    showToast(String(e), 'error')
+    editing.value = null
+  } catch (err) {
+    // Stay in the box with the reason, so the name can be fixed.
+    if (editing.value) {
+      editing.value = { ...e, error: String(err) }
+      void focusEdit()
+    } else showToast(String(err), 'error')
+  } finally {
+    committing = false
   }
 }
 
-const inside = (path: string, dir: string) => path === dir || path.startsWith(`${dir}/`)
-
-/** Rename… also moves: the new name can be a path elsewhere in the repository. */
-async function rename(r: Row) {
-  const v = await ask({
-    title: r.kind === 'dir' ? 'Rename Folder' : 'Rename File',
-    message: 'A new name, or a path to move it to.',
-    fields: [{ name: 'to', label: 'Name', value: r.path, required: true }],
-    confirm: 'Rename',
-  })
-  const to = String(v?.to ?? '')
-    .trim()
-    .replace(/^\/+|\/+$/g, '')
-  if (!v || !to || to === r.path) return
+/** Renames or moves, keeping an open file open under its new name (asking first about unsaved edits). */
+async function moveTo(from: string, kind: 'dir' | 'file', to: string) {
   const p = preview.value
-  const wasOpen = p && p.rev === null && inside(p.path, r.path) ? p : null
+  const wasOpen = p && p.rev === null && inside(p.path, from) ? p : null
   if (wasOpen && !(await leaveEditor())) return
-  try {
-    await git.renamePath(repoRoot(), r.path, to)
-    newFolders.value = new Set([...newFolders.value].map((f) => (inside(f, r.path) ? to + f.slice(r.path.length) : f)))
-    await afterChange()
-    reveal(to, r.kind === 'dir')
-    if (wasOpen) await open(to + wasOpen.path.slice(r.path.length), wasOpen.view, null)
-    showToast(`Renamed to ${to}`)
-  } catch (e) {
-    showToast(String(e), 'error')
-  }
+  await git.renamePath(repoRoot(), from, to)
+  editing.value = null
+  newFolders.value = new Set([...newFolders.value].map((f) => (inside(f, from) ? to + f.slice(from.length) : f)))
+  await afterChange()
+  reveal(to, kind === 'dir')
+  if (wasOpen) await open(to + wasOpen.path.slice(from.length), wasOpen.view, null)
 }
 
 async function trash(r: Row) {
@@ -149,12 +184,12 @@ async function trash(r: Row) {
 }
 
 const createItems = (dir: string): MenuEntry[] => [
-  { label: 'New File…', icon: 'file', run: () => create('file', dir) },
-  { label: 'New Folder…', icon: 'folder', run: () => create('folder', dir) },
+  { label: 'New File', icon: 'file', run: () => startCreate('file', dir) },
+  { label: 'New Folder', icon: 'folder', run: () => startCreate('folder', dir) },
 ]
 
 const changeItems = (r: Row): MenuEntry[] => [
-  { label: 'Rename…', icon: 'pencil', run: () => rename(r) },
+  { label: 'Rename', icon: 'pencil', run: () => startRename(r) },
   { label: 'Move to Trash', icon: 'trash', danger: true, run: () => trash(r) },
 ]
 
@@ -177,6 +212,13 @@ const visible = computed<Row[]>(() => {
     for (const path of [...dir.files].sort((a, b) => a.localeCompare(b))) out.push({ kind: 'file', path, name: path.slice(prefix.length), depth })
   }
   walk(tree.value, '', 0)
+  // The row a new file or folder is named in: first inside its folder (or at the top).
+  const e = editing.value
+  if (e && e.mode !== 'rename') {
+    const at = e.dir ? out.findIndex((r) => r.kind === 'dir' && r.path === e.dir) : -1
+    const depth = at === -1 ? 0 : out[at].depth + 1
+    out.splice(at + 1, 0, { kind: 'new', path: '\u0000new', name: '', depth })
+  }
   return out
 })
 
@@ -236,20 +278,41 @@ watch(status, (now, before) => {
     <div class="tree" @contextmenu.self.prevent="rootMenu">
       <Skeleton v-if="loading && !list.length" :lines="10" />
       <p v-else-if="!visible.length" class="note">No files</p>
-      <div
-        v-for="r in visible"
-        :key="r.path"
-        class="row"
-        :class="[r.kind, { active: r.kind === 'file' && preview?.path === r.path && preview?.rev === rev }]"
-        :style="{ paddingLeft: `${(r.kind === 'file' ? 24 : 8) + r.depth * 14}px` }"
-        :title="r.path"
-        @click="r.kind === 'dir' ? toggle(r.path) : open(r.path)"
-        @contextmenu.prevent="rowMenu($event, r)"
-      >
-        <Icon v-if="r.kind === 'dir'" name="chevron" :size="11" class="chev" :class="{ open: expanded.has(r.path) }" />
-        <FileIcon :path="r.path" :folder="r.kind === 'dir'" :open="expanded.has(r.path)" />
-        <span class="name">{{ r.name }}</span>
-      </div>
+      <template v-for="r in visible" :key="r.path">
+        <div
+          class="row"
+          :class="[r.kind, { active: r.kind === 'file' && preview?.path === r.path && preview?.rev === rev, editing: isEditing(r) }]"
+          :style="{ paddingLeft: `${(r.kind === 'dir' ? 8 : 24) + r.depth * 14}px` }"
+          :title="r.kind === 'new' ? undefined : r.path"
+          @click="isEditing(r) || r.kind === 'new' ? undefined : r.kind === 'dir' ? toggle(r.path) : open(r.path)"
+          @contextmenu.prevent="r.kind !== 'new' && rowMenu($event, r)"
+        >
+          <Icon v-if="r.kind === 'dir'" name="chevron" :size="11" class="chev" :class="{ open: expanded.has(r.path) }" />
+          <FileIcon
+            :path="r.kind === 'new' ? editing?.value || (editing?.mode === 'folder' ? 'folder' : 'untitled') : r.path"
+            :folder="r.kind === 'dir' || (r.kind === 'new' && editing?.mode === 'folder')"
+            :open="expanded.has(r.path)"
+          />
+          <input
+            v-if="isEditing(r) && editing"
+            ref="editInput"
+            v-model="editing.value"
+            class="inline"
+            :class="{ invalid: editing.error }"
+            type="text"
+            spellcheck="false"
+            autocomplete="off"
+            :placeholder="editing.mode === 'folder' ? 'Folder name' : editing.mode === 'file' ? 'File name' : ''"
+            @keydown.enter.prevent="commitEdit"
+            @keydown.esc.stop.prevent="cancelEdit"
+            @input="editing.error && (editing.error = '')"
+            @blur="onEditBlur"
+            @click.stop
+          />
+          <span v-else class="name">{{ r.name }}</span>
+        </div>
+        <p v-if="isEditing(r) && editing?.error" class="edit-error" :style="{ paddingLeft: `${24 + r.depth * 14}px` }">{{ editing.error }}</p>
+      </template>
     </div>
   </div>
 </template>
@@ -336,6 +399,32 @@ watch(status, (now, before) => {
 .name {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.row.editing,
+.row.editing:hover {
+  background: transparent;
+}
+.inline {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  margin-right: 2px;
+  padding: 0 5px;
+  border: 1px solid var(--ring);
+  border-radius: 5px;
+  background: var(--input-bg);
+  color: var(--fg);
+  font-size: 12.5px;
+  outline: none;
+}
+.inline.invalid {
+  border-color: var(--danger, #e5534b);
+}
+.edit-error {
+  margin: 0 6px 4px;
+  color: var(--danger, #e5534b);
+  font-size: 11px;
+  white-space: normal;
 }
 .note {
   margin: 12px 8px;

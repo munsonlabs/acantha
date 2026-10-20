@@ -13,6 +13,8 @@ export function createFiles({ repo }: Repo) {
   /** null is the working tree. */
   const rev = ref<string | null>(null)
   const list = shallowRef<string[]>([])
+  /** Folders git can't list through their files (new or empty), for the working tree. */
+  const folders = shallowRef<string[]>([])
   const loading = ref(false)
   const filter = ref('')
   const expanded = ref(new Set<string>())
@@ -29,8 +31,14 @@ export function createFiles({ repo }: Repo) {
     const id = ++seq
     loading.value = true
     try {
-      const files = await git.listFiles(repo.value, rev.value)
-      if (id === seq) list.value = files
+      const [files, dirs] = await Promise.all([
+        git.listFiles(repo.value, rev.value),
+        rev.value === null ? git.listNewFolders(repo.value).catch(() => []) : [],
+      ])
+      if (id === seq) {
+        list.value = files
+        folders.value = dirs
+      }
     } catch (e) {
       if (id === seq) showToast(String(e), 'error')
     } finally {
@@ -133,6 +141,7 @@ export function createFiles({ repo }: Repo) {
   return {
     rev,
     list,
+    folders,
     loading,
     filter,
     expanded,

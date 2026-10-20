@@ -37,6 +37,7 @@ fn main() {
             slack::slack_canvas,
             scripts::list_scripts,
             files::list_files,
+            files::list_new_folders,
             files::read_file,
             files::write_file,
             files::create_file,

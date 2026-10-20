@@ -159,6 +159,8 @@ export const git = {
   statusDiff: (repo: string, file: StatusFile, staged: boolean) =>
     invoke<string>('get_status_diff', { repo, path: file.path, oldPath: file.oldPath, staged, untracked: file.kind === 'untracked' }),
   listFiles: (repo: string, rev: string | null) => invoke<string[]>('list_files', { repo, rev }),
+  /** New folders in the working tree, empty ones included. */
+  listNewFolders: (repo: string) => invoke<string[]>('list_new_folders', { repo }),
   readFile: (repo: string, rev: string | null, path: string) => invoke<FileContent>('read_file', { repo, rev, path }),
   searchFiles: (repo: string, rev: string | null, query: string, regex: boolean, caseSensitive: boolean, paths: string[]) =>
     invoke<SearchResults>('search_files', { repo, rev, query, regex, caseSensitive, paths }),

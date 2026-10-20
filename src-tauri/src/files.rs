@@ -107,6 +107,19 @@ pub async fn list_files(repo: String, rev: Option<String>) -> Result<Vec<String>
     Ok(files)
 }
 
+/// Folders in the working tree that git doesn't list as part of any file: new ones, empty ones included (not ignored
+/// ones). A new folder holding only new empty folders shows as itself.
+#[tauri::command]
+pub async fn list_new_folders(repo: String) -> Result<Vec<String>, String> {
+    let out = git(&repo, ["ls-files", "-z", "--others", "--exclude-standard", "--directory"])?;
+    Ok(out
+        .split('\0')
+        .filter_map(|p| p.strip_suffix('/'))
+        .filter(|p| !p.is_empty())
+        .map(String::from)
+        .collect())
+}
+
 #[tauri::command]
 pub async fn read_file(repo: String, rev: Option<String>, path: String) -> Result<FileContent, String> {
     let bytes = match rev {
@@ -529,6 +542,9 @@ mod tests {
         assert!(run(Box::pin(create_file(r.clone(), "src/new.ts".into()))).is_err(), "won't overwrite");
         run(Box::pin(create_folder(r.clone(), "docs/notes".into()))).unwrap();
         assert!(repo.join("docs/notes").is_dir());
+        git(&r, ["init", "-q"]).unwrap();
+        let folders = tauri::async_runtime::block_on(list_new_folders(r.clone())).unwrap();
+        assert!(folders.contains(&"docs".to_string()), "{folders:?}");
 
         run(Box::pin(rename_path(r.clone(), "src/new.ts".into(), "lib/renamed.ts".into()))).unwrap();
         assert!(repo.join("lib/renamed.ts").is_file() && !repo.join("src/new.ts").exists());
