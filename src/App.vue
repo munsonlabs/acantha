@@ -3,12 +3,13 @@ import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { invoke } from '@tauri-apps/api/core'
 import { git } from '@/lib/git'
 import { basename } from '@/lib/format'
 import { activateTabNumber, overlays, runCommand } from '@/composables/commands'
 import { prefs } from '@/composables/prefs'
 import { useWorkspaces } from '@/composables/workspace'
-import { closeDialog, useDialog } from '@/composables/useDialog'
+import { closeDialog, confirmAction, useDialog } from '@/composables/useDialog'
 import { onMakeTodos, useContextMenu } from '@/composables/useContextMenu'
 import { pasteIntoPanel } from '@/composables/slackLinks'
 import { showToast } from '@/composables/useToast'
@@ -119,6 +120,14 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
+/** Quitting asks first when any file has unsaved edits (see `should_quit` in main.rs). */
+async function onQuitRequested() {
+  const unsaved = workspaces.value.reduce((n, ws) => n + ws.files.drafts.value.size, 0)
+  const what = unsaved === 1 ? '1 file' : `${unsaved} files`
+  if (!unsaved || (await confirmAction('Quit Acantha?', `You have unsaved changes in ${what}. Quit and lose them?`, 'Quit', true)))
+    await invoke('quit_app')
+}
+
 // Right-click → Make To-do List on selected text.
 onMakeTodos((items) => {
   const ws = active.value
@@ -191,6 +200,7 @@ onMounted(async () => {
     }),
     // Clicks and shortcuts from the native menu bar.
     await listen<string>('menu', ({ payload }) => runCommand(payload)),
+    await listen('quit-requested', () => void onQuitRequested()),
     await appWindow.onDragDropEvent(({ payload }) => {
       if (payload.type === 'drop' && payload.paths[0]) void openInWorkspace(payload.paths[0])
     }),

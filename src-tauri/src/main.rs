@@ -9,7 +9,36 @@ mod scripts;
 mod slack;
 mod watch;
 
-use tauri::Manager;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::{Emitter, Manager};
+
+/// Set once the interface has said it's fine to quit (no unsaved edits, or you chose to lose them).
+static QUIT_ALLOWED: AtomicBool = AtomicBool::new(false);
+/// When the last quit was held back, so a second ⌘Q soon after quits anyway: the interface can't block quitting
+/// if it has stopped answering.
+static QUIT_ASKED_AT: AtomicU64 = AtomicU64::new(0);
+
+/// Quitting (⌘Q, or closing the window) is held back and the interface asked first, since it knows about unsaved
+/// edits. Returns true when it should go ahead now.
+fn should_quit(app: &tauri::AppHandle) -> bool {
+    if QUIT_ALLOWED.load(Ordering::SeqCst) {
+        return true;
+    }
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+    if now.saturating_sub(QUIT_ASKED_AT.swap(now, Ordering::SeqCst)) < 2000 {
+        return true;
+    }
+    let _ = app.emit("quit-requested", ());
+    false
+}
+
+/// The interface's go-ahead to quit.
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) {
+    QUIT_ALLOWED.store(true, Ordering::SeqCst);
+    app.exit(0);
+}
 
 fn main() {
     tauri::Builder::default()
@@ -21,6 +50,7 @@ fn main() {
         .menu(menu::build)
         .on_menu_event(|app, event| menu::forward(app, event.id().as_ref()))
         .invoke_handler(tauri::generate_handler![
+            quit_app,
             git::initial_repo,
             git::resolve_repo,
             git::get_log,
@@ -60,10 +90,22 @@ fn main() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building Acantha")
-        .run(|app, event| {
-            // Don't leave shells running after the window goes away.
-            if let tauri::RunEvent::Exit = event {
-                app.state::<pty::Ptys>().kill_all();
+        .run(|app, event| match event {
+            tauri::RunEvent::ExitRequested { api, code: None, .. } => {
+                if !should_quit(app) {
+                    api.prevent_exit();
+                }
             }
+            tauri::RunEvent::WindowEvent {
+                event: tauri::WindowEvent::CloseRequested { api, .. },
+                ..
+            } => {
+                if !should_quit(app) {
+                    api.prevent_close();
+                }
+            }
+            // Don't leave shells running after the window goes away.
+            tauri::RunEvent::Exit => app.state::<pty::Ptys>().kill_all(),
+            _ => {}
         });
 }
