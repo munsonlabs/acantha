@@ -145,3 +145,9 @@ export function renderSlackText(text: string, users: Record<string, SlackUser> =
   s = s.replace(/\n/g, '<br>').replace(/<\/blockquote><br>/g, '</blockquote>')
   return s.replace(/\uE000(\d+)\uE000/g, (_, i: string) => held[Number(i)])
 }
+
+/**
+ * Messages and canvases already fetched this session, by link, so switching back to a tab shows it straight away.
+ * Kept in memory only: nothing from Slack is written to disk.
+ */
+export const slackCache = new Map<string, { thread: SlackThread | null; canvas: SlackCanvas | null }>()

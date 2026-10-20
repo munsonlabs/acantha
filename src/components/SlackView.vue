@@ -3,7 +3,7 @@ import { computed, ref, shallowRef, watch } from 'vue'
 import DOMPurify from 'dompurify'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { formatDate } from '@/lib/format'
-import { prepareCanvas, parseSlackLink, renderSlackText, slack, type SlackCanvas, type SlackMessage, type SlackThread } from '@/lib/slack'
+import { prepareCanvas, parseSlackLink, renderSlackText, slack, slackCache, type SlackCanvas, type SlackMessage, type SlackThread } from '@/lib/slack'
 import { parseBullets, slackPlain } from '@/lib/todos'
 import { displayDate } from '@/composables/dates'
 import { prefs } from '@/composables/prefs'
@@ -24,9 +24,17 @@ const loading = ref(false)
 const link = computed(() => parseSlackLink(props.url))
 let seq = 0
 
-async function load() {
+/** Shows the tab's message or canvas: from this session's cache unless `fresh`, else fetched from Slack. */
+async function load(fresh = false) {
   const l = link.value
   if (!l) return
+  const cached = slackCache.get(props.url)
+  if (cached && !fresh) {
+    thread.value = cached.thread
+    canvas.value = cached.canvas
+    error.value = null
+    return
+  }
   const id = ++seq
   loading.value = true
   error.value = null
@@ -45,7 +53,12 @@ async function load() {
         thread.value = null
       }
     }
-    if (id === seq) ws.panel.rename(props.tabId, title.value)
+    if (id === seq) {
+      slackCache.set(props.url, { thread: thread.value, canvas: canvas.value })
+      // Name the tab after what it shows, unless it has a name already (perhaps one you gave it).
+      const tab = ws.panel.tabs.value.find((t) => t.id === props.tabId)
+      if (tab?.kind === 'slack' && !tab.title) ws.panel.rename(props.tabId, title.value)
+    }
   } catch (e) {
     if (id === seq) error.value = String(e)
   } finally {
@@ -62,7 +75,7 @@ watch(
   { immediate: true },
 )
 
-defineExpose({ load, loading })
+defineExpose({ refresh: () => load(true), loading })
 
 const seconds = (ts: string) => Math.floor(Number(ts))
 const author = (m: SlackMessage) => (m.user ? (thread.value?.users[m.user]?.name ?? m.user) : (m.author ?? 'Slack'))

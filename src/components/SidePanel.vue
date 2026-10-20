@@ -104,7 +104,7 @@ const hide = () => (prefs.panelOpen.value = false)
       <button class="ghost icon-btn" title="New tab: Slack or a to-do list" @click="newTab"><Icon name="plus" /></button>
       <div class="spacer" />
       <template v-if="current?.kind === 'slack'">
-        <button class="ghost icon-btn" title="Refresh" :disabled="slackView?.loading" @click="slackView?.load()"><Icon name="refresh" /></button>
+        <button class="ghost icon-btn" title="Refresh" :disabled="slackView?.loading" @click="slackView?.refresh()"><Icon name="refresh" /></button>
         <button class="ghost icon-btn" title="Open in Slack" @click="openUrl(current.url)"><Icon name="external" /></button>
       </template>
       <button v-if="props.docked && tabs.length" class="ghost icon-btn" title="Expand over the graph" @click="expand">
