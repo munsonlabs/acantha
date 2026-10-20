@@ -3,7 +3,7 @@ import { computed, ref, shallowRef, watch } from 'vue'
 import DOMPurify from 'dompurify'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { formatDate } from '@/lib/format'
-import { canvasEmoji, parseSlackLink, renderSlackText, slack, type SlackCanvas, type SlackMessage, type SlackThread } from '@/lib/slack'
+import { prepareCanvas, parseSlackLink, renderSlackText, slack, type SlackCanvas, type SlackMessage, type SlackThread } from '@/lib/slack'
 import { parseBullets, slackPlain } from '@/lib/todos'
 import { displayDate } from '@/composables/dates'
 import { prefs } from '@/composables/prefs'
@@ -84,7 +84,7 @@ function makeTodos(m: SlackMessage) {
 // token to load).
 const canvasHtml = computed(() => {
   if (!canvas.value) return ''
-  return DOMPurify.sanitize(canvasEmoji(canvas.value.html), {
+  return DOMPurify.sanitize(prepareCanvas(canvas.value.html), {
     FORBID_TAGS: ['style', 'img', 'video', 'audio', 'iframe'],
     FORBID_ATTR: ['style'],
   })

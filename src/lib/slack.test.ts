@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canvasEmoji, parseSlackLink, renderSlackText } from './slack'
+import { prepareCanvas, parseSlackLink, renderSlackText } from './slack'
 
 describe('parseSlackLink', () => {
   it('reads a message link', () => {
@@ -55,18 +55,24 @@ describe('renderSlackText', () => {
   })
 })
 
-describe('canvasEmoji', () => {
+describe('prepareCanvas', () => {
   it("turns Slack's emoji pictures back into emoji", () => {
     const html =
       '<h1><control><img src="https://slack-imgs.com/x" alt="desktop_computer" data-is-slack style="w">:desktop_computer:</img></control> Setup</h1>'
-    expect(canvasEmoji(html)).toBe('<h1><control>🖥️</control> Setup</h1>')
+    expect(prepareCanvas(html)).toBe('<h1><control>🖥️</control> Setup</h1>')
   })
 
   it('handles a picture without its fallback text, and leaves unknown ones as names', () => {
-    expect(canvasEmoji('<p><img alt="warning" src="x"> mind <img alt="partyparrot" src="y"></p>')).toBe('<p>⚠️ mind :partyparrot:</p>')
+    expect(prepareCanvas('<p><img alt="warning" src="x"> mind <img alt="partyparrot" src="y"></p>')).toBe('<p>⚠️ mind :partyparrot:</p>')
+  })
+
+  it("makes Slack's <lnk> tags ordinary links", () => {
+    expect(prepareCanvas('<li><span>1. <lnk href="https://x.dev/pr/1">the PR</lnk></span></li>')).toBe(
+      '<li><span>1. <a href="https://x.dev/pr/1">the PR</a></span></li>',
+    )
   })
 
   it('leaves attributes alone', () => {
-    expect(canvasEmoji('<a href="https://x.dev/:tada:">:tada:</a>')).toBe('<a href="https://x.dev/:tada:">🎉</a>')
+    expect(prepareCanvas('<a href="https://x.dev/:tada:">:tada:</a>')).toBe('<a href="https://x.dev/:tada:">🎉</a>')
   })
 })

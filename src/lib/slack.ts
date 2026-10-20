@@ -81,11 +81,13 @@ const EMOJI_CODE = /:([a-z0-9_+'-]+):(?::skin-tone-([2-6]):)?/g
 export const replaceEmoji = (text: string) => text.replace(EMOJI_CODE, (m, name: string, tone?: string) => emoji(name, tone) ?? m)
 
 /**
- * A canvas as Slack exports it, with its emoji as text. Slack writes each one as a picture,
- * `<img alt="name" src="…">:name:</img>`, and the picture needs the token to load.
+ * A canvas as Slack exports it, made ready to sanitise and show. Its links are Slack's own `<lnk href="…">` tags,
+ * which a sanitiser would drop, so they become ordinary links. Its emoji are pictures,
+ * `<img alt="name" src="…">:name:</img>` that need the token to load, so they become text.
  */
-export function canvasEmoji(html: string) {
-  const named = html.replace(/<img\b[^>]*\balt="([a-z0-9_+'-]+)"[^>]*>(?::\1:)?(?:<\/img>)?/g, ':$1:')
+export function prepareCanvas(html: string) {
+  const linked = html.replace(/<lnk\b/g, '<a').replace(/<\/lnk>/g, '</a>')
+  const named = linked.replace(/<img\b[^>]*\balt="([a-z0-9_+'-]+)"[^>]*>(?::\1:)?(?:<\/img>)?/g, ':$1:')
   // Only in text, between tags, so attributes and URLs are left alone.
   return named.replace(/>([^<]+)</g, (_, text: string) => `>${replaceEmoji(text)}<`)
 }
