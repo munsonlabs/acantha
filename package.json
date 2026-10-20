@@ -1,6 +1,6 @@
 {
   "name": "acantha",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "description": "A Git client with a commit graph, terminals and an editor",
   "license": "SEE LICENSE IN LICENSE",
