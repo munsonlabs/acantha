@@ -163,6 +163,11 @@ export const git = {
   searchFiles: (repo: string, rev: string | null, query: string, regex: boolean, caseSensitive: boolean, paths: string[]) =>
     invoke<SearchResults>('search_files', { repo, rev, query, regex, caseSensitive, paths }),
   writeFile: (repo: string, path: string, contents: string) => invoke<void>('write_file', { repo, path, contents }),
+  createFile: (repo: string, path: string) => invoke<void>('create_file', { repo, path }),
+  createFolder: (repo: string, path: string) => invoke<void>('create_folder', { repo, path }),
+  renamePath: (repo: string, from: string, to: string) => invoke<void>('rename_path', { repo, from, to }),
+  /** Moves a file or folder to the Trash. */
+  trashPath: (repo: string, path: string) => invoke<void>('trash_path', { repo, path }),
   fileHistory: (repo: string, rev: string | null, path: string) => invoke<Commit[]>('file_history', { repo, rev, path }),
   blame: (repo: string, rev: string | null, path: string) => invoke<Blame>('blame_file', { repo, rev, path }),
   rebaseCommits: (repo: string, base: string | null) => invoke<Commit[]>('rebase_commits', { repo, base }),

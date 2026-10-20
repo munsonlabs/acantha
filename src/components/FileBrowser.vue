@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, watch } from 'vue'
+import { git } from '@/lib/git'
 import { shortHash } from '@/lib/format'
 import { useWorkspace } from '@/composables/workspace'
 import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
 import { openMenu } from '@/composables/useContextMenu'
 import { fileOpenItems, folderOpenItems } from '@/composables/openers'
+import { ask, confirmAction } from '@/composables/useDialog'
+import { showToast } from '@/composables/useToast'
+import type { MenuEntry } from '@/composables/useContextMenu'
 import Skeleton from './Skeleton.vue'
 
 const ws = useWorkspace()
-const { rev, list, loading, filter, expanded, preview, load, browse, toggle, open } = ws.files
+const { rev, list, loading, filter, expanded, newFolders, preview, load, browse, toggle, open, closePreview, leaveEditor } = ws.files
 const { rows } = ws.repo
 const { status } = ws.status
 
@@ -37,8 +41,127 @@ const tree = computed(() => {
     }
     dir.files.push(path)
   }
+  // Folders made here that git can't list yet, being empty.
+  if (rev.value === null)
+    for (const path of newFolders.value) {
+      let dir = root
+      for (const part of path.split('/')) {
+        let next = dir.dirs.get(part)
+        if (!next) dir.dirs.set(part, (next = { dirs: new Map(), files: [] }))
+        dir = next
+      }
+    }
   return root
 })
+
+/** The working tree can be changed from here; past commits can't. */
+const working = computed(() => rev.value === null)
+const repoRoot = () => ws.repo.repo.value!
+
+/** Opens every folder down to `path`, so what was just made or moved is in view. */
+function reveal(path: string, includeSelf = false) {
+  const parts = path.split('/')
+  const next = new Set(expanded.value)
+  for (let i = 1; i < parts.length + (includeSelf ? 1 : 0); i++) next.add(parts.slice(0, i).join('/'))
+  expanded.value = next
+}
+
+async function afterChange() {
+  await load()
+  void ws.status.refresh()
+}
+
+/** New File… or New Folder… in `dir` ('' for the top). A name with slashes makes the folders on the way. */
+async function create(kind: 'file' | 'folder', dir: string) {
+  const v = await ask({
+    title: kind === 'file' ? 'New File' : 'New Folder',
+    message: dir ? `In \`${dir}/\`.` : 'At the top of the repository.',
+    fields: [{ name: 'name', label: 'Name', required: true, placeholder: kind === 'file' ? 'notes.md, or src/new.ts' : 'components' }],
+    confirm: 'Create',
+  })
+  const name = String(v?.name ?? '')
+    .trim()
+    .replace(/^\/+|\/+$/g, '')
+  if (!v || !name) return
+  const path = dir ? `${dir}/${name}` : name
+  try {
+    if (kind === 'file') {
+      await git.createFile(repoRoot(), path)
+      await afterChange()
+      reveal(path)
+      await open(path)
+    } else {
+      await git.createFolder(repoRoot(), path)
+      newFolders.value = new Set([...newFolders.value, path])
+      reveal(path, true)
+    }
+  } catch (e) {
+    showToast(String(e), 'error')
+  }
+}
+
+const inside = (path: string, dir: string) => path === dir || path.startsWith(`${dir}/`)
+
+/** Rename… also moves: the new name can be a path elsewhere in the repository. */
+async function rename(r: Row) {
+  const v = await ask({
+    title: r.kind === 'dir' ? 'Rename Folder' : 'Rename File',
+    message: 'A new name, or a path to move it to.',
+    fields: [{ name: 'to', label: 'Name', value: r.path, required: true }],
+    confirm: 'Rename',
+  })
+  const to = String(v?.to ?? '')
+    .trim()
+    .replace(/^\/+|\/+$/g, '')
+  if (!v || !to || to === r.path) return
+  const p = preview.value
+  const wasOpen = p && p.rev === null && inside(p.path, r.path) ? p : null
+  if (wasOpen && !(await leaveEditor())) return
+  try {
+    await git.renamePath(repoRoot(), r.path, to)
+    newFolders.value = new Set([...newFolders.value].map((f) => (inside(f, r.path) ? to + f.slice(r.path.length) : f)))
+    await afterChange()
+    reveal(to, r.kind === 'dir')
+    if (wasOpen) await open(to + wasOpen.path.slice(r.path.length), wasOpen.view, null)
+    showToast(`Renamed to ${to}`)
+  } catch (e) {
+    showToast(String(e), 'error')
+  }
+}
+
+async function trash(r: Row) {
+  const what = r.kind === 'dir' ? 'folder' : 'file'
+  if (!(await confirmAction('Move to Trash', `Move the ${what} \`${r.path}\` to the Trash? You can put it back from Finder.`, 'Move to Trash', true)))
+    return
+  const p = preview.value
+  if (p && p.rev === null && inside(p.path, r.path)) {
+    await closePreview()
+    if (preview.value) return // kept open for unsaved edits
+  }
+  try {
+    await git.trashPath(repoRoot(), r.path)
+    newFolders.value = new Set([...newFolders.value].filter((f) => !inside(f, r.path)))
+    await afterChange()
+    showToast(`Moved ${r.path.split('/').pop()} to the Trash`)
+  } catch (e) {
+    showToast(String(e), 'error')
+  }
+}
+
+const createItems = (dir: string): MenuEntry[] => [
+  { label: 'New File…', icon: 'file', run: () => create('file', dir) },
+  { label: 'New Folder…', icon: 'folder', run: () => create('folder', dir) },
+]
+
+const changeItems = (r: Row): MenuEntry[] => [
+  { label: 'Rename…', icon: 'pencil', run: () => rename(r) },
+  { label: 'Move to Trash', icon: 'trash', danger: true, run: () => trash(r) },
+]
+
+/** Right-clicking empty space in the tree, or the header's + button. */
+function rootMenu(e: MouseEvent) {
+  if (working.value) openMenu(e, createItems(''))
+}
 
 /** The tree flattened into the rows that are visible, folders first. A filter shows matching files as a flat list instead. */
 const visible = computed<Row[]>(() => {
@@ -58,10 +181,27 @@ const visible = computed<Row[]>(() => {
 })
 
 function rowMenu(e: MouseEvent, r: Row) {
-  const root = ws.repo.repo.value!
+  const root = repoRoot()
   const header = { header: r.path.split('/').pop()!, detail: r.path }
-  if (r.kind === 'dir') return openMenu(e, [header, ...folderOpenItems(`${root}/${r.path}`, () => ws.terminals.add(`${root}/${r.path}`))])
-  openMenu(e, [header, { label: 'Preview', icon: 'eye', run: () => open(r.path) }, 'separator', ...fileOpenItems(root, r.path)])
+  if (r.kind === 'dir')
+    return openMenu(e, [
+      header,
+      ...(working.value ? [...createItems(r.path), 'separator' as const, ...changeItems(r), 'separator' as const] : []),
+      ...folderOpenItems(`${root}/${r.path}`, () => ws.terminals.add(`${root}/${r.path}`)),
+    ])
+  openMenu(e, [
+    header,
+    ...(working.value
+      ? [
+          { label: 'Edit', icon: 'pencil' as const, run: () => open(r.path, 'edit') },
+          { label: 'Preview', icon: 'eye' as const, run: () => open(r.path, 'preview') },
+          'separator' as const,
+          ...changeItems(r),
+        ]
+      : [{ label: 'Preview', icon: 'eye' as const, run: () => open(r.path) }]),
+    'separator',
+    ...fileOpenItems(root, r.path),
+  ])
 }
 
 const subject = computed(() => rows.value.find((c) => c.hash === rev.value)?.subject)
@@ -86,13 +226,14 @@ watch(status, (now, before) => {
       <span v-else class="at"><Icon name="folder" :size="13" /> Working tree</span>
       <div class="spacer" />
       <button v-if="rev" class="ghost icon-btn" title="Back to the working tree" @click="browse(null)"><Icon name="x" /></button>
+      <button v-if="working" class="ghost icon-btn" title="New file or folder" @click="rootMenu"><Icon name="plus" /></button>
       <button class="ghost icon-btn" title="Refresh" @click="load"><Icon name="refresh" /></button>
     </header>
     <div class="filter">
       <Icon name="search" :size="12" />
       <input v-model="filter" type="text" placeholder="Filter files" spellcheck="false" autocomplete="off" />
     </div>
-    <div class="tree">
+    <div class="tree" @contextmenu.self.prevent="rootMenu">
       <Skeleton v-if="loading && !list.length" :lines="10" />
       <p v-else-if="!visible.length" class="note">No files</p>
       <div

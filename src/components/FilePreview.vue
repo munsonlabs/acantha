@@ -57,6 +57,8 @@ async function load() {
     }
     const [file, b] = await Promise.all([git.readFile(repo.value, p.rev, p.path), p.view === 'blame' ? git.blame(repo.value, p.rev, p.path) : null])
     if (id !== seq) return
+    // Only text can be edited: anything else (an image, say) opened for editing shows as a preview instead.
+    if (p.view === 'edit' && file.kind !== 'text') return void open(p.path, 'preview', p.rev)
     content.value = file
     blame.value = b
     if (p.view === 'edit') {

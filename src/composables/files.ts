@@ -1,6 +1,7 @@
 import { ref, shallowRef, watch } from 'vue'
 import { filterPathspecs, parseFileFilter } from '@/lib/fileFilter'
 import { git, type SearchResults } from '@/lib/git'
+import { prefs } from './prefs'
 import type { Repo } from './repo'
 import { confirmAction } from './useDialog'
 import { showToast } from './useToast'
@@ -15,6 +16,8 @@ export function createFiles({ repo }: Repo) {
   const loading = ref(false)
   const filter = ref('')
   const expanded = ref(new Set<string>())
+  /** Folders made from the browser: git doesn't list folders with nothing in them, so these show until they fill. */
+  const newFolders = ref(new Set<string>())
   /** line: a line to scroll to and mark, from a search result. */
   const preview = shallowRef<{ path: string; rev: string | null; view: PreviewView; line?: number } | null>(null)
   /** Set while the editor has unsaved changes, so nothing navigates away from them silently. */
@@ -57,7 +60,9 @@ export function createFiles({ repo }: Repo) {
     return true
   }
 
-  async function open(path: string, view: PreviewView = 'preview', at: string | null = rev.value, line?: number) {
+  /** Without a view, a working-tree file opens in the editor when that's the setting; anything else as a preview. */
+  async function open(path: string, view?: PreviewView, at: string | null = rev.value, line?: number) {
+    view ??= prefs.editByDefault.value && at === null ? 'edit' : 'preview'
     const p = preview.value
     // Switching between views of the same file keeps the editor's changes only while editing.
     if (p && p.view === 'edit' && !(await leaveEditor())) return
@@ -122,9 +127,27 @@ export function createFiles({ repo }: Repo) {
     preview.value = null
     dirty.value = false
     expanded.value = new Set()
+    newFolders.value = new Set()
   })
 
-  return { rev, list, loading, filter, expanded, preview, dirty, search, load, browse, toggle, open, closePreview, leaveEditor, runSearch }
+  return {
+    rev,
+    list,
+    loading,
+    filter,
+    expanded,
+    newFolders,
+    preview,
+    dirty,
+    search,
+    load,
+    browse,
+    toggle,
+    open,
+    closePreview,
+    leaveEditor,
+    runSearch,
+  }
 }
 
 export type Files = ReturnType<typeof createFiles>

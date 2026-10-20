@@ -12,6 +12,8 @@ export const prefs = {
   sidebarOpen: usePersisted('sidebar-open', true),
   workspaces: usePersisted<string[]>('workspaces', []),
   editorVim: usePersisted('editor-vim', false),
+  /** Opening a working-tree file goes straight to the editor (text files; others still preview). */
+  editByDefault: usePersisted('edit-by-default', true),
   /** The card with a commit's details that appears when hovering a row in the graph. */
   hoverCards: usePersisted('hover-cards', true),
   /** Slack channel IDs whose messages and canvases may be opened. Empty allows any the token can see. */

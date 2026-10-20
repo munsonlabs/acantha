@@ -206,6 +206,94 @@ pub async fn search_files(
     Ok(parse_grep(&out, rev.as_deref()))
 }
 
+/// A path in the working tree for the file browser's create, rename and trash: relative, no `..`, and the folder it
+/// sits in (the nearest one that exists) inside the repository, so a symlink can't lead out of it. The last part is
+/// left unresolved, so renaming or trashing a symlink acts on the link, not what it points at.
+fn browser_path(repo: &str, path: &str) -> Result<PathBuf, String> {
+    let rel = safe_relative(path)?;
+    let root = Path::new(repo).canonicalize().map_err(|e| e.to_string())?;
+    let name = rel.file_name().ok_or_else(|| format!("{path} is not a file or folder name"))?;
+    let mut parent = root.join(rel.parent().unwrap_or(Path::new("")));
+    while !parent.exists() {
+        parent = parent.parent().ok_or("No such folder")?.to_path_buf();
+    }
+    if !parent.canonicalize().map_err(|e| e.to_string())?.starts_with(&root) {
+        return Err(format!("{path} is outside the repository"));
+    }
+    Ok(root.join(rel.parent().unwrap_or(Path::new(""))).join(name))
+}
+
+fn must_be_free(p: &Path, path: &str) -> Result<(), String> {
+    if p.symlink_metadata().is_ok() {
+        return Err(format!("{path} already exists"));
+    }
+    Ok(())
+}
+
+/// A new, empty file (and any folders it needs).
+#[tauri::command]
+pub async fn create_file(repo: String, path: String) -> Result<(), String> {
+    let p = browser_path(&repo, &path)?;
+    must_be_free(&p, &path)?;
+    if let Some(dir) = p.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&p)
+        .map(|_| ())
+        .map_err(|e| format!("{path}: {e}"))
+}
+
+#[tauri::command]
+pub async fn create_folder(repo: String, path: String) -> Result<(), String> {
+    let p = browser_path(&repo, &path)?;
+    must_be_free(&p, &path)?;
+    std::fs::create_dir_all(&p).map_err(|e| format!("{path}: {e}"))
+}
+
+/// Renames or moves a file or folder within the working tree. Won't overwrite.
+#[tauri::command]
+pub async fn rename_path(repo: String, from: String, to: String) -> Result<(), String> {
+    let source = browser_path(&repo, &from)?;
+    source.symlink_metadata().map_err(|e| format!("{from}: {e}"))?;
+    let dest = browser_path(&repo, &to)?;
+    must_be_free(&dest, &to)?;
+    if let Some(dir) = dest.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    std::fs::rename(&source, &dest).map_err(|e| format!("{from}: {e}"))
+}
+
+/// Moves `p` into `trash`, numbering the name if one's already there, as Finder does.
+fn move_into(p: &Path, trash: &Path) -> Result<PathBuf, String> {
+    let name = p.file_name().ok_or("Nothing to move")?.to_string_lossy().into_owned();
+    let (stem, ext) = match name.rsplit_once('.') {
+        Some((s, e)) if !s.is_empty() => (s.to_string(), format!(".{e}")),
+        _ => (name.clone(), String::new()),
+    };
+    let mut dest = trash.join(&name);
+    let mut n = 2;
+    while dest.symlink_metadata().is_ok() {
+        dest = trash.join(format!("{stem} {n}{ext}"));
+        n += 1;
+    }
+    std::fs::rename(p, &dest).map_err(|e| e.to_string())?;
+    Ok(dest)
+}
+
+/// Moves a file or folder to your Trash, so it can be put back from Finder.
+#[tauri::command]
+pub async fn trash_path(repo: String, path: String) -> Result<(), String> {
+    let p = browser_path(&repo, &path)?;
+    p.symlink_metadata().map_err(|e| format!("{path}: {e}"))?;
+    let home = std::env::var("HOME").map_err(|_| "Couldn't find your Trash".to_string())?;
+    move_into(&p, &Path::new(&home).join(".Trash"))
+        .map(|_| ())
+        .map_err(|e| format!("{path}: {e}"))
+}
+
 /// Overwrites a file in the working tree, used to save a resolved merge conflict.
 #[tauri::command]
 pub async fn write_file(repo: String, path: String, contents: String) -> Result<(), String> {
@@ -423,6 +511,40 @@ mod tests {
         assert_eq!(not_src.hits.iter().map(|h| h.path.as_str()).collect::<Vec<_>>(), ["new.txt"]);
         // An option-like query is searched for, not obeyed.
         assert!(search(None, "--help", false, false).hits.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn creates_renames_and_trashes() {
+        let dir = std::env::temp_dir().join(format!("acantha-browser-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("trash")).unwrap();
+        let repo = dir.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        let r = repo.to_string_lossy().into_owned();
+        let run = |f: std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>>>>| tauri::async_runtime::block_on(f);
+
+        run(Box::pin(create_file(r.clone(), "src/new.ts".into()))).unwrap();
+        assert!(repo.join("src/new.ts").is_file());
+        assert!(run(Box::pin(create_file(r.clone(), "src/new.ts".into()))).is_err(), "won't overwrite");
+        run(Box::pin(create_folder(r.clone(), "docs/notes".into()))).unwrap();
+        assert!(repo.join("docs/notes").is_dir());
+
+        run(Box::pin(rename_path(r.clone(), "src/new.ts".into(), "lib/renamed.ts".into()))).unwrap();
+        assert!(repo.join("lib/renamed.ts").is_file() && !repo.join("src/new.ts").exists());
+        assert!(
+            run(Box::pin(rename_path(r.clone(), "docs".into(), "lib/renamed.ts".into()))).is_err(),
+            "won't overwrite"
+        );
+
+        for bad in ["../escape", "/etc/hosts", "a/../../b"] {
+            assert!(run(Box::pin(create_file(r.clone(), bad.into()))).is_err(), "{bad}");
+        }
+
+        std::fs::write(dir.join("trash/renamed.ts"), "older").unwrap();
+        let moved = move_into(&browser_path(&r, "lib/renamed.ts").unwrap(), &dir.join("trash")).unwrap();
+        assert_eq!(moved.file_name().unwrap(), "renamed 2.ts");
+        assert!(!repo.join("lib/renamed.ts").exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

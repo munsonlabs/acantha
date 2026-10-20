@@ -104,6 +104,15 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
               <input v-model="prefs.editorVim.value" type="checkbox" class="switch" />
             </label>
             <label class="row">
+              <div>
+                <span class="label">Open files for editing</span>
+                <span class="hint"
+                  >Opening a file from the working tree goes straight to the editor. Images, other binary files and past commits still preview.</span
+                >
+              </div>
+              <input v-model="prefs.editByDefault.value" type="checkbox" class="switch" />
+            </label>
+            <label class="row">
               <span class="label">Open files with</span>
               <select v-model="prefs.externalEditor.value">
                 <option v-for="app in EDITORS" :key="app" :value="app">{{ app || 'Default app' }}</option>
