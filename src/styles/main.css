@@ -137,7 +137,12 @@ body.resizing {
   cursor: col-resize;
 }
 
-body.resizing * {
+body.resizing-rows {
+  cursor: row-resize;
+}
+
+body.resizing *,
+body.resizing-rows * {
   pointer-events: none;
 }
 

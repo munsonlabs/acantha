@@ -5,6 +5,7 @@ mod git;
 mod menu;
 mod pty;
 mod rebase;
+mod slack;
 mod watch;
 
 use tauri::Manager;
@@ -31,6 +32,8 @@ fn main() {
             git::get_stats,
             git::head_state,
             git::rev_parse,
+            slack::slack_thread,
+            slack::slack_canvas,
             files::list_files,
             files::read_file,
             files::write_file,

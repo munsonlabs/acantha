@@ -10,6 +10,7 @@ import { prefs } from '@/composables/prefs'
 import { useWorkspaces } from '@/composables/workspace'
 import { closeDialog, useDialog } from '@/composables/useDialog'
 import { useContextMenu } from '@/composables/useContextMenu'
+import { openSlackLink } from '@/composables/slackLinks'
 import CommandPalette from '@/components/CommandPalette.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
 import PromptDialog from '@/components/PromptDialog.vue'
@@ -77,9 +78,16 @@ function onKeydown(e: KeyboardEvent) {
   } else if (e.metaKey && e.shiftKey && (e.key === '[' || e.key === '{' || e.key === ']' || e.key === '}')) {
     e.preventDefault()
     runCommand(e.key === '[' || e.key === '{' ? 'prev-tab' : 'next-tab')
+  } else if (mod && e.shiftKey && !e.altKey && key === 'l') {
+    e.preventDefault()
+    runCommand('open-slack-link')
   } else if (mod && e.shiftKey && !e.altKey && key === 'f') {
     e.preventDefault()
     runCommand('search-files')
+  } else if (mod && e.altKey && !e.shiftKey && e.code === 'KeyF' && !inEditor) {
+    // ⌥ changes e.key on macOS (ƒ), so this one goes by the physical key.
+    e.preventDefault()
+    runCommand('search-file-names')
   } else if (mod && !e.shiftKey && !e.altKey && KEYS[key] && !(key === 'f' && inEditor)) {
     e.preventDefault()
     runCommand(KEYS[key])
@@ -93,10 +101,23 @@ function onKeydown(e: KeyboardEvent) {
     else if (ws?.ui.rebase.value) ws.ui.rebase.value = null
     else if (menu.value) closeMenu()
     else if (!typing && ws?.files.preview.value) void ws.files.closePreview()
+    else if (!typing && ws?.ui.slackExpanded.value) ws.ui.slackExpanded.value = false
     else if (!typing && ws?.details.details.value) ws.details.closeDetails()
   } else if (!typing && !dialog.value && !ws?.diff.diff.value && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && ws?.details.details.value) {
     e.preventDefault()
     ws.details.step(e.key === 'ArrowDown' ? 1 : -1)
+  }
+}
+
+/** Pasting a Slack message or canvas link anywhere outside a text field opens it. */
+function onPaste(e: ClipboardEvent) {
+  const target = e.target instanceof Element ? e.target : null
+  if (target?.closest('input, textarea, [contenteditable], .cm-editor, .xterm')) return
+  const ws = active.value
+  const text = e.clipboardData?.getData('text/plain') ?? ''
+  if (ws && /slack\.com\//.test(text)) {
+    e.preventDefault()
+    void openSlackLink(ws, text)
   }
 }
 
@@ -118,6 +139,7 @@ const poll = setInterval(() => {
 
 onMounted(async () => {
   window.addEventListener('keydown', onKeydown)
+  window.addEventListener('paste', onPaste)
   // Pick up changes made in the terminal or an editor whenever the window comes back into focus.
   unlisten.push(
     await appWindow.onFocusChanged(({ payload: focused }) => {
@@ -155,6 +177,7 @@ onBeforeUnmount(() => {
   clearInterval(poll)
   clearInterval(autoFetch)
   window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('paste', onPaste)
   unlisten.forEach((fn) => fn())
 })
 </script>

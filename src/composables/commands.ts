@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { prefs } from './prefs'
+import { promptSlackLink, toggleSlackPanel } from './slackLinks'
 import { useWorkspaces } from './workspace'
 
 /** App-wide overlays opened by commands. */
@@ -62,11 +63,32 @@ export const commands: Command[] = [
     group: 'View',
     keys: '⇧⌘F',
     run: withRepo((ws) => {
+      if (ws.files.search.scope.value === 'names') ws.files.search.scope.value = 'all'
       ws.ui.sidebarTab.value = 'search'
       prefs.sidebarOpen.value = true
       ws.ui.focusFileSearch.value++
     }),
   },
+  {
+    id: 'search-file-names',
+    label: 'Search File Names',
+    group: 'View',
+    keys: '⌥⌘F',
+    run: withRepo((ws) => {
+      ws.files.search.scope.value = 'names'
+      ws.ui.sidebarTab.value = 'search'
+      prefs.sidebarOpen.value = true
+      ws.ui.focusFileSearch.value++
+    }),
+  },
+  {
+    id: 'open-slack-link',
+    label: 'Open Slack Link…',
+    group: 'View',
+    keys: '⇧⌘L',
+    run: () => active.value && promptSlackLink(active.value),
+  },
+  { id: 'toggle-slack', label: 'Toggle Slack Panel', group: 'View', run: () => active.value && toggleSlackPanel(active.value) },
   {
     id: 'toggle-remotes',
     label: 'Toggle Remote Branches',

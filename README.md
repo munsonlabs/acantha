@@ -28,6 +28,8 @@ Built with Tauri 2, Rust and Vue 3.
 - A Git panel: write a commit message, stage, unstage and discard files, view staged or unstaged diffs, amend, push and pull
 - A terminal pane next to each graph, with its own tabs, starting in the repository (`portable-pty` + xterm.js)
 - A file browser for the working tree or any commit, with highlighted code, rendered Markdown, images, blame and file history
+- Search in files (⇧⌘F): file names, contents or both, through `git grep`, with match case, regular expressions and a filter for file types or folders (`ts, src/, !*.lock`)
+- Slack messages and canvases in a panel under the terminal: paste a link to read the thread or canvas beside the code (see [Slack](#slack))
 - A small editor (CodeMirror, optional Vim keys) for working-tree files: ⌘S to save, Save & Stage, a warning before losing unsaved changes or overwriting edits made elsewhere, and Open in VS Code, Cursor, Zed or another app
 - Branch filter: show any set of branches, or all of them; stashes in the graph, which can be hidden
 - A merge conflict resolver (accept current, incoming or both per conflict, or edit it by hand) with Continue/Abort for merges, rebases and cherry-picks
@@ -68,6 +70,58 @@ Built with Tauri 2, Rust and Vue 3.
 | ⌃⇧`           | New terminal tab                                    |
 | ⌘K            | Clear the terminal                                  |
 | ⌘F / ⌘R / ⌘O  | Search commits / refresh / open a repository        |
+| ⇧⌘F / ⌥⌘F     | Search in files / search file names                 |
+| ⇧⌘L           | Open a Slack link (or paste one with ⌘V)            |
+
+## Slack
+
+Acantha can show a Slack message (with its thread) or a canvas in a panel under the terminal. It reads them with your
+own Slack user token, which lives in the macOS Keychain; the app never stores it, and nothing is ever posted to Slack.
+
+### Set up
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps), choose **Create New App → From a manifest**, pick your
+   workspace and paste:
+
+   ```yaml
+   display_information:
+     name: Acantha
+   oauth_config:
+     scopes:
+       user:
+         - channels:history # messages in public channels
+         - files:read # canvases
+         - users:read # names and avatars (optional)
+   ```
+
+   Add `groups:history`, `im:history` or `mpim:history` only if you want private channels, DMs or group DMs too.
+
+2. Open **OAuth & Permissions** and click **Install to Workspace**. If it says **Request to Install**, your workspace
+   needs an admin to approve it first; install it once they have.
+3. Copy the **User OAuth Token** (`xoxp-…`). You don't need the app-level token, client secret or signing secret.
+4. Save it to your Keychain from Terminal, pasting the token when asked (twice):
+
+   ```sh
+   security add-generic-password -a "$USER" -s com.munsonlabs.acantha.slack -w
+   ```
+
+### Use
+
+- Copy a message's link in Slack (**⋯ → Copy link**) or a canvas's link, click anywhere in Acantha outside a text box
+  and press ⌘V. ⇧⌘L opens a box to paste one into.
+- The **Slack** button at the bottom right shows or hides the panel; drag the bar between it and the terminal to
+  resize. **Expand** moves it over the graph, and Esc puts it back.
+- To limit Acantha to certain channels, put their IDs (the `C…` in a message link) under **Settings → Slack →
+  Allowed channels**. Anything from another channel is then refused before it's fetched. Left empty, any channel
+  you can read is allowed.
+
+### Good to know
+
+- A user token only sees what you can see in Slack. Nobody is notified when Acantha reads a message, and the app
+  can't post: it has no write scopes. Workspace admins can see that the app is installed and what it may read.
+- Custom workspace emoji show as `:name:`; pictures in canvases aren't loaded.
+- To remove it, delete the app on [api.slack.com/apps](https://api.slack.com/apps) (or **Revoke Tokens** there),
+  and the Keychain item with `security delete-generic-password -s com.munsonlabs.acantha.slack`.
 
 ## Install
 

@@ -8,6 +8,7 @@ import GraphPane from './GraphPane.vue'
 import ConflictResolver from './ConflictResolver.vue'
 import RebaseModal from './RebaseModal.vue'
 import Sidebar from './Sidebar.vue'
+import SlackView from './SlackView.vue'
 import TerminalPane from './TerminalPane.vue'
 
 const props = defineProps<{ ws: Workspace; visible: boolean }>()
@@ -15,6 +16,7 @@ provideWorkspace(props.ws)
 
 const { repo } = props.ws.repo
 const { open, sessions } = props.ws.terminals
+const { slack, slackExpanded } = props.ws.ui
 const el = ref<HTMLElement>()
 const width = prefs.terminalWidth
 const sidebarWidth = prefs.sidebarWidth
@@ -33,7 +35,16 @@ onBeforeUnmount(() => observer.disconnect())
  */
 const sliding = ref<'sidebar' | 'terminal' | null>(null)
 watch(sidebarOpen, () => (sliding.value = 'sidebar'), { flush: 'sync' })
-watch(open, () => (sliding.value = 'terminal'), { flush: 'sync' })
+
+/**
+ * The right-hand column holds the terminal with the Slack panel under it; it's open while either is. (While a
+ * Slack message is expanded over the graph, the panel leaves the column.)
+ */
+const slackDocked = computed(() => prefs.slackOpen.value && !(slackExpanded.value && slack.value))
+const rightOpen = computed(() => (open.value && sessions.value.length > 0) || slackDocked.value)
+/** What a closed column has to show when peeked at. */
+const rightPeekable = computed(() => sessions.value.length > 0 || (!!slack.value && !slackExpanded.value))
+watch(rightOpen, () => (sliding.value = 'terminal'), { flush: 'sync' })
 const doneSliding = (e: TransitionEvent) => e.propertyName === 'width' && (sliding.value = null)
 
 /**
@@ -103,8 +114,8 @@ function onKey(e: KeyboardEvent) {
 }
 
 // Pinning the panel (or closing the last terminal) ends the peek.
-watch([sidebarOpen, open, () => sessions.value.length], () => {
-  if ((peek.value === 'sidebar' && sidebarOpen.value) || (peek.value === 'terminal' && (open.value || !sessions.value.length))) peek.value = null
+watch([sidebarOpen, rightOpen, rightPeekable], () => {
+  if ((peek.value === 'sidebar' && sidebarOpen.value) || (peek.value === 'terminal' && (rightOpen.value || !rightPeekable.value))) peek.value = null
 })
 onMounted(() => {
   window.addEventListener('pointerdown', onPointerDown, true)
@@ -116,6 +127,25 @@ onBeforeUnmount(() => {
   clearTimeout(enterTimer)
   clearTimeout(leaveTimer)
 })
+
+const showTerminal = computed(() => sessions.value.length > 0 && (open.value || peek.value === 'terminal'))
+const showSlack = computed(() => slackDocked.value || (peek.value === 'terminal' && rightPeekable.value && !!slack.value && !slackExpanded.value))
+const column = ref<HTMLElement>()
+
+/** Drags the bar between the terminal and the Slack panel; Slack's height is kept as a share of the column. */
+function startSplit(e: MouseEvent) {
+  const box = column.value!.getBoundingClientRect()
+  const move = (ev: MouseEvent) => (prefs.slackHeight.value = Math.min(Math.max((box.bottom - ev.clientY) / box.height, 0.15), 0.85))
+  const up = () => {
+    window.removeEventListener('mousemove', move)
+    window.removeEventListener('mouseup', up)
+    document.body.classList.remove('resizing-rows')
+  }
+  document.body.classList.add('resizing-rows')
+  window.addEventListener('mousemove', move)
+  window.addEventListener('mouseup', up)
+  e.preventDefault()
+}
 
 /** Drags a gutter: the sidebar is sized in pixels from the left, the terminal as a fraction from the right. */
 function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
@@ -161,29 +191,39 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
     <GraphPane class="graph" />
     <!-- Terminals stay mounted while hidden so their shells keep running. -->
     <div
-      v-if="repo && sessions.length && !open && peek !== 'terminal'"
+      v-if="repo && rightPeekable && !rightOpen && peek !== 'terminal'"
       class="edge right"
       @mouseenter="edgeEnter('terminal')"
       @mouseleave="edgeLeave"
     />
     <div
-      v-if="repo && sessions.length"
+      v-if="repo && (sessions.length || slackDocked || slack)"
       ref="rightSlot"
       class="slot right"
       :class="{
         sliding: sliding === 'terminal',
-        shut: !open && peek !== 'terminal',
+        shut: !rightOpen && peek !== 'terminal',
         peek: peek === 'terminal',
         leaving: peek === 'terminal' && leaving,
       }"
-      :style="{ width: open ? `${terminalPx + 10}px` : peek === 'terminal' ? `${terminalPx}px` : '0px' }"
+      :style="{ width: rightOpen ? `${terminalPx + 10}px` : peek === 'terminal' ? `${terminalPx}px` : '0px' }"
       @transitionend.self="doneSliding"
       @animationend="peekDone"
       @mouseenter="peek && peekEnter()"
       @mouseleave="peek && peekLeave()"
     >
       <div class="gutter" @mousedown="startResize($event, 'terminal')" />
-      <TerminalPane class="terminal" :style="{ width: `${terminalPx}px` }" :visible="visible && (open || peek === 'terminal')" />
+      <div ref="column" class="column" :style="{ width: `${terminalPx}px` }">
+        <TerminalPane v-if="sessions.length" v-show="showTerminal" class="terminal" :visible="visible && showTerminal" />
+        <div v-if="showTerminal && showSlack" class="split" @mousedown="startSplit" />
+        <SlackView
+          v-if="showSlack"
+          docked
+          class="slack-dock"
+          :class="{ alone: !showTerminal }"
+          :style="showTerminal ? { height: `${Math.round(prefs.slackHeight.value * 100)}%` } : undefined"
+        />
+      </div>
     </div>
     <DiffModal />
     <ConflictResolver />
@@ -220,8 +260,30 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
   pointer-events: none;
 }
 .sidebar,
-.terminal {
+.column {
   flex: none;
+}
+.column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.terminal {
+  flex: 1;
+  min-height: 120px;
+}
+.slack-dock {
+  flex: none;
+  min-height: 120px;
+}
+.slack-dock.alone {
+  flex: 1;
+}
+/* The bar between the terminal and Slack. */
+.split {
+  flex: none;
+  height: 10px;
+  cursor: row-resize;
 }
 .gutter {
   flex: none;

@@ -54,6 +54,9 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &sep()?,
             &item("find", "Find", None)?,
             &item("search-files", "Find in Files", Some("CmdOrCtrl+Shift+F"))?,
+            &item("search-file-names", "Find File by Name", Some("CmdOrCtrl+Alt+F"))?,
+            &sep()?,
+            &item("open-slack-link", "Open Slack Link…", Some("CmdOrCtrl+Shift+L"))?,
         ],
     )?;
     let view = Submenu::with_items(

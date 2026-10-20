@@ -14,6 +14,11 @@ export const prefs = {
   editorVim: usePersisted('editor-vim', false),
   /** The card with a commit's details that appears when hovering a row in the graph. */
   hoverCards: usePersisted('hover-cards', true),
+  /** Slack channel IDs whose messages and canvases may be opened. Empty allows any the token can see. */
+  slackChannels: usePersisted<string[]>('slack-channels', []),
+  /** The Slack panel under the terminal, and its share of that column's height when both show. */
+  slackOpen: usePersisted('slack-open', false),
+  slackHeight: usePersisted('slack-height', 0.45),
   /** Columns of the graph turned off from the header's right-click menu. */
   hiddenColumns: usePersisted<string[]>('hidden-columns', []),
   /** Column order dragged in the graph's header. Empty means the default. */

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { overlays, ZOOM_MAX, ZOOM_MIN } from '@/composables/commands'
 import { prefs } from '@/composables/prefs'
 import { useWorkspaces } from '@/composables/workspace'
@@ -10,6 +11,12 @@ const open = overlays.settings
 const EDITORS = ['', 'Visual Studio Code', 'Cursor', 'Zed', 'Sublime Text', 'TextEdit']
 
 // Remote branches change what the log contains, so the graph reloads.
+/** Slack channel IDs, edited as one comma-separated line. */
+const slackChannels = computed({
+  get: () => prefs.slackChannels.value.join(', '),
+  set: (v: string) => (prefs.slackChannels.value = v.split(/[\s,]+/).filter((id) => /^[A-Z0-9]+$/.test(id))),
+})
+
 const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRemotes(on) : (prefs.showRemotes.value = on))
 </script>
 
@@ -102,6 +109,21 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
                 <option v-for="app in EDITORS" :key="app" :value="app">{{ app || 'Default app' }}</option>
               </select>
             </label>
+          </section>
+
+          <section>
+            <h3>Slack</h3>
+            <label class="row">
+              <div>
+                <span class="label">Allowed channels</span>
+                <span class="hint">Channel IDs (the C… part of a message link). Leave empty to allow any channel you're in.</span>
+              </div>
+              <input v-model.lazy="slackChannels" type="text" placeholder="C0123ABCD" spellcheck="false" autocomplete="off" />
+            </label>
+            <p class="hint">
+              Open a message or canvas by pasting its link anywhere (⇧⌘L to type one). Your token is read from the macOS Keychain
+              (<code>com.munsonlabs.acantha.slack</code>) and never stored by the app.
+            </p>
           </section>
 
           <section>
