@@ -68,6 +68,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &sep()?,
             &item("toggle-sidebar", "Toggle Sidebar", Some("CmdOrCtrl+B"))?,
             &item("toggle-terminal", "Toggle Terminal", Some("CmdOrCtrl+J"))?,
+            &item("open-files", "Open Files…", Some("CmdOrCtrl+E"))?,
             &sep()?,
             &item("refresh", "Refresh", Some("CmdOrCtrl+R"))?,
             &sep()?,

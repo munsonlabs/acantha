@@ -14,7 +14,24 @@ import type { MenuEntry } from '@/composables/useContextMenu'
 import Skeleton from './Skeleton.vue'
 
 const ws = useWorkspace()
-const { rev, list, folders, loading, filter, expanded, newFolders, preview, load, browse, toggle, open, closePreview, leaveEditor } = ws.files
+const {
+  rev,
+  list,
+  folders,
+  loading,
+  filter,
+  expanded,
+  newFolders,
+  renameOpen,
+  forgetOpen,
+  preview,
+  load,
+  browse,
+  toggle,
+  open,
+  closePreview,
+  leaveEditor,
+} = ws.files
 const { rows } = ws.repo
 const { status } = ws.status
 
@@ -157,6 +174,7 @@ async function moveTo(from: string, kind: 'dir' | 'file', to: string) {
   const wasOpen = p && p.rev === null && inside(p.path, from) ? p : null
   if (wasOpen && !(await leaveEditor())) return
   await git.renamePath(repoRoot(), from, to)
+  renameOpen(from, to)
   editing.value = null
   newFolders.value = new Set([...newFolders.value].map((f) => (inside(f, from) ? to + f.slice(from.length) : f)))
   await afterChange()
@@ -175,6 +193,7 @@ async function trash(r: Row) {
   }
   try {
     await git.trashPath(repoRoot(), r.path)
+    forgetOpen(r.path)
     newFolders.value = new Set([...newFolders.value].filter((f) => !inside(f, r.path)))
     await afterChange()
     showToast(`Moved ${r.path.split('/').pop()} to the Trash`)

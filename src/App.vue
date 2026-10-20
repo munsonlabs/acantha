@@ -13,6 +13,7 @@ import { onMakeTodos, useContextMenu } from '@/composables/useContextMenu'
 import { pasteIntoPanel } from '@/composables/slackLinks'
 import { showToast } from '@/composables/useToast'
 import CommandPalette from '@/components/CommandPalette.vue'
+import OpenFiles from '@/components/OpenFiles.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
 import PromptDialog from '@/components/PromptDialog.vue'
 import SettingsModal from '@/components/SettingsModal.vue'
@@ -55,6 +56,7 @@ const KEYS: Record<string, string> = {
   ',': 'settings',
   '/': 'shortcuts',
   f: 'find',
+  e: 'open-files',
 }
 
 function onKeydown(e: KeyboardEvent) {
@@ -100,6 +102,7 @@ function onKeydown(e: KeyboardEvent) {
     else if (dialog.value) closeDialog(null)
     else if (overlays.settings.value) overlays.settings.value = false
     else if (overlays.shortcuts.value) overlays.shortcuts.value = false
+    else if (overlays.openFiles.value) overlays.openFiles.value = false
     else if (ws?.diff.diff.value) ws.diff.closeDiff()
     else if (ws?.ui.conflict.value) ws.ui.conflict.value = null
     else if (ws?.ui.rebase.value) ws.ui.rebase.value = null
@@ -226,6 +229,7 @@ onBeforeUnmount(() => {
   <StatusBar />
   <ContextMenu />
   <CommandPalette />
+  <OpenFiles />
   <SettingsModal />
   <ShortcutsModal />
   <PromptDialog />

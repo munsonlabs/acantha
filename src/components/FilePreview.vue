@@ -7,6 +7,7 @@ import { compactDate, formatDate, nameHue, shortHash, splitPath } from '@/lib/fo
 import { displayDate } from '@/composables/dates'
 import type { PreviewView } from '@/composables/files'
 import { prefs } from '@/composables/prefs'
+import { overlays } from '@/composables/commands'
 import { openMenu } from '@/composables/useContextMenu'
 import { confirmAction } from '@/composables/useDialog'
 import { showToast } from '@/composables/useToast'
@@ -19,7 +20,7 @@ import MarkdownView from './MarkdownView.vue'
 import Skeleton from './Skeleton.vue'
 
 const ws = useWorkspace()
-const { preview, dirty, open, closePreview, diskChanged } = ws.files
+const { preview, dirty, open, closePreview, diskChanged, openFiles } = ws.files
 const { stage, refresh } = ws.status
 const { repo, rows } = ws.repo
 const { select } = ws.details
@@ -261,6 +262,9 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
       <button v-if="isMarkdown && preview.view === 'preview'" class="ghost toggle" @click="rendered = !rendered">
         {{ rendered ? 'Source' : 'Rendered' }}
       </button>
+      <button class="ghost open-files-btn" title="Open files (⌘E)" @click="overlays.openFiles.value = true">
+        <Icon name="files" :size="13" /> {{ openFiles.length }}
+      </button>
       <button class="ghost icon-btn" title="Close" @click="closePreview"><Icon name="x" /></button>
     </header>
 
@@ -435,6 +439,15 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
   overflow: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar) transparent;
+}
+.open-files-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 7px;
+  color: var(--fg-muted);
+  font-size: 11.5px;
 }
 .disk-bar {
   position: sticky;

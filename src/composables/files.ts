@@ -8,6 +8,12 @@ import { showToast } from './useToast'
 
 export type PreviewView = 'preview' | 'blame' | 'history' | 'edit'
 
+/** A file in the open-files list: a path, in the working tree (rev null) or at a commit. */
+export interface OpenFile {
+  path: string
+  rev: string | null
+}
+
 /** The file browser: the repository's files at a commit (or in the working tree), and the file being previewed. */
 export function createFiles({ repo }: Repo) {
   /** null is the working tree. */
@@ -70,13 +76,45 @@ export function createFiles({ repo }: Repo) {
     return true
   }
 
-  /** Without a view, a working-tree file opens in the editor when that's the setting; anything else as a preview. */
+  /** How a file opens when no view is asked for: a working-tree file in the editor when that's the setting. */
+  const defaultView = (at: string | null): PreviewView => (prefs.editByDefault.value && at === null ? 'edit' : 'preview')
+
+  /**
+   * The files open in this repository, in the order they were opened (⌘E lists them). Opening a file adds it;
+   * closing it (its ✕ there, or closing the preview) takes it out. The editor holds one at a time.
+   */
+  const openFiles = ref<OpenFile[]>([])
+  const sameFile = (a: OpenFile, b: OpenFile) => a.path === b.path && a.rev === b.rev
+
   async function open(path: string, view?: PreviewView, at: string | null = rev.value, line?: number) {
-    view ??= prefs.editByDefault.value && at === null ? 'edit' : 'preview'
+    view ??= defaultView(at)
     const p = preview.value
     // Switching between views of the same file keeps the editor's changes only while editing.
     if (p && p.view === 'edit' && !(await leaveEditor())) return
     preview.value = { path, rev: at, view, line }
+    if (!openFiles.value.some((f) => sameFile(f, { path, rev: at }))) openFiles.value = [...openFiles.value, { path, rev: at }].slice(-40)
+  }
+
+  /** Closes one open file. Closing the one on screen shows the one next to it, or the graph when it was the last. */
+  async function closeFile(file: OpenFile) {
+    const p = preview.value
+    const i = openFiles.value.findIndex((f) => sameFile(f, file))
+    const rest = openFiles.value.filter((f) => !sameFile(f, file))
+    if (p && sameFile(p, file)) {
+      if (p.view === 'edit' && !(await leaveEditor())) return
+      const next = rest[Math.min(Math.max(i, 0), rest.length - 1)]
+      preview.value = next ? { path: next.path, rev: next.rev, view: defaultView(next.rev) } : null
+    }
+    openFiles.value = rest
+  }
+
+  /** Keeps the list right when files are renamed, moved or trashed from the sidebar. */
+  const inside = (path: string, dir: string) => path === dir || path.startsWith(`${dir}/`)
+  function renameOpen(from: string, to: string) {
+    openFiles.value = openFiles.value.map((f) => (f.rev === null && inside(f.path, from) ? { ...f, path: to + f.path.slice(from.length) } : f))
+  }
+  function forgetOpen(dir: string) {
+    openFiles.value = openFiles.value.filter((f) => !(f.rev === null && inside(f.path, dir)))
   }
 
   /** Searching the files' contents (and names), at the same commit as the browser. */
@@ -126,8 +164,11 @@ export function createFiles({ repo }: Repo) {
     searchTimer = setTimeout(runSearch, 250)
   })
 
+  /** Closes the file on screen (and takes it off the open files), back to the graph. */
   async function closePreview() {
-    if (preview.value?.view === 'edit' && !(await leaveEditor())) return
+    const p = preview.value
+    if (p?.view === 'edit' && !(await leaveEditor())) return
+    if (p) openFiles.value = openFiles.value.filter((f) => !sameFile(f, p))
     preview.value = null
   }
 
@@ -135,6 +176,7 @@ export function createFiles({ repo }: Repo) {
     rev.value = null
     list.value = []
     preview.value = null
+    openFiles.value = []
     dirty.value = false
     expanded.value = new Set()
     newFolders.value = new Set()
@@ -150,6 +192,7 @@ export function createFiles({ repo }: Repo) {
     expanded,
     newFolders,
     preview,
+    openFiles,
     dirty,
     search,
     load,
@@ -157,6 +200,9 @@ export function createFiles({ repo }: Repo) {
     toggle,
     open,
     closePreview,
+    closeFile,
+    renameOpen,
+    forgetOpen,
     leaveEditor,
     runSearch,
   }
