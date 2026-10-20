@@ -66,7 +66,7 @@ function saveEdit(t: Todo) {
           type="text"
           spellcheck="false"
           @keydown.enter="saveEdit(t)"
-          @keydown.esc.stop="editing = null"
+          @keydown.esc.stop.prevent="editing = null"
           @blur="saveEdit(t)"
         />
         <span v-else class="text" title="Click to edit" @click="startEdit(t)">{{ t.text }}</span>

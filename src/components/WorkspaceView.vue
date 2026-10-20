@@ -110,7 +110,10 @@ function onPointerDown(e: PointerEvent) {
 }
 
 function onKey(e: KeyboardEvent) {
-  if (e.key === 'Escape' && peek.value && !menu.value) dismiss()
+  if (e.key === 'Escape' && peek.value && !menu.value) {
+    e.preventDefault()
+    dismiss()
+  }
 }
 
 // Pinning the panel (or closing the last terminal) ends the peek.

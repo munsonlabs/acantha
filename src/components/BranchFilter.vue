@@ -53,6 +53,7 @@ const onDown = (e: MouseEvent) => {
 }
 const onKey = (e: KeyboardEvent) => {
   if (open.value && e.key === 'Escape') {
+    e.preventDefault()
     e.stopPropagation()
     open.value = false
   }

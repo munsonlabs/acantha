@@ -105,6 +105,7 @@ function onKey(e: KeyboardEvent) {
     if (scope.value !== 'names' && first) void openHit(first)
     else if (names.value[0]) void open(names.value[0])
   } else if (e.key === 'Escape' && query.value) {
+    e.preventDefault()
     e.stopPropagation()
     query.value = ''
   }
@@ -163,7 +164,7 @@ onMounted(() => {
         title="Extensions, patterns or folders, separated by commas or spaces. ! leaves matches out."
         spellcheck="false"
         autocomplete="off"
-        @keydown.esc.stop="toggleInclude"
+        @keydown.esc.stop.prevent="toggleInclude"
       />
     </div>
     <div class="scopes">

@@ -88,6 +88,7 @@ function tabMenu(e: MouseEvent, ws: Workspace) {
 function onSearchKey(e: KeyboardEvent) {
   if (e.key === 'Enter') search.value?.step(e.shiftKey ? -1 : 1)
   if (e.key === 'Escape') {
+    e.preventDefault()
     query.value = ''
     input.value?.blur()
   }

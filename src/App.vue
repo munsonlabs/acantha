@@ -11,6 +11,7 @@ import { useWorkspaces } from '@/composables/workspace'
 import { closeDialog, useDialog } from '@/composables/useDialog'
 import { onMakeTodos, useContextMenu } from '@/composables/useContextMenu'
 import { pasteIntoPanel } from '@/composables/slackLinks'
+import { showToast } from '@/composables/useToast'
 import CommandPalette from '@/components/CommandPalette.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
 import PromptDialog from '@/components/PromptDialog.vue'
@@ -92,8 +93,11 @@ function onKeydown(e: KeyboardEvent) {
     e.preventDefault()
     runCommand(KEYS[key])
   } else if (e.key === 'Escape') {
-    if (inEditor) return
-    if (dialog.value) closeDialog(null)
+    // Already handled by the editor, a search box, a dropdown or the palette.
+    if (e.defaultPrevented) return
+    let closed = true
+    if (inEditor) closed = false
+    else if (dialog.value) closeDialog(null)
     else if (overlays.settings.value) overlays.settings.value = false
     else if (overlays.shortcuts.value) overlays.shortcuts.value = false
     else if (ws?.diff.diff.value) ws.diff.closeDiff()
@@ -103,6 +107,9 @@ function onKeydown(e: KeyboardEvent) {
     else if (!typing && ws?.files.preview.value) void ws.files.closePreview()
     else if (!typing && ws?.panel.expanded.value) ws.panel.expanded.value = false
     else if (!typing && ws?.details.details.value) ws.details.closeDetails()
+    else closed = false
+    if (closed) e.preventDefault()
+    else escapeFullscreen(e)
   } else if (!typing && !dialog.value && !ws?.diff.diff.value && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && ws?.details.details.value) {
     e.preventDefault()
     ws.details.step(e.key === 'ArrowDown' ? 1 : -1)
@@ -115,6 +122,30 @@ onMakeTodos((items) => {
   if (!ws?.repo.repo.value) return
   ws.panel.addTodos('To-dos', items)
 })
+
+/**
+ * In macOS full screen, an Escape the page doesn't claim also exits full screen. Escapes that close something are
+ * claimed above; with nothing to close, the first one asks for a second, and that one leaves full screen.
+ */
+let fullscreen = false
+let escapeArmedAt = 0
+const syncFullscreen = () =>
+  appWindow.isFullscreen().then(
+    (f) => (fullscreen = f),
+    () => {},
+  )
+
+function escapeFullscreen(e: KeyboardEvent) {
+  if (!fullscreen) return
+  e.preventDefault()
+  if (Date.now() - escapeArmedAt < 2000) {
+    escapeArmedAt = 0
+    void appWindow.setFullscreen(false).catch(() => {})
+  } else {
+    escapeArmedAt = Date.now()
+    showToast('Press Esc again to exit full screen')
+  }
+}
 
 /** Pasting outside a text field: a Slack link opens in the panel, and a bulleted list becomes a to-do list there. */
 function onPaste(e: ClipboardEvent) {
@@ -144,8 +175,11 @@ const poll = setInterval(() => {
 onMounted(async () => {
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('paste', onPaste)
-  // Pick up changes made in the terminal or an editor whenever the window comes back into focus.
+  void syncFullscreen()
   unlisten.push(
+    // Entering or leaving full screen resizes the window.
+    await appWindow.onResized(syncFullscreen),
+    // Pick up changes made in the terminal or an editor whenever the window comes back into focus.
     await appWindow.onFocusChanged(({ payload: focused }) => {
       if (focused && Date.now() - lastFocusReload > 1000) {
         lastFocusReload = Date.now()
