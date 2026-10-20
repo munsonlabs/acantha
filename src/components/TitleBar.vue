@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { basename } from '@/lib/format'
 import { useWorkspaces, type Workspace } from '@/composables/workspace'
 import { openMenu, type MenuEntry } from '@/composables/useContextMenu'
@@ -91,11 +92,26 @@ function onSearchKey(e: KeyboardEvent) {
   }
 }
 
+// macOS hides the traffic lights in fullscreen, so the tabs can take their place.
+const fullscreen = ref(false)
+let stopResize: (() => void) | undefined
+onMounted(async () => {
+  const win = getCurrentWindow()
+  const check = () =>
+    win.isFullscreen().then(
+      (f) => (fullscreen.value = f),
+      () => {},
+    )
+  check()
+  stopResize = await win.onResized(check).catch(() => undefined)
+})
+onBeforeUnmount(() => stopResize?.())
+
 defineExpose({ focusSearch: () => input.value?.select() })
 </script>
 
 <template>
-  <header class="titlebar" data-tauri-drag-region>
+  <header class="titlebar" :class="{ fullscreen }" data-tauri-drag-region>
     <div ref="strip" class="tabs pilled" :class="{ tinted: activeColor }" :style="{ '--tab-color': activeColor ?? undefined }" data-tauri-drag-region>
       <span class="tab-pill" :style="pill.style.value" />
       <div
@@ -139,6 +155,9 @@ defineExpose({ focusSearch: () => input.value?.select() })
   height: 40px;
   /* Room for the macOS traffic lights. */
   padding: 0 10px 0 84px;
+}
+.titlebar.fullscreen {
+  padding-left: 10px;
 }
 .tabs {
   position: relative;
