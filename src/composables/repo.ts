@@ -111,10 +111,16 @@ export function createRepo() {
       }
     } catch (e) {
       if (seq !== reloadSeq) return
-      // The filtered branch may have been deleted or renamed.
+      // A filtered branch may have been deleted or renamed: drop just the ones that are gone, keep the rest.
       if (branches.value.length) {
-        branches.value = []
-        return reload()
+        const path = repo.value
+        const exists = await Promise.all(branches.value.map((b) => git.revParse(path, b).catch(() => null)))
+        if (seq !== reloadSeq) return
+        const kept = branches.value.filter((_, i) => exists[i])
+        if (kept.length < branches.value.length) {
+          branches.value = kept
+          return reload()
+        }
       }
       showToast(String(e), 'error')
     }
