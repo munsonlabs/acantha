@@ -9,6 +9,7 @@ const { log, showRemotes, showStashes, reload, setShowRemotes } = ws.repo
 const { fetchAll } = ws.menus
 const hoverCards = prefs.hoverCards
 const dimIdle = prefs.dimIdleGraph
+const collapsed = prefs.graphCollapsed
 </script>
 
 <template>
@@ -50,6 +51,9 @@ const dimIdle = prefs.dimIdleGraph
     </button>
     <button class="ghost icon-btn" :disabled="!log?.remotes.length" title="Fetch from all remotes" @click="fetchAll"><Icon name="fetch" /></button>
     <button class="ghost icon-btn" title="Refresh (⌘R)" @click="reload"><Icon name="refresh" /></button>
+    <button class="ghost icon-btn" title="Collapse the graph (show it again from the status bar)" @click="collapsed = true">
+      <Icon name="minimize" />
+    </button>
   </header>
 </template>
 

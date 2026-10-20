@@ -91,6 +91,7 @@ export const commands: Command[] = [
     run: () => active.value && promptSlackLink(active.value),
   },
   { id: 'open-files', label: 'Open Files', group: 'View', keys: '⌘E', run: withRepo(() => (overlays.openFiles.value = !overlays.openFiles.value)) },
+  { id: 'toggle-graph', label: 'Toggle Graph', group: 'View', run: () => (prefs.graphCollapsed.value = !prefs.graphCollapsed.value) },
   { id: 'toggle-panel', label: 'Toggle Panel (Slack and To-dos)', group: 'View', run: () => active.value && togglePanel(active.value) },
   { id: 'new-todo-list', label: 'New To-do List', group: 'View', run: withRepo((ws) => ws.panel.addTodos('To-dos')) },
   { id: 'new-notes', label: 'New Notes', group: 'View', run: withRepo((ws) => ws.panel.addNotes()) },

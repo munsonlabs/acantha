@@ -7,6 +7,7 @@ import DiffModal from './DiffModal.vue'
 import GraphPane from './GraphPane.vue'
 import ConflictResolver from './ConflictResolver.vue'
 import RebaseModal from './RebaseModal.vue'
+import GraphStamp from './GraphStamp.vue'
 import Sidebar from './Sidebar.vue'
 import SidePanel from './SidePanel.vue'
 import TerminalPane from './TerminalPane.vue'
@@ -133,6 +134,42 @@ onBeforeUnmount(() => {
 
 const showTerminal = computed(() => sessions.value.length > 0 && (open.value || peek.value === 'terminal'))
 const showPanel = computed(() => panelDocked.value || (peek.value === 'terminal' && panelTabs.value.length > 0 && !panelExpanded.value))
+
+/**
+ * The panel slides open and closed under the terminal by animating its height, like the commit details: it's added
+ * at no height, then grown on the next frame; closing shrinks it, then removes it once the slide ends (so its content
+ * stays put while it goes). The height only animates while opening or closing; dragging the split follows the mouse.
+ */
+// Files and the expanded panel show where the graph is, so opening one brings that area back.
+watch([() => props.ws.files.preview.value, panelExpanded], ([preview, expanded]) => {
+  if (preview || expanded) prefs.graphCollapsed.value = false
+})
+
+const panelMounted = ref(showPanel.value)
+const panelGrown = ref(showPanel.value)
+const panelSliding = ref(false)
+watch(
+  showPanel,
+  (on) => {
+    panelSliding.value = true
+    if (on) {
+      panelMounted.value = true
+      requestAnimationFrame(() => requestAnimationFrame(() => (panelGrown.value = showPanel.value)))
+    } else {
+      panelGrown.value = false
+    }
+  },
+  { flush: 'sync' },
+)
+function panelSlid(e: TransitionEvent) {
+  if (e.propertyName !== 'height' || e.target !== e.currentTarget) return
+  panelSliding.value = false
+  if (!showPanel.value) panelMounted.value = false
+}
+const panelSlotHeight = computed(() => {
+  if (!panelGrown.value) return '0px'
+  return showTerminal.value ? `${Math.round(prefs.panelHeight.value * 100)}%` : '100%'
+})
 const column = ref<HTMLElement>()
 
 /** Drags the bar between the terminal and the panel; the panel's height is kept as a share of the column. */
@@ -193,7 +230,18 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
       <Sidebar class="sidebar" :style="{ width: `${sidebarWidth}px` }" />
       <div class="gutter" @mousedown="startResize($event, 'sidebar')" />
     </div>
-    <GraphPane class="graph" />
+    <!--
+      Collapsed, the graph stays mounted (keeping its scroll and state) and its place shows the stamp. The two share
+      the middle and cross-fade, so nothing beside them moves.
+    -->
+    <div class="center">
+      <Transition name="center">
+        <GraphPane v-show="!prefs.graphCollapsed.value" class="graph" />
+      </Transition>
+      <Transition name="center">
+        <GraphStamp v-if="prefs.graphCollapsed.value" class="graph-stamp" />
+      </Transition>
+    </div>
     <!-- Terminals stay mounted while hidden so their shells keep running. -->
     <div
       v-if="repo && rightPeekable && !rightOpen && peek !== 'terminal'"
@@ -220,14 +268,16 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
       <div class="gutter" @mousedown="startResize($event, 'terminal')" />
       <div ref="column" class="column" :style="{ width: `${terminalPx}px` }">
         <TerminalPane v-if="sessions.length" v-show="showTerminal" class="terminal" :visible="visible && showTerminal" />
-        <div v-if="showTerminal && showPanel" class="split" @mousedown="startSplit" />
-        <SidePanel
-          v-if="showPanel"
-          docked
-          class="panel-dock"
-          :class="{ alone: !showTerminal }"
-          :style="showTerminal ? { height: `${Math.round(prefs.panelHeight.value * 100)}%` } : undefined"
-        />
+        <div v-if="showTerminal && panelGrown" class="split" @mousedown="startSplit" />
+        <div
+          v-if="panelMounted"
+          class="panel-slot"
+          :class="{ sliding: panelSliding }"
+          :style="{ height: panelSlotHeight }"
+          @transitionend="panelSlid"
+        >
+          <SidePanel docked class="panel-dock" />
+        </div>
       </div>
     </div>
     <DiffModal />
@@ -244,9 +294,16 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
   min-height: 0;
   padding: 0 10px;
 }
+.center {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 320px;
+}
 .graph {
   flex: 1;
-  min-width: 320px;
+  min-height: 0;
 }
 .slot {
   display: flex;
@@ -277,12 +334,32 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
   flex: 1;
   min-height: 120px;
 }
-.panel-dock {
+.panel-slot {
   flex: none;
+  min-height: 0;
+  overflow: hidden;
+}
+.panel-slot.sliding {
+  transition: height 0.26s var(--ease-out);
+}
+.panel-dock {
+  height: 100%;
   min-height: 120px;
 }
-.panel-dock.alone {
-  flex: 1;
+.graph-stamp {
+  position: absolute;
+  inset: 0;
+}
+.center-enter-active,
+.center-leave-active {
+  transition:
+    opacity 0.22s var(--ease-out),
+    transform 0.22s var(--ease-out);
+}
+.center-enter-from,
+.center-leave-to {
+  opacity: 0;
+  transform: scale(0.985);
 }
 /* The bar between the terminal and the panel. */
 .split {
