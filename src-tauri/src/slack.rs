@@ -139,13 +139,24 @@ fn user(id: &str) -> SlackUser {
         let pick = |v: &Value| v.as_str().filter(|s| !s.is_empty()).map(String::from);
         SlackUser {
             id: id.to_string(),
-            name: pick(&profile["display_name"]).or(pick(&profile["real_name"])).or(pick(&u["name"])).unwrap_or_else(|| id.to_string()),
+            name: pick(&profile["display_name"])
+                .or(pick(&profile["real_name"]))
+                .or(pick(&u["name"]))
+                .unwrap_or_else(|| id.to_string()),
             avatar: pick(&profile["image_48"]),
         }
     });
     // Without users:read, or for someone who's gone, show the id rather than failing the whole thread.
-    let user = found.unwrap_or_else(|| SlackUser { id: id.to_string(), name: id.to_string(), avatar: None });
-    USERS.lock().unwrap().get_or_insert_with(HashMap::new).insert(id.to_string(), user.clone());
+    let user = found.unwrap_or_else(|| SlackUser {
+        id: id.to_string(),
+        name: id.to_string(),
+        avatar: None,
+    });
+    USERS
+        .lock()
+        .unwrap()
+        .get_or_insert_with(HashMap::new)
+        .insert(id.to_string(), user.clone());
     user
 }
 
@@ -202,7 +213,10 @@ pub async fn slack_thread(channel: String, ts: String, thread_ts: Option<String>
         return Err(NOT_ALLOWED.into());
     }
     let parent = thread_ts.unwrap_or(ts);
-    let json = api("conversations.replies", &[("channel", &channel), ("ts", &parent), ("limit", "200"), ("inclusive", "true")])?;
+    let json = api(
+        "conversations.replies",
+        &[("channel", &channel), ("ts", &parent), ("limit", "200"), ("inclusive", "true")],
+    )?;
     let messages: Vec<SlackMessage> = json["messages"].as_array().into_iter().flatten().map(parse_message).collect();
     let mut users = HashMap::new();
     for id in messages.iter().flat_map(|m| m.user.clone().into_iter().chain(mentions(&m.text))) {
@@ -233,7 +247,10 @@ pub async fn slack_canvas(file: String, allowed: Vec<String>) -> Result<SlackCan
     if !allowed.is_empty() && !channels.iter().any(|c| allowed.contains(c)) {
         return Err(NOT_ALLOWED.into());
     }
-    let url = f["url_private_download"].as_str().or(f["url_private"].as_str()).ok_or("Slack didn't say where that canvas's content is.")?;
+    let url = f["url_private_download"]
+        .as_str()
+        .or(f["url_private"].as_str())
+        .ok_or("Slack didn't say where that canvas's content is.")?;
     let html = String::from_utf8_lossy(&fetch(url)?).into_owned();
     Ok(SlackCanvas {
         title: f["title"].as_str().or(f["name"].as_str()).unwrap_or("Canvas").to_string(),

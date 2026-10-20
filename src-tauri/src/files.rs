@@ -148,7 +148,9 @@ fn parse_grep(out: &str, rev: Option<&str>) -> SearchResults {
     let mut truncated = false;
     for record in out.lines() {
         let mut parts = record.splitn(3, '\0');
-        let (Some(path), Some(line), Some(text)) = (parts.next(), parts.next(), parts.next()) else { continue };
+        let (Some(path), Some(line), Some(text)) = (parts.next(), parts.next(), parts.next()) else {
+            continue;
+        };
         let Ok(line) = line.parse() else { continue };
         if hits.len() == MAX_HITS {
             truncated = true;
@@ -159,7 +161,11 @@ fn parse_grep(out: &str, rev: Option<&str>) -> SearchResults {
             Some((cut, _)) => &text[..cut],
             None => text,
         };
-        hits.push(SearchHit { path: path.to_string(), line, text: text.to_string() });
+        hits.push(SearchHit {
+            path: path.to_string(),
+            line,
+            text: text.to_string(),
+        });
     }
     SearchResults { hits, truncated }
 }
@@ -177,7 +183,10 @@ pub async fn search_files(
     paths: Vec<String>,
 ) -> Result<SearchResults, String> {
     if query.is_empty() {
-        return Ok(SearchResults { hits: Vec::new(), truncated: false });
+        return Ok(SearchResults {
+            hits: Vec::new(),
+            truncated: false,
+        });
     }
     let mut args = vec!["grep", "-n", "-z", "-I", "--no-color", "--full-name", if regex { "-E" } else { "-F" }];
     if !case_sensitive {
