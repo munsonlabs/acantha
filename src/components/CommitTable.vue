@@ -118,12 +118,14 @@ function columnsMenu(e: MouseEvent) {
 
 /**
  * Commits that just appeared at the top (after a fetch, a commit, or work in the terminal) slide in with a brief
- * highlight. The first load, switching repos and "load more" (which adds older commits below) don't count.
+ * highlight. The first load, switching repos, changing the branch filter and "load more" (which adds older commits
+ * below) don't count.
  */
 const fresh = shallowRef(new Set<string>())
 let known: Set<string> | null = null
 let freshTimer: ReturnType<typeof setTimeout> | undefined
-watch(ws.repo.repo, () => (known = null))
+// Showing different branches, remotes or stashes brings commits into view that aren't new: no slide-in for those.
+watch([ws.repo.repo, ws.repo.branches, ws.repo.showRemotes, ws.repo.showStashes], () => (known = null))
 watch(rows, (now) => {
   const hashes = now.map((c) => c.hash).filter((h) => h !== UNCOMMITTED)
   if (known) {
