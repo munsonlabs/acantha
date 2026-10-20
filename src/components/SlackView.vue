@@ -108,13 +108,22 @@ const title = computed(() => {
   return words.length > 32 ? `${words.slice(0, 30).trimEnd()}…` : words || author(first)
 })
 
-/** Links to other Slack messages open in a new tab; everything else in the browser. */
+/**
+ * Links to other Slack messages and canvases open in a new tab; everything else in the browser. Canvases can link
+ * relative to the workspace (`/archives/…`, `/team/…`), so those are resolved against this tab's link first.
+ */
 function onClick(e: MouseEvent) {
   const a = (e.target as Element).closest('a')
-  const href = a?.getAttribute('href')
-  if (!href) return
+  const raw = a?.getAttribute('href')
+  if (!raw) return
   e.preventDefault()
-  if (!openSlackLink(ws, href)) void openUrl(href)
+  let href: string
+  try {
+    href = new URL(raw, props.url).href
+  } catch {
+    return
+  }
+  if (!openSlackLink(ws, href) && /^(https?|mailto):/.test(href)) void openUrl(href)
 }
 </script>
 
