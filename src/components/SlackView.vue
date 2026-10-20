@@ -91,7 +91,14 @@ const canvasHtml = computed(() => {
 
 const title = computed(() => {
   if (!current.value) return 'Slack'
-  if (canvas.value) return canvas.value.title
+  // Slack writes a canvas title's emoji as :name: codes; the title reads better without them.
+  if (canvas.value)
+    return (
+      canvas.value.title
+        .replace(/:[a-z0-9_+'-]+:(?::skin-tone-[2-6]:)?/g, '')
+        .replace(/\s+/g, ' ')
+        .trim() || 'Canvas'
+    )
   const n = thread.value ? thread.value.messages.length - 1 : 0
   return n > 0 ? `Slack thread · ${n} ${n === 1 ? 'reply' : 'replies'}` : 'Slack message'
 })
