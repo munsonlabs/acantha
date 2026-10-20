@@ -1,4 +1,5 @@
 import { ref, shallowRef, watch } from 'vue'
+import { filterPathspecs, parseFileFilter } from '@/lib/fileFilter'
 import { git, type SearchResults } from '@/lib/git'
 import type { Repo } from './repo'
 import { confirmAction } from './useDialog'
@@ -66,6 +67,10 @@ export function createFiles({ repo }: Repo) {
   /** Searching the files' contents (and names), at the same commit as the browser. */
   const search = {
     query: ref(''),
+    /** What to look through: names and contents, or just one of them. */
+    scope: ref<'all' | 'names' | 'contents'>('all'),
+    /** Which files, as typed in the "files to include" box (see `parseFileFilter`). */
+    include: ref(''),
     regex: ref(false),
     caseSensitive: ref(false),
     results: shallowRef<SearchResults | null>(null),
@@ -78,7 +83,7 @@ export function createFiles({ repo }: Repo) {
   async function runSearch() {
     const q = search.query.value
     const id = ++searchSeq
-    if (!repo.value || q.trim().length < 2) {
+    if (!repo.value || q.trim().length < 2 || search.scope.value === 'names') {
       search.results.value = null
       search.searching.value = false
       search.error.value = null
@@ -86,7 +91,8 @@ export function createFiles({ repo }: Repo) {
     }
     search.searching.value = true
     try {
-      const found = await git.searchFiles(repo.value, rev.value, q, search.regex.value, search.caseSensitive.value)
+      const paths = filterPathspecs(parseFileFilter(search.include.value))
+      const found = await git.searchFiles(repo.value, rev.value, q, search.regex.value, search.caseSensitive.value, paths)
       if (id !== searchSeq) return
       search.results.value = found
       search.error.value = null
@@ -100,7 +106,7 @@ export function createFiles({ repo }: Repo) {
     }
   }
 
-  watch([search.query, search.regex, search.caseSensitive, rev], () => {
+  watch([search.query, search.scope, search.include, search.regex, search.caseSensitive, rev], () => {
     clearTimeout(searchTimer)
     searchTimer = setTimeout(runSearch, 250)
   })

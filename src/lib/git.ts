@@ -160,8 +160,8 @@ export const git = {
     invoke<string>('get_status_diff', { repo, path: file.path, oldPath: file.oldPath, staged, untracked: file.kind === 'untracked' }),
   listFiles: (repo: string, rev: string | null) => invoke<string[]>('list_files', { repo, rev }),
   readFile: (repo: string, rev: string | null, path: string) => invoke<FileContent>('read_file', { repo, rev, path }),
-  searchFiles: (repo: string, rev: string | null, query: string, regex: boolean, caseSensitive: boolean) =>
-    invoke<SearchResults>('search_files', { repo, rev, query, regex, caseSensitive }),
+  searchFiles: (repo: string, rev: string | null, query: string, regex: boolean, caseSensitive: boolean, paths: string[]) =>
+    invoke<SearchResults>('search_files', { repo, rev, query, regex, caseSensitive, paths }),
   writeFile: (repo: string, path: string, contents: string) => invoke<void>('write_file', { repo, path, contents }),
   fileHistory: (repo: string, rev: string | null, path: string) => invoke<Commit[]>('file_history', { repo, rev, path }),
   blame: (repo: string, rev: string | null, path: string) => invoke<Blame>('blame_file', { repo, rev, path }),

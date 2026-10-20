@@ -165,9 +165,17 @@ fn parse_grep(out: &str, rev: Option<&str>) -> SearchResults {
 }
 
 /// Lines matching `query` in the repository's text files, at `rev` or in the working tree (tracked and untracked,
-/// not ignored). A plain string unless `regex`, which takes an extended regular expression.
+/// not ignored). A plain string unless `regex`, which takes an extended regular expression. `paths` are git pathspecs
+/// limiting which files are searched (`:(glob)**/*.ts`, `:(glob,exclude)target/**`).
 #[tauri::command]
-pub async fn search_files(repo: String, rev: Option<String>, query: String, regex: bool, case_sensitive: bool) -> Result<SearchResults, String> {
+pub async fn search_files(
+    repo: String,
+    rev: Option<String>,
+    query: String,
+    regex: bool,
+    case_sensitive: bool,
+    paths: Vec<String>,
+) -> Result<SearchResults, String> {
     if query.is_empty() {
         return Ok(SearchResults { hits: Vec::new(), truncated: false });
     }
@@ -183,6 +191,7 @@ pub async fn search_files(repo: String, rev: Option<String>, query: String, rege
         args.push(rev.as_str());
     }
     args.push("--");
+    args.extend(paths.iter().map(String::as_str));
     // Exit code 1 is "nothing matched".
     let out = git_with(&repo, &args, &[0, 1])?;
     Ok(parse_grep(&out, rev.as_deref()))
@@ -383,9 +392,11 @@ mod tests {
         git(&repo, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "c"]).unwrap();
         std::fs::write(dir.join("new.txt"), "a needle untracked\n").unwrap();
 
-        let search = |rev: Option<&str>, q: &str, regex: bool, case: bool| {
-            tauri::async_runtime::block_on(search_files(repo.clone(), rev.map(String::from), q.into(), regex, case)).unwrap()
+        let search_in = |rev: Option<&str>, q: &str, regex: bool, case: bool, paths: &[&str]| {
+            let paths = paths.iter().map(|p| p.to_string()).collect();
+            tauri::async_runtime::block_on(search_files(repo.clone(), rev.map(String::from), q.into(), regex, case, paths)).unwrap()
         };
+        let search = |rev: Option<&str>, q: &str, regex: bool, case: bool| search_in(rev, q, regex, case, &[]);
         let found = search(None, "needle", false, false);
         let mut where_: Vec<_> = found.hits.iter().map(|h| (h.path.as_str(), h.line)).collect();
         where_.sort();
@@ -396,6 +407,11 @@ mod tests {
         assert!(search(None, "nothing like it", false, false).hits.is_empty());
         let at_head = search(Some("HEAD"), "needle", false, false);
         assert_eq!(at_head.hits.iter().map(|h| h.path.as_str()).collect::<Vec<_>>(), ["src/a.txt"]);
+        // Pathspecs narrow it down, or leave files out.
+        let only_src = search_in(None, "needle", false, false, &[":(glob)src/**"]);
+        assert_eq!(only_src.hits.iter().map(|h| h.path.as_str()).collect::<Vec<_>>(), ["src/a.txt"]);
+        let not_src = search_in(None, "needle", false, false, &[":(glob,exclude)src/**"]);
+        assert_eq!(not_src.hits.iter().map(|h| h.path.as_str()).collect::<Vec<_>>(), ["new.txt"]);
         // An option-like query is searched for, not obeyed.
         assert!(search(None, "--help", false, false).hits.is_empty());
         let _ = std::fs::remove_dir_all(&dir);

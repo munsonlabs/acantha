@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { fileFilterMatcher, parseFileFilter } from '@/lib/fileFilter'
 import { shortHash, splitPath } from '@/lib/format'
 import type { SearchHit } from '@/lib/git'
 import { useWorkspace } from '@/composables/workspace'
@@ -8,17 +9,35 @@ import Icon from './Icon.vue'
 
 const ws = useWorkspace()
 const { rev, list, preview, load, open } = ws.files
-const { query, regex, caseSensitive, results, searching, error } = ws.files.search
+const { query, scope, include, regex, caseSensitive, results, searching, error } = ws.files.search
 const { rows } = ws.repo
 const input = ref<HTMLInputElement>()
 const collapsed = ref(new Set<string>())
+const includeInput = ref<HTMLInputElement>()
+/** The "files to include" row shows while it's open or has something in it. */
+const showInclude = ref(!!include.value)
+
+const SCOPES = [
+  { value: 'all', label: 'All', title: 'File names and contents (⇧⌘F)' },
+  { value: 'names', label: 'Names', title: 'File names only (⌥⌘F)' },
+  { value: 'contents', label: 'Contents', title: 'File contents only' },
+] as const
+
+function toggleInclude() {
+  showInclude.value = !showInclude.value
+  if (showInclude.value) void nextTick(() => includeInput.value?.focus())
+  else include.value = ''
+}
 
 const NAME_LIMIT = 30
 
 /** The query as a pattern for matching names and marking hits, or null while it isn't a valid one. */
+/** Names are quick to search from the first letter; contents need two. */
+const minLength = computed(() => (scope.value === 'names' ? 1 : 2))
+
 const pattern = computed(() => {
   const q = query.value
-  if (q.trim().length < 2) return null
+  if (q.trim().length < minLength.value) return null
   try {
     return new RegExp(regex.value ? q : q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), caseSensitive.value ? 'g' : 'gi')
   } catch {
@@ -26,10 +45,15 @@ const pattern = computed(() => {
   }
 })
 
+const filter = computed(() => fileFilterMatcher(parseFileFilter(include.value)))
+
 const names = computed(() => {
   const re = pattern.value
-  if (!re) return []
-  return list.value.filter((p) => new RegExp(re.source, re.flags.replace('g', '')).test(p.split('/').pop()!)).slice(0, NAME_LIMIT)
+  if (!re || scope.value === 'contents') return []
+  const test = new RegExp(re.source, re.flags.replace('g', ''))
+  const found = list.value.filter((p) => test.test(p.split('/').pop()!) && filter.value(p))
+  // Names alone get the whole list; beside contents, just the top of it.
+  return found.slice(0, scope.value === 'names' ? 500 : NAME_LIMIT)
 })
 
 const groups = computed(() => {
@@ -78,7 +102,7 @@ const openHit = (hit: SearchHit) => open(hit.path, 'preview', rev.value, hit.lin
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Enter') {
     const first = groups.value[0]?.hits[0]
-    if (first) void openHit(first)
+    if (scope.value !== 'names' && first) void openHit(first)
     else if (names.value[0]) void open(names.value[0])
   } else if (e.key === 'Escape' && query.value) {
     e.stopPropagation()
@@ -118,21 +142,44 @@ onMounted(() => {
         ref="input"
         v-model="query"
         type="text"
-        placeholder="Search file names and contents"
+        :placeholder="scope === 'names' ? 'Search file names' : scope === 'contents' ? 'Search file contents' : 'Search file names and contents'"
         spellcheck="false"
         autocomplete="off"
         @keydown="onKey"
       />
       <button class="ghost opt" :class="{ on: caseSensitive }" title="Match case" @click="caseSensitive = !caseSensitive">Aa</button>
       <button class="ghost opt" :class="{ on: regex }" title="Regular expression" @click="regex = !regex">.*</button>
+      <button class="ghost opt" :class="{ on: showInclude || include }" title="Limit to file types or folders" @click="toggleInclude">
+        <Icon name="filter" :size="12" />
+      </button>
+    </div>
+    <div v-if="showInclude" class="box include">
+      <span class="include-label">Files</span>
+      <input
+        ref="includeInput"
+        v-model="include"
+        type="text"
+        placeholder="ts, vue, src/, !*.test.ts"
+        title="Extensions, patterns or folders, separated by commas or spaces. ! leaves matches out."
+        spellcheck="false"
+        autocomplete="off"
+        @keydown.esc.stop="toggleInclude"
+      />
+    </div>
+    <div class="scopes">
+      <button v-for="s in SCOPES" :key="s.value" class="ghost" :class="{ on: scope === s.value }" :title="s.title" @click="scope = s.value">
+        {{ s.label }}
+      </button>
     </div>
 
     <div class="results">
-      <p v-if="query.trim().length < 2" class="note">Type at least two characters. Enter opens the first result.</p>
+      <p v-if="query.trim().length < minLength" class="note">
+        {{ minLength === 1 ? 'Type part of a file name.' : 'Type at least two characters.' }} Enter opens the first result.
+      </p>
       <p v-else-if="error" class="note error">{{ error }}</p>
       <template v-else>
         <template v-if="names.length">
-          <h4>File names</h4>
+          <h4 v-if="scope !== 'names'">File names</h4>
           <div
             v-for="path in names"
             :key="`n:${path}`"
@@ -236,6 +283,33 @@ onMounted(() => {
 .opt.on {
   background: var(--accent-soft);
   color: var(--accent);
+}
+.include {
+  margin-top: 0;
+}
+.include-label {
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.scopes {
+  display: flex;
+  gap: 2px;
+  margin: 2px 8px 4px;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--input-bg);
+}
+.scopes button {
+  flex: 1 1 0;
+  height: 22px;
+  border-radius: 5px;
+  color: var(--fg-muted);
+  font-size: 11.5px;
+}
+.scopes button.on {
+  background: var(--pill);
+  color: var(--fg);
 }
 .results {
   flex: 1;
