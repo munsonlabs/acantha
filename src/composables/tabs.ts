@@ -79,3 +79,22 @@ export function useTabDrag(container: Ref<HTMLElement | undefined>, move: (from:
 
   return { dragging, onPointerDown }
 }
+
+/**
+ * A row of tabs too long for its space scrolls sideways under an ordinary mouse wheel (the scrollbar is hidden, and a
+ * wheel only goes up and down; trackpads already scroll sideways). The active tab is kept in view.
+ */
+export function useTabScroll(container: Ref<HTMLElement | undefined>, active: WatchSource<unknown>) {
+  function onWheel(e: WheelEvent) {
+    const el = container.value
+    if (!el || el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return
+    el.scrollLeft += e.deltaY
+    e.preventDefault()
+  }
+  onMounted(() => container.value?.addEventListener('wheel', onWheel, { passive: false }))
+  onBeforeUnmount(() => container.value?.removeEventListener('wheel', onWheel))
+  watch(active, async () => {
+    await nextTick()
+    container.value?.querySelector(':scope > .active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  })
+}

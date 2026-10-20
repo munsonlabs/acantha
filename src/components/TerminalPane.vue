@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useSlidingPill, useTabDrag } from '@/composables/tabs'
+import { useSlidingPill, useTabDrag, useTabScroll } from '@/composables/tabs'
 import { useWorkspace } from '@/composables/workspace'
 import Icon from './Icon.vue'
 import TerminalView from './TerminalView.vue'
@@ -11,6 +11,7 @@ const strip = ref<HTMLElement>()
 
 const pill = useSlidingPill(strip, () => [activeKey.value, sessions.value.map((s) => `${s.key}:${s.title}`)])
 const { dragging, onPointerDown } = useTabDrag(strip, move)
+useTabScroll(strip, () => activeKey.value)
 
 /** Terminals render in creation order, so reordering tabs never moves (and disturbs) a live terminal. */
 const views = computed(() => [...sessions.value].sort((a, b) => a.key - b.key))

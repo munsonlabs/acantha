@@ -7,7 +7,7 @@ import { openMenu, type MenuEntry } from '@/composables/useContextMenu'
 import { folderOpenItems } from '@/composables/openers'
 import { prefs } from '@/composables/prefs'
 import { freshTabColor, TAB_COLORS, tabColor } from '@/lib/tabColors'
-import { useSlidingPill, useTabDrag } from '@/composables/tabs'
+import { useSlidingPill, useTabDrag, useTabScroll } from '@/composables/tabs'
 import Icon from './Icon.vue'
 
 const { workspaces, activeId, active, activate, addWorkspace, closeWorkspace, closeOtherWorkspaces, moveWorkspace } = useWorkspaces()
@@ -26,6 +26,7 @@ const label = (ws: Workspace) => (ws.repo.repo.value ? basename(ws.repo.repo.val
 
 const pill = useSlidingPill(strip, () => [activeId.value, workspaces.value.map((w) => `${w.id}:${label(w)}:${w.repo.log.value?.headBranch ?? ''}`)])
 const { dragging, onPointerDown } = useTabDrag(strip, moveWorkspace)
+useTabScroll(strip, () => activeId.value)
 
 function onTabDown(e: PointerEvent, ws: Workspace, index: number) {
   if (e.button !== 0) return

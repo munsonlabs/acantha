@@ -6,7 +6,7 @@ import { parseLines } from '@/lib/todos'
 import type { PanelTab } from '@/composables/panel'
 import { prefs } from '@/composables/prefs'
 import { promptSlackLink } from '@/composables/slackLinks'
-import { useSlidingPill, useTabDrag } from '@/composables/tabs'
+import { useSlidingPill, useTabDrag, useTabScroll } from '@/composables/tabs'
 import { openMenu } from '@/composables/useContextMenu'
 import { ask } from '@/composables/useDialog'
 import { showToast } from '@/composables/useToast'
@@ -30,6 +30,7 @@ const label = (t: PanelTab) => {
 
 const pill = useSlidingPill(strip, () => [active.value?.id, tabs.value.map((t) => `${t.id}:${label(t)}`)])
 const { dragging, onPointerDown } = useTabDrag(strip, move)
+useTabScroll(strip, () => active.value?.id)
 
 function onTabDown(e: PointerEvent, t: PanelTab, index: number) {
   if (e.button !== 0) return
