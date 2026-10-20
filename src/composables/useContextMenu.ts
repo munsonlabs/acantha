@@ -49,9 +49,48 @@ export function replaceNativeMenu() {
   window.addEventListener('contextmenu', (e) => {
     if (e.defaultPrevented) return
     e.preventDefault()
-    const field = (e.target as Element).closest<HTMLElement>('input, textarea, [contenteditable]:not([contenteditable="false"])')
-    if (field) openMenu(e, editMenu(field))
+    const target = e.target as Element
+    const field = target.closest<HTMLElement>('input, textarea, [contenteditable]:not([contenteditable="false"])')
+    if (field) return openMenu(e, editMenu(field))
+    const items = readMenu(target)
+    if (items.length) openMenu(e, items)
   })
+}
+
+/**
+ * Outside text fields: Copy for selected text (in a message, canvas, preview or diff), and Open / Copy for a link.
+ * Clicking a link through the menu goes through the page's own handler, so Slack links still open in the panel.
+ */
+function readMenu(target: Element): MenuEntry[] {
+  const selection = window.getSelection()?.toString() ?? ''
+  const link = target.closest<HTMLAnchorElement>('a[href]')
+  const items: MenuEntry[] = []
+  if (link) {
+    items.push(
+      { label: 'Open Link', icon: 'external', run: () => link.click() },
+      { label: 'Copy Link', icon: 'copy', run: () => navigator.clipboard.writeText(link.href) },
+    )
+  }
+  if (selection.trim()) {
+    if (items.length) items.push('separator')
+    items.push({ label: 'Copy', shortcut: '⌘C', run: () => navigator.clipboard.writeText(selection) })
+  }
+  // Text you can select (messages, canvases, previews) gets Select All for that block.
+  const block = target.closest<HTMLElement>('.canvas, .markdown, .code') ?? target.closest<HTMLElement>('.slack-view .text')
+  if (block) {
+    if (items.length) items.push('separator')
+    items.push({
+      label: 'Select All',
+      shortcut: '⌘A',
+      run: () => {
+        const range = document.createRange()
+        range.selectNodeContents(block)
+        window.getSelection()?.removeAllRanges()
+        window.getSelection()?.addRange(range)
+      },
+    })
+  }
+  return items
 }
 
 function editMenu(field: HTMLElement): MenuEntry[] {

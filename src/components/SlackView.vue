@@ -8,6 +8,7 @@ import { parseBullets, slackPlain } from '@/lib/todos'
 import { displayDate } from '@/composables/dates'
 import { prefs } from '@/composables/prefs'
 import { openSlackLink } from '@/composables/slackLinks'
+import { showToast } from '@/composables/useToast'
 import { useWorkspace } from '@/composables/workspace'
 import Icon from './Icon.vue'
 import Skeleton from './Skeleton.vue'
@@ -123,7 +124,7 @@ function onClick(e: MouseEvent) {
   } catch {
     return
   }
-  if (!openSlackLink(ws, href) && /^(https?|mailto):/.test(href)) void openUrl(href)
+  if (!openSlackLink(ws, href) && /^(https?|mailto):/.test(href)) openUrl(href).catch((err) => showToast(`Couldn't open the link: ${err}`, 'error'))
 }
 </script>
 
