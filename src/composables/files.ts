@@ -20,6 +20,8 @@ export function createFiles({ repo }: Repo) {
   const expanded = ref(new Set<string>())
   /** Folders made from the browser: git doesn't list folders with nothing in them, so these show until they fill. */
   const newFolders = ref(new Set<string>())
+  /** Bumped when files in the working tree change outside the app, so an open file can catch up. */
+  const diskChanged = ref(0)
   /** line: a line to scroll to and mark, from a search result. */
   const preview = shallowRef<{ path: string; rev: string | null; view: PreviewView; line?: number } | null>(null)
   /** Set while the editor has unsaved changes, so nothing navigates away from them silently. */
@@ -142,6 +144,7 @@ export function createFiles({ repo }: Repo) {
     rev,
     list,
     folders,
+    diskChanged,
     loading,
     filter,
     expanded,

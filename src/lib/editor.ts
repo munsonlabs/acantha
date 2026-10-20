@@ -116,8 +116,19 @@ export function createEditor(parent: HTMLElement, { doc, path, vim: vimMode, onC
   return {
     view,
     getDoc: () => view.state.doc.toString(),
-    /** Replaces the text, e.g. after reloading from disk, without counting as an edit. */
-    setDoc: (text: string) => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } }),
+    /**
+     * Replaces the text, e.g. after reloading from disk. Only the part that differs is swapped, so the cursor and
+     * scroll position stay where they were when a formatter rewrites a few lines.
+     */
+    setDoc: (text: string) => {
+      const old = view.state.doc.toString()
+      if (old === text) return
+      let start = 0
+      while (start < old.length && start < text.length && old[start] === text[start]) start++
+      let end = 0
+      while (end < old.length - start && end < text.length - start && old[old.length - 1 - end] === text[text.length - 1 - end]) end++
+      view.dispatch({ changes: { from: start, to: old.length - end, insert: text.slice(start, text.length - end) } })
+    },
     setVim: (on: boolean) => view.dispatch({ effects: keys.reconfigure(on ? vim() : []) }),
     focus: () => view.focus(),
     destroy: () => view.destroy(),

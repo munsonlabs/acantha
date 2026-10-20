@@ -30,7 +30,10 @@ function createWorkspace(id: number) {
       prefs.sidebarOpen.value = true
     }
     const status = createStatus(repo)
-    createWatcher(repo, status.refresh)
+    createWatcher(repo, async () => {
+      files.diskChanged.value++
+      await status.refresh()
+    })
     return {
       repo,
       reveal,

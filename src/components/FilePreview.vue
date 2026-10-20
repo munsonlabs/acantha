@@ -19,7 +19,7 @@ import MarkdownView from './MarkdownView.vue'
 import Skeleton from './Skeleton.vue'
 
 const ws = useWorkspace()
-const { preview, dirty, open, closePreview } = ws.files
+const { preview, dirty, open, closePreview, diskChanged } = ws.files
 const { stage, refresh } = ws.status
 const { repo, rows } = ws.repo
 const { select } = ws.details
@@ -35,6 +35,43 @@ const editor = ref<InstanceType<typeof CodeEditor>>()
 /** The file's text as it was last loaded or saved, to tell whether the editor has changes. */
 const saved = ref('')
 const saving = ref(false)
+
+/**
+ * The file's new text when it changed on disk (a formatter, git, another editor) while you had unsaved edits here.
+ * Without unsaved edits it's simply loaded; a preview always just updates.
+ */
+const diskText = ref<string | null>(null)
+
+async function catchUp() {
+  const p = preview.value
+  if (!p || p.rev !== null || p.view === 'history' || !repo.value || saving.value) return
+  const file = await git.readFile(repo.value, null, p.path).catch(() => null)
+  const now = preview.value
+  if (!file || file.kind !== 'text' || !now || now.path !== p.path || now.view !== p.view || now.rev !== null) return
+  if (p.view !== 'edit') {
+    if (content.value?.kind !== 'text' || content.value.text !== file.text) void load()
+    return
+  }
+  if (file.text === saved.value) return void (diskText.value = null)
+  if (dirty.value) return void (diskText.value = file.text)
+  saved.value = file.text
+  editor.value?.setDoc(file.text)
+}
+watch(diskChanged, () => void catchUp())
+
+/** Takes the version on disk, dropping the edits made here. */
+function reloadFromDisk() {
+  if (diskText.value === null) return
+  saved.value = diskText.value
+  editor.value?.setDoc(diskText.value)
+  dirty.value = false
+  diskText.value = null
+}
+
+watch(
+  () => preview.value && `${preview.value.path}|${preview.value.view}`,
+  () => (diskText.value = null),
+)
 let seq = 0
 
 const EDITORS = ['', 'Visual Studio Code', 'Cursor', 'Zed', 'Sublime Text', 'TextEdit']
@@ -228,6 +265,12 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
     </header>
 
     <div class="body">
+      <div v-if="diskText !== null && preview.view === 'edit'" class="disk-bar">
+        <Icon name="warning" :size="13" />
+        <span>This file changed on disk while you were editing it.</span>
+        <button class="ghost" @click="reloadFromDisk">Reload</button>
+        <button class="ghost" title="Keep your edits; saving will ask before overwriting" @click="diskText = null">Keep mine</button>
+      </div>
       <p v-if="error" class="note error">{{ error }}</p>
 
       <template v-else-if="preview.view === 'history'">
@@ -392,6 +435,26 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
   overflow: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar) transparent;
+}
+.disk-bar {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid color-mix(in oklab, var(--modify) 40%, transparent);
+  background: color-mix(in oklab, var(--modify) 12%, var(--bg));
+  font-size: 12px;
+}
+.disk-bar span {
+  flex: 1;
+}
+.disk-bar button {
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11.5px;
 }
 .note {
   margin: 24px;
