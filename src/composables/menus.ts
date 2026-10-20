@@ -22,7 +22,7 @@ interface MenuActions {
   rebaseFrom: (base: string, label: string) => void
 }
 
-export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse, rebaseFrom }: MenuActions) {
+export function createMenus({ repo, log, rows, run, lastFetch, refsByHash }: Repo, { browse, rebaseFrom }: MenuActions) {
   const currentBranch = () => log.value?.headBranch ?? null
   const remotes = () => log.value?.remotes ?? []
   const hasLocalBranch = (name: string) => !!log.value?.refs.some((r) => r.kind === 'branch' && r.name === name)
@@ -206,9 +206,19 @@ export function createMenus({ repo, log, rows, run, lastFetch }: Repo, { browse,
         },
       },
       'separator',
+      ...branchCopyItems(c.hash),
       { label: 'Copy Commit Hash', icon: 'copy', run: () => copy(c.hash, 'commit hash') },
       { label: 'Copy Commit Subject', icon: 'copy', run: () => copy(c.subject, 'commit subject') },
     ]
+  }
+
+  /** Copy for the branches at a commit: local ones, or its remote ones when it has none. */
+  function branchCopyItems(hash: string): MenuEntry[] {
+    const refs = refsByHash.value.get(hash)
+    const local = refs?.branches.map((b) => b.name) ?? []
+    const names = local.length ? local : (refs?.remotes.map((r) => `${r.remote}/${r.name}`) ?? [])
+    if (names.length === 1) return [{ label: 'Copy Branch Name', icon: 'copy', run: () => copy(names[0], 'branch name') }]
+    return names.slice(0, 5).map((name) => ({ label: `Copy “${name}”`, icon: 'copy' as const, run: () => copy(name, 'branch name') }))
   }
 
   function stashMenu(stash: Stash): MenuEntry[] {
