@@ -16,6 +16,8 @@ export const prefs = {
   hoverCards: usePersisted('hover-cards', true),
   /** Columns of the graph turned off from the header's right-click menu. */
   hiddenColumns: usePersisted<string[]>('hidden-columns', []),
+  /** Column order dragged in the graph's header. Empty means the default. */
+  columnOrder: usePersisted<string[]>('column-order', []),
   dateStyle: usePersisted<'relative' | 'absolute'>('date-style', 'relative'),
   /** Author pictures from GitHub and Gravatar. Gravatar gets a hash of the email, never the address. */
   avatars: usePersisted('avatars', true),

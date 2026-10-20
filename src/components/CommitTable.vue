@@ -25,11 +25,13 @@ const root = ref<HTMLElement>()
 const scroller = ref<HTMLElement>()
 
 /**
- * Columns after the subject. Each shows when it isn't turned off in the header's menu and the table is at least
- * `min` wide, so narrow windows drop the least useful first. Quick actions only fit on wide windows.
+ * Columns after the graph, in their default order. Each shows when it isn't turned off in the header's menu and the
+ * table is at least `min` wide, so narrow windows drop the least useful first. Quick actions only fit on wide windows.
+ * The subject can be moved but not hidden.
  */
 const COLUMNS = [
   { id: 'sha', label: 'SHA', width: '64px', min: 480 },
+  { id: 'subject', label: 'Subject', width: 'minmax(0, 1fr)', min: 0 },
   { id: 'changes', label: 'Changes', width: '104px', min: 900 },
   { id: 'author', label: 'Author', width: '150px', min: 680 },
   { id: 'date', label: 'Date', width: '96px', min: 480 },
@@ -42,23 +44,75 @@ const resize = new ResizeObserver(([entry]) => (width.value = entry.contentRect.
 onMounted(() => resize.observe(root.value!))
 onBeforeUnmount(() => resize.disconnect())
 
+const column = (id: ColumnId) => COLUMNS.find((c) => c.id === id)!
+
+/** The saved order, with any column it doesn't mention (one added since it was saved) at the end. */
+const order = computed(() => {
+  const saved = prefs.columnOrder.value.filter((id): id is ColumnId => COLUMNS.some((c) => c.id === id))
+  return [...saved, ...COLUMNS.map((c) => c.id).filter((id) => !saved.includes(id))]
+})
 const shown = computed(
   () => new Set<ColumnId>(COLUMNS.filter((c) => width.value >= c.min && !prefs.hiddenColumns.value.includes(c.id)).map((c) => c.id)),
 )
-const gridColumns = computed(() => {
-  const w = (id: ColumnId) => (shown.value.has(id) ? [COLUMNS.find((c) => c.id === id)!.width] : [])
-  return ['var(--graph-w)', ...w('sha'), 'minmax(0, 1fr)', ...w('changes'), ...w('author'), ...w('date'), ...w('actions')].join(' ')
-})
+const visible = computed(() => order.value.filter((id) => shown.value.has(id)))
+const gridColumns = computed(() => ['var(--graph-w)', ...visible.value.map((id) => column(id).width)].join(' '))
+/** Cells keep their place in the markup and are laid out by CSS `order`, from these variables. */
+const columnVars = computed(() => Object.fromEntries(order.value.map((id, i) => [`--o-${id}`, i + 1])))
+
+/**
+ * Dragging a header cell sideways moves its column. `drop` is where it would land: the column it would go before
+ * (null for the end) and the x of the marker drawn there.
+ */
+const header = ref<HTMLElement>()
+const dragging = ref<ColumnId | null>(null)
+const drop = ref<{ before: ColumnId | null; x: number } | null>(null)
+let dragStart: { id: ColumnId; x: number } | null = null
+
+function headerDown(e: PointerEvent) {
+  const id = (e.target as HTMLElement).closest<HTMLElement>('[data-col]')?.dataset.col as ColumnId | undefined
+  if (e.button !== 0 || !id) return
+  dragStart = { id, x: e.clientX }
+  header.value!.setPointerCapture(e.pointerId)
+}
+
+function headerMove(e: PointerEvent) {
+  if (!dragStart) return
+  if (!dragging.value && Math.abs(e.clientX - dragStart.x) < 4) return
+  dragging.value = dragStart.id
+  const box = header.value!.getBoundingClientRect()
+  const cells = [...header.value!.querySelectorAll<HTMLElement>('[data-col]')]
+    .filter((el) => el.dataset.col !== dragStart!.id)
+    .map((el) => ({ id: el.dataset.col as ColumnId, rect: el.getBoundingClientRect() }))
+    .sort((a, b) => a.rect.left - b.rect.left)
+  const next = cells.find((c) => e.clientX < c.rect.left + c.rect.width / 2)
+  const x = next ? next.rect.left : (cells.at(-1)?.rect.right ?? box.right)
+  drop.value = { before: next?.id ?? null, x: x - box.left }
+}
+
+function headerUp() {
+  const id = dragging.value
+  if (id && drop.value) {
+    const rest = order.value.filter((c) => c !== id)
+    const at = drop.value.before ? rest.indexOf(drop.value.before) : rest.length
+    rest.splice(at, 0, id)
+    prefs.columnOrder.value = rest
+  }
+  dragStart = null
+  dragging.value = null
+  drop.value = null
+}
 
 function columnsMenu(e: MouseEvent) {
   const hidden = prefs.hiddenColumns.value
   openMenu(e, [
     { header: 'Columns', detail: 'Narrow windows hide some anyway' },
-    ...COLUMNS.map((c) => ({
+    ...COLUMNS.filter((c) => c.id !== 'subject').map((c) => ({
       label: c.label,
       icon: hidden.includes(c.id) ? undefined : ('check' as const),
       run: () => (prefs.hiddenColumns.value = hidden.includes(c.id) ? hidden.filter((h) => h !== c.id) : [...hidden, c.id]),
     })),
+    'separator',
+    { label: 'Reset Column Order', icon: 'undo', disabled: !prefs.columnOrder.value.length, run: () => (prefs.columnOrder.value = []) },
   ])
 }
 
@@ -199,15 +253,22 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="root" class="commit-table" :style="{ '--graph-w': `${graphWidth}px`, '--row-h': `${ROW_H}px`, '--columns': gridColumns }">
-    <div class="row header" @contextmenu.prevent="columnsMenu">
+  <div ref="root" class="commit-table" :style="{ '--graph-w': `${graphWidth}px`, '--row-h': `${ROW_H}px`, '--columns': gridColumns, ...columnVars }">
+    <div
+      ref="header"
+      class="row header"
+      :class="{ dragging }"
+      @contextmenu.prevent="columnsMenu"
+      @pointerdown="headerDown"
+      @pointermove="headerMove"
+      @pointerup="headerUp"
+      @pointercancel="headerUp"
+    >
       <div />
-      <div v-if="shown.has('sha')" class="c-sha">SHA</div>
-      <div>Subject</div>
-      <div v-if="shown.has('changes')" class="c-changes">Changes</div>
-      <div v-if="shown.has('author')" class="c-author">Author</div>
-      <div v-if="shown.has('date')" class="c-date">Date</div>
-      <div v-if="shown.has('actions')" />
+      <template v-for="id in visible" :key="id">
+        <div :data-col="id" :class="[`c-${id}`, { moving: dragging === id }]">{{ id === 'actions' ? '' : column(id).label }}</div>
+      </template>
+      <span v-if="drop" class="drop-marker" :style="{ left: `${drop.x}px` }" />
     </div>
     <div ref="scroller" class="scroller" @scroll.passive="hideCard()">
       <div v-if="!rows.length" class="no-commits">This repository has no commits yet.</div>
@@ -237,7 +298,7 @@ onBeforeUnmount(() => {
         >
           <div />
           <div v-if="shown.has('sha')" class="sha c-sha">{{ c.hash === UNCOMMITTED ? '' : shortHash(c.hash) }}</div>
-          <div class="desc">
+          <div class="desc c-subject">
             <span v-if="c.stash" class="stash-label"><Icon name="archive" :size="11" /> {{ c.stash.selector }}</span>
             <RefLabels
               v-if="refsByHash.has(c.hash) || (c.hash === log!.head && !log!.headBranch)"
@@ -444,6 +505,49 @@ onBeforeUnmount(() => {
   padding: 40px;
   text-align: center;
   color: var(--fg-muted);
+}
+/* Cells sit in a fixed place in the markup; the column order puts them where they belong. */
+.c-sha {
+  order: var(--o-sha);
+}
+.c-subject {
+  order: var(--o-subject);
+}
+.c-changes {
+  order: var(--o-changes);
+}
+.c-author {
+  order: var(--o-author);
+}
+.c-date {
+  order: var(--o-date);
+}
+.c-actions {
+  order: var(--o-actions);
+}
+.header {
+  position: relative;
+  user-select: none;
+}
+.header [data-col] {
+  cursor: grab;
+}
+.header.dragging,
+.header.dragging [data-col] {
+  cursor: grabbing;
+}
+.header .moving {
+  opacity: 0.4;
+}
+.drop-marker {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--accent);
+  pointer-events: none;
 }
 .c-actions {
   justify-content: flex-end;
