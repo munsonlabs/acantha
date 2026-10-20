@@ -4,7 +4,7 @@
 
 # Acantha
 
-A Git client for macOS: a commit graph, terminals, a Git panel and an editor, side by side.
+A Git client and simple editor for macOS: a commit graph, a Git panel, terminals and your files, side by side.
 
 **AI-generated and sense-checked · inspired by [Terax](https://github.com/crynta/terax-ai) · for personal use only**
 

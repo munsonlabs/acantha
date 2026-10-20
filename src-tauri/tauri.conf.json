@@ -42,7 +42,7 @@
       "icons/icon.ico"
     ],
     "category": "DeveloperTool",
-    "shortDescription": "A Git client with a commit graph, terminals and an editor",
+    "shortDescription": "A Git client and simple editor",
     "copyright": "\u00a9 2026 Munson Labs",
     "macOS": {
       "signingIdentity": "-",
