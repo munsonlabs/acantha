@@ -19,7 +19,8 @@ const mainline = (c: Commit) => (c.parents.length > 1 ? ['-m', '1'] : [])
 
 interface MenuActions {
   browse: (rev: string | null) => void
-  rebaseFrom: (base: string, label: string) => void
+  /** base: rebase the commits after it; null for the whole history. */
+  rebaseFrom: (base: string | null, label: string) => void
 }
 
 export function createMenus({ repo, log, rows, run, lastFetch, refsByHash, branches, setBranches }: Repo, { browse, rebaseFrom }: MenuActions) {
@@ -182,7 +183,14 @@ export function createMenus({ repo, log, rows, run, lastFetch, refsByHash, branc
         },
       },
       { label: 'Merge into Current Branch…', icon: 'merge', disabled: c.hash === log.value?.head, run: () => merge(c.hash, `commit \`${s}\``) },
-      { label: 'Interactive Rebase from Here…', icon: 'rebase', disabled: !isAncestorOfHead(c.hash), run: () => rebaseFrom(c.hash, s) },
+      // From here means including this commit, so the latest one can be reworded, and squashing the latest into the
+      // one before starts from that one.
+      {
+        label: 'Interactive Rebase from Here…',
+        icon: 'rebase',
+        disabled: c.hash !== log.value?.head && !isAncestorOfHead(c.hash),
+        run: () => rebaseFrom(c.parents[0] ?? null, c.parents[0] ? shortHash(c.parents[0]) : 'the root'),
+      },
       {
         label: 'Reset Current Branch to this Commit…',
         icon: 'reset',
