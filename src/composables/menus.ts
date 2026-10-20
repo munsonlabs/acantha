@@ -22,7 +22,7 @@ interface MenuActions {
   rebaseFrom: (base: string, label: string) => void
 }
 
-export function createMenus({ repo, log, rows, run, lastFetch, refsByHash }: Repo, { browse, rebaseFrom }: MenuActions) {
+export function createMenus({ repo, log, rows, run, lastFetch, refsByHash, branches, setBranches }: Repo, { browse, rebaseFrom }: MenuActions) {
   const currentBranch = () => log.value?.headBranch ?? null
   const remotes = () => log.value?.remotes ?? []
   const hasLocalBranch = (name: string) => !!log.value?.refs.some((r) => r.kind === 'branch' && r.name === name)
@@ -89,6 +89,11 @@ export function createMenus({ repo, log, rows, run, lastFetch, refsByHash }: Rep
         done: `Checked out ${v.name}`,
         undo: { label: `checking out ${v.name}`, checkout: true },
       })
+    // Filtering on the remote branch: show the local one too, so what you just checked out stays in view.
+    const remoteRef = `refs/remotes/${remote}/${name}`
+    const localRef = `refs/heads/${v.name}`
+    const picked = branches.value
+    if (picked.includes(remoteRef) && !picked.includes(localRef) && hasLocalBranch(v.name)) await setBranches([...picked, localRef])
   }
 
   function commitMenu(c: Commit): MenuEntry[] {
