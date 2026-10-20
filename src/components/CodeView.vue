@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { nextTick, ref, watch } from 'vue'
 import type { Token } from '@/lib/highlight'
 
 export interface BlameCell {
@@ -10,13 +11,25 @@ export interface BlameCell {
   hue: number
 }
 
-defineProps<{ lines: Token[][]; blame?: BlameCell[] }>()
+/** focus: a 1-based line to scroll to and mark, e.g. a search result. */
+const props = defineProps<{ lines: Token[][]; blame?: BlameCell[]; focus?: number }>()
 const emit = defineEmits<{ commit: [hash: string] }>()
+
+const root = ref<HTMLElement>()
+watch(
+  () => [props.focus, props.lines] as const,
+  async () => {
+    if (!props.focus) return
+    await nextTick()
+    root.value?.children[props.focus - 1]?.scrollIntoView({ block: 'center' })
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
-  <div class="code" :class="{ blamed: blame }">
-    <div v-for="(line, i) in lines" :key="i" class="line" :class="{ 'blame-start': blame?.[i]?.start && i > 0 }">
+  <div ref="root" class="code" :class="{ blamed: blame }">
+    <div v-for="(line, i) in lines" :key="i" class="line" :class="{ 'blame-start': blame?.[i]?.start && i > 0, focus: focus === i + 1 }">
       <button
         v-if="blame"
         class="blame"
@@ -48,6 +61,10 @@ const emit = defineEmits<{ commit: [hash: string] }>()
 }
 .line:hover {
   background: var(--hover);
+}
+.line.focus {
+  background: var(--match);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 .blame-start {
   border-top: 1px solid var(--border);

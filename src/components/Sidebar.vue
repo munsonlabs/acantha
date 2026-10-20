@@ -4,6 +4,7 @@ import { useSlidingPill } from '@/composables/tabs'
 import { useWorkspace } from '@/composables/workspace'
 import FileBrowser from './FileBrowser.vue'
 import Icon from './Icon.vue'
+import SearchPanel from './SearchPanel.vue'
 import SourceControl from './SourceControl.vue'
 
 const ws = useWorkspace()
@@ -17,11 +18,15 @@ const pill = useSlidingPill(nav, () => [sidebarTab.value, files.value.length])
   <section class="pane sidebar-pane">
     <Transition name="fade" mode="out-in">
       <FileBrowser v-if="sidebarTab === 'files'" class="content" />
+      <SearchPanel v-else-if="sidebarTab === 'search'" class="content" />
       <SourceControl v-else class="content" />
     </Transition>
     <nav ref="nav" class="switcher">
       <span class="tab-pill" :style="pill.style.value" />
       <button class="ghost" :class="{ active: sidebarTab === 'files' }" @click="sidebarTab = 'files'"><Icon name="files" :size="13" /> Files</button>
+      <button class="ghost" :class="{ active: sidebarTab === 'search' }" title="Search in files (⇧⌘F)" @click="sidebarTab = 'search'">
+        <Icon name="search" :size="13" /> Search
+      </button>
       <button class="ghost" :class="{ active: sidebarTab === 'scm' }" @click="sidebarTab = 'scm'">
         <Icon name="scm" :size="13" /> Git
         <span v-if="files.length" class="count">{{ files.length }}</span>

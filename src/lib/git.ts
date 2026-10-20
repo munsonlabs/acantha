@@ -95,6 +95,18 @@ export type FileContent =
   | { kind: 'binary'; size: number }
   | { kind: 'tooLarge'; size: number }
 
+export interface SearchHit {
+  path: string
+  line: number
+  text: string
+}
+
+export interface SearchResults {
+  hits: SearchHit[]
+  /** More lines matched than came back. */
+  truncated: boolean
+}
+
 export interface Blame {
   commits: Record<string, { author: string; date: number; summary: string }>
   lines: { hash: string; text: string }[]
@@ -148,6 +160,8 @@ export const git = {
     invoke<string>('get_status_diff', { repo, path: file.path, oldPath: file.oldPath, staged, untracked: file.kind === 'untracked' }),
   listFiles: (repo: string, rev: string | null) => invoke<string[]>('list_files', { repo, rev }),
   readFile: (repo: string, rev: string | null, path: string) => invoke<FileContent>('read_file', { repo, rev, path }),
+  searchFiles: (repo: string, rev: string | null, query: string, regex: boolean, caseSensitive: boolean) =>
+    invoke<SearchResults>('search_files', { repo, rev, query, regex, caseSensitive }),
   writeFile: (repo: string, path: string, contents: string) => invoke<void>('write_file', { repo, path, contents }),
   fileHistory: (repo: string, rev: string | null, path: string) => invoke<Commit[]>('file_history', { repo, rev, path }),
   blame: (repo: string, rev: string | null, path: string) => invoke<Blame>('blame_file', { repo, rev, path }),

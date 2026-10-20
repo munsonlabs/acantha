@@ -77,6 +77,9 @@ function onKeydown(e: KeyboardEvent) {
   } else if (e.metaKey && e.shiftKey && (e.key === '[' || e.key === '{' || e.key === ']' || e.key === '}')) {
     e.preventDefault()
     runCommand(e.key === '[' || e.key === '{' ? 'prev-tab' : 'next-tab')
+  } else if (mod && e.shiftKey && !e.altKey && key === 'f') {
+    e.preventDefault()
+    runCommand('search-files')
   } else if (mod && !e.shiftKey && !e.altKey && KEYS[key] && !(key === 'f' && inEditor)) {
     e.preventDefault()
     runCommand(KEYS[key])

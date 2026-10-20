@@ -57,6 +57,17 @@ export const commands: Command[] = [
     run: withRepo(() => document.querySelector<HTMLInputElement>('.titlebar .search input')?.select()),
   },
   {
+    id: 'search-files',
+    label: 'Search in Files',
+    group: 'View',
+    keys: '⇧⌘F',
+    run: withRepo((ws) => {
+      ws.ui.sidebarTab.value = 'search'
+      prefs.sidebarOpen.value = true
+      ws.ui.focusFileSearch.value++
+    }),
+  },
+  {
     id: 'toggle-remotes',
     label: 'Toggle Remote Branches',
     group: 'View',

@@ -1,4 +1,4 @@
-use crate::git::{git, parse_commits, run, stderr_or_code, Commit, COMMIT_FORMAT};
+use crate::git::{git, git_with, parse_commits, run, stderr_or_code, Commit, COMMIT_FORMAT};
 use base64::Engine;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -120,6 +120,72 @@ pub async fn read_file(repo: String, rev: Option<String>, path: String) -> Resul
         None => std::fs::read(worktree_path(&repo, &path)?).map_err(|e| format!("{path}: {e}"))?,
     };
     Ok(classify(&path, bytes))
+}
+
+const MAX_HITS: usize = 2000;
+const MAX_LINE: usize = 400;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchHit {
+    path: String,
+    line: u32,
+    text: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchResults {
+    hits: Vec<SearchHit>,
+    /// More lines matched than were returned.
+    truncated: bool,
+}
+
+/// `git grep -n -z` output: `path NUL line NUL text` per line, with `rev:` before the path when searching a commit.
+fn parse_grep(out: &str, rev: Option<&str>) -> SearchResults {
+    let prefix = rev.map(|r| format!("{r}:"));
+    let mut hits = Vec::new();
+    let mut truncated = false;
+    for record in out.lines() {
+        let mut parts = record.splitn(3, '\0');
+        let (Some(path), Some(line), Some(text)) = (parts.next(), parts.next(), parts.next()) else { continue };
+        let Ok(line) = line.parse() else { continue };
+        if hits.len() == MAX_HITS {
+            truncated = true;
+            break;
+        }
+        let path = prefix.as_deref().and_then(|p| path.strip_prefix(p)).unwrap_or(path);
+        let text = match text.char_indices().nth(MAX_LINE) {
+            Some((cut, _)) => &text[..cut],
+            None => text,
+        };
+        hits.push(SearchHit { path: path.to_string(), line, text: text.to_string() });
+    }
+    SearchResults { hits, truncated }
+}
+
+/// Lines matching `query` in the repository's text files, at `rev` or in the working tree (tracked and untracked,
+/// not ignored). A plain string unless `regex`, which takes an extended regular expression.
+#[tauri::command]
+pub async fn search_files(repo: String, rev: Option<String>, query: String, regex: bool, case_sensitive: bool) -> Result<SearchResults, String> {
+    if query.is_empty() {
+        return Ok(SearchResults { hits: Vec::new(), truncated: false });
+    }
+    let mut args = vec!["grep", "-n", "-z", "-I", "--no-color", "--full-name", if regex { "-E" } else { "-F" }];
+    if !case_sensitive {
+        args.push("-i");
+    }
+    if rev.is_none() {
+        args.push("--untracked");
+    }
+    args.extend(["-e", query.as_str()]);
+    if let Some(rev) = &rev {
+        args.push(rev.as_str());
+    }
+    args.push("--");
+    // Exit code 1 is "nothing matched".
+    let out = git_with(&repo, &args, &[0, 1])?;
+    Ok(parse_grep(&out, rev.as_deref()))
 }
 
 /// Overwrites a file in the working tree, used to save a resolved merge conflict.
@@ -299,6 +365,39 @@ mod tests {
 
         assert!(tauri::async_runtime::block_on(backup_files(repo.clone(), vec!["../escape".into()])).is_err());
         assert!(tauri::async_runtime::block_on(restore_files(repo, "../x".into())).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn searches_files() {
+        let dir = std::env::temp_dir().join(format!("acantha-search-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        let repo = dir.to_string_lossy().into_owned();
+        git(&repo, ["init", "-q"]).unwrap();
+        std::fs::write(dir.join("src/a.txt"), "one\nNeedle here\nthree\n").unwrap();
+        std::fs::write(dir.join(".gitignore"), "ignored.txt\n").unwrap();
+        std::fs::write(dir.join("ignored.txt"), "needle\n").unwrap();
+        std::fs::write(dir.join("bin.dat"), [b'n', b'e', b'e', b'd', b'l', b'e', 0]).unwrap();
+        git(&repo, ["add", "src/a.txt"]).unwrap();
+        git(&repo, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "c"]).unwrap();
+        std::fs::write(dir.join("new.txt"), "a needle untracked\n").unwrap();
+
+        let search = |rev: Option<&str>, q: &str, regex: bool, case: bool| {
+            tauri::async_runtime::block_on(search_files(repo.clone(), rev.map(String::from), q.into(), regex, case)).unwrap()
+        };
+        let found = search(None, "needle", false, false);
+        let mut where_: Vec<_> = found.hits.iter().map(|h| (h.path.as_str(), h.line)).collect();
+        where_.sort();
+        // Untracked files count; ignored and binary ones don't.
+        assert_eq!(where_, [("new.txt", 1), ("src/a.txt", 2)]);
+        assert_eq!(search(None, "needle", false, true).hits.len(), 1);
+        assert_eq!(search(None, "^Need", true, true).hits[0].text, "Needle here");
+        assert!(search(None, "nothing like it", false, false).hits.is_empty());
+        let at_head = search(Some("HEAD"), "needle", false, false);
+        assert_eq!(at_head.hits.iter().map(|h| h.path.as_str()).collect::<Vec<_>>(), ["src/a.txt"]);
+        // An option-like query is searched for, not obeyed.
+        assert!(search(None, "--help", false, false).hits.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

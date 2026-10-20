@@ -33,6 +33,7 @@ fn main() {
             files::list_files,
             files::read_file,
             files::write_file,
+            files::search_files,
             files::file_history,
             files::blame_file,
             files::backup_files,

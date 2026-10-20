@@ -80,6 +80,13 @@ watch(
   { immediate: true },
 )
 
+// A search result in a Markdown file points at a line of its source.
+watch(
+  () => preview.value?.line,
+  (line) => line && (rendered.value = false),
+  { immediate: true },
+)
+
 const setView = (view: PreviewView) => preview.value && open(preview.value.path, view, preview.value.rev)
 
 const onEdit = (doc: string) => (dirty.value = doc !== saved.value)
@@ -265,7 +272,7 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
         @open="(path) => open(path, 'preview', preview!.rev)"
       />
       <Skeleton v-else-if="!tokens" :lines="14" />
-      <CodeView v-else :lines="tokens" :blame="preview.view === 'blame' ? blameCells : undefined" @commit="showCommit" />
+      <CodeView v-else :lines="tokens" :blame="preview.view === 'blame' ? blameCells : undefined" :focus="preview.line" @commit="showCommit" />
     </div>
   </div>
 </template>

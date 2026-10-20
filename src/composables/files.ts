@@ -1,5 +1,5 @@
 import { ref, shallowRef, watch } from 'vue'
-import { git } from '@/lib/git'
+import { git, type SearchResults } from '@/lib/git'
 import type { Repo } from './repo'
 import { confirmAction } from './useDialog'
 import { showToast } from './useToast'
@@ -14,7 +14,8 @@ export function createFiles({ repo }: Repo) {
   const loading = ref(false)
   const filter = ref('')
   const expanded = ref(new Set<string>())
-  const preview = shallowRef<{ path: string; rev: string | null; view: PreviewView } | null>(null)
+  /** line: a line to scroll to and mark, from a search result. */
+  const preview = shallowRef<{ path: string; rev: string | null; view: PreviewView; line?: number } | null>(null)
   /** Set while the editor has unsaved changes, so nothing navigates away from them silently. */
   const dirty = ref(false)
   let seq = 0
@@ -55,12 +56,54 @@ export function createFiles({ repo }: Repo) {
     return true
   }
 
-  async function open(path: string, view: PreviewView = 'preview', at: string | null = rev.value) {
+  async function open(path: string, view: PreviewView = 'preview', at: string | null = rev.value, line?: number) {
     const p = preview.value
     // Switching between views of the same file keeps the editor's changes only while editing.
     if (p && p.view === 'edit' && !(await leaveEditor())) return
-    preview.value = { path, rev: at, view }
+    preview.value = { path, rev: at, view, line }
   }
+
+  /** Searching the files' contents (and names), at the same commit as the browser. */
+  const search = {
+    query: ref(''),
+    regex: ref(false),
+    caseSensitive: ref(false),
+    results: shallowRef<SearchResults | null>(null),
+    searching: ref(false),
+    error: ref<string | null>(null),
+  }
+  let searchSeq = 0
+  let searchTimer: ReturnType<typeof setTimeout> | undefined
+
+  async function runSearch() {
+    const q = search.query.value
+    const id = ++searchSeq
+    if (!repo.value || q.trim().length < 2) {
+      search.results.value = null
+      search.searching.value = false
+      search.error.value = null
+      return
+    }
+    search.searching.value = true
+    try {
+      const found = await git.searchFiles(repo.value, rev.value, q, search.regex.value, search.caseSensitive.value)
+      if (id !== searchSeq) return
+      search.results.value = found
+      search.error.value = null
+    } catch (e) {
+      if (id !== searchSeq) return
+      search.results.value = null
+      // git grep's complaint about a bad pattern is the useful part.
+      search.error.value = String(e).replace(/^fatal: /, '')
+    } finally {
+      if (id === searchSeq) search.searching.value = false
+    }
+  }
+
+  watch([search.query, search.regex, search.caseSensitive, rev], () => {
+    clearTimeout(searchTimer)
+    searchTimer = setTimeout(runSearch, 250)
+  })
 
   async function closePreview() {
     if (preview.value?.view === 'edit' && !(await leaveEditor())) return
@@ -75,7 +118,7 @@ export function createFiles({ repo }: Repo) {
     expanded.value = new Set()
   })
 
-  return { rev, list, loading, filter, expanded, preview, dirty, load, browse, toggle, open, closePreview, leaveEditor }
+  return { rev, list, loading, filter, expanded, preview, dirty, search, load, browse, toggle, open, closePreview, leaveEditor, runSearch }
 }
 
 export type Files = ReturnType<typeof createFiles>

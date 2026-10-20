@@ -53,6 +53,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &PredefinedMenuItem::select_all(app, None)?,
             &sep()?,
             &item("find", "Find", None)?,
+            &item("search-files", "Find in Files", Some("CmdOrCtrl+Shift+F"))?,
         ],
     )?;
     let view = Submenu::with_items(
