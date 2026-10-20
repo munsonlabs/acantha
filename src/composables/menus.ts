@@ -354,18 +354,30 @@ export function createMenus({ repo, log, rows, run, lastFetch, refsByHash }: Rep
         disabled: isCurrent,
         danger: true,
         run: async () => {
+          // The same branch on a remote can go too, but only when asked: that changes the remote for everyone.
+          const onRemotes = (log.value?.refs ?? []).filter((r) => r.kind === 'remote' && r.name === name).map((r) => r.remote!)
           const v = await ask({
             title: 'Delete Branch',
-            message: `Delete branch \`${name}\`?`,
-            fields: [{ name: 'force', label: 'Force delete, even if not fully merged', type: 'checkbox', value: false }],
+            message: `Delete branch \`${name}\`?${onRemotes.length ? ' Deleting it on a remote changes it for everyone, and Undo only brings back the local branch.' : ''}`,
+            fields: [
+              { name: 'force', label: 'Force delete, even if not fully merged', type: 'checkbox', value: false },
+              ...onRemotes.map((r) => ({
+                name: `remote:${r}`,
+                label: `Also delete ${r}/${name} on the remote`,
+                type: 'checkbox' as const,
+                value: false,
+              })),
+            ],
             confirm: 'Delete',
             danger: true,
           })
           if (v) {
             const root = repo.value!
             const hash = refHash('branch', name)
-            await run(['branch', v.force ? '-D' : '-d', name], {
-              done: `Deleted ${name}`,
+            const alsoRemote = onRemotes.filter((r) => v[`remote:${r}`])
+            await run([['branch', v.force ? '-D' : '-d', name], ...alsoRemote.map((r) => ['push', r, '--delete', name])], {
+              busy: alsoRemote.length ? 'Deleting…' : undefined,
+              done: `Deleted ${[name, ...alsoRemote.map((r) => `${r}/${name}`)].join(' and ')}`,
               undo: hash ? { label: `deleting ${name}`, run: () => git.action(root, ['branch', name, hash]) } : undefined,
             })
           }
