@@ -18,16 +18,22 @@ export function parseBullets(text: string): TodoDraft[] {
   return out
 }
 
-/** Every non-empty line, bullet or not: for pasting into a list's "add" box. */
+/**
+ * Every non-empty line as a to-do, with any bullet, number or checkbox taken off. Lists copied from Slack or a canvas
+ * often lose some of their markers, so unmarked lines count too; only an unmarked heading ending in ":" is left out.
+ */
 export function parseLines(text: string): TodoDraft[] {
-  const bullets = parseBullets(text)
-  if (bullets.length) return bullets
-  return text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .map((t) => ({ text: t, done: false }))
+  const out: TodoDraft[] = []
+  for (const line of text.split(/\r?\n/)) {
+    const marked = parseBullets(line)[0]
+    if (marked) out.push(marked)
+    else if (line.trim() && !/:\s*$/.test(line)) out.push({ text: line.trim(), done: false })
+  }
+  return out
 }
+
+/** Whether pasted text is a list worth turning into to-dos: two or more bullet or numbered lines. */
+export const looksLikeList = (text: string) => parseBullets(text).length >= 2
 
 /** Slack's markup as plain text: links become their label, mentions their name, emphasis marks go. */
 export function slackPlain(text: string, names: Record<string, string> = {}) {

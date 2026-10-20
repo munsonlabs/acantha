@@ -1,5 +1,5 @@
 import { parseSlackLink } from '@/lib/slack'
-import { parseBullets } from '@/lib/todos'
+import { looksLikeList, parseLines } from '@/lib/todos'
 import { prefs } from './prefs'
 import { ask } from './useDialog'
 import { showToast } from './useToast'
@@ -13,13 +13,13 @@ export function openSlackLink(ws: Workspace, text: string) {
 }
 
 /**
- * What a paste outside a text box can become: a Slack link opens in the panel, and a bulleted list (two or more
- * items) becomes a new to-do list. Returns false for anything else.
+ * What a paste outside a text box can become: a Slack link opens in the panel, and a list (two or more bullet or
+ * numbered lines) becomes a new to-do list of all its lines. Returns false for anything else.
  */
 export function pasteIntoPanel(ws: Workspace, text: string) {
   if (openSlackLink(ws, text)) return true
-  const items = parseBullets(text)
-  if (items.length < 2) return false
+  if (!looksLikeList(text)) return false
+  const items = parseLines(text)
   ws.panel.addTodos('To-dos', items)
   showToast(`Made a to-do list of ${items.length} items`)
   return true

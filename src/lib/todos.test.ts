@@ -27,9 +27,24 @@ describe('parseBullets', () => {
 })
 
 describe('parseLines', () => {
-  it('takes bullets when there are any, otherwise every line', () => {
-    expect(parseLines('- a\nstray\n- b').map((t) => t.text)).toEqual(['a', 'b'])
+  it('takes every line, marked or not, leaving out headings', () => {
+    expect(parseLines('Plan:\n- a\nstray\n- [x] b').map((t) => [t.text, t.done])).toEqual([
+      ['a', false],
+      ['stray', false],
+      ['b', true],
+    ])
     expect(parseLines(' first \n\nsecond').map((t) => t.text)).toEqual(['first', 'second'])
+  })
+
+  it('keeps the lines that lost their bullets on the way from a canvas', () => {
+    const pasted = '1. feature/a\n2. feature/b (requires feature/c)\n3. feature/d\nfeature/e ➕\nfeature/f ➕'
+    expect(parseLines(pasted).map((t) => t.text)).toEqual([
+      'feature/a',
+      'feature/b (requires feature/c)',
+      'feature/d',
+      'feature/e ➕',
+      'feature/f ➕',
+    ])
   })
 })
 
