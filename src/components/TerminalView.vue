@@ -73,7 +73,7 @@ onMounted(async () => {
     cursorBlink: true,
     cursorStyle: 'bar',
     macOptionIsMeta: true,
-    scrollback: 10_000,
+    scrollback: prefs.terminalScrollback.value,
     theme: theme(),
   })
   fit = new FitAddon()
@@ -126,6 +126,8 @@ onMounted(async () => {
   scheme.addEventListener('change', updateTheme)
   if (props.active) term.focus()
 })
+
+watch(prefs.terminalScrollback, (lines) => term && (term.options.scrollback = lines))
 
 watch(prefs.terminalFontSize, (size) => {
   if (!term) return

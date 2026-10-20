@@ -146,6 +146,18 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
             </label>
             <label class="row">
               <div>
+                <span class="label">Scrollback</span>
+                <span class="hint">Lines each terminal keeps to scroll back through. More uses more memory per terminal.</span>
+              </div>
+              <select v-model.number="prefs.terminalScrollback.value">
+                <option :value="1000">1,000 lines</option>
+                <option :value="5000">5,000 lines</option>
+                <option :value="10000">10,000 lines</option>
+                <option :value="50000">50,000 lines</option>
+              </select>
+            </label>
+            <label class="row">
+              <div>
                 <span class="label">Shell</span>
                 <span class="hint">For new terminals. Leave empty for your login shell.</span>
               </div>
