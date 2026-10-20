@@ -15,6 +15,7 @@ export type PanelTab =
   | { id: string; kind: 'slack'; url: string; title?: string }
   | { id: string; kind: 'todos'; title: string; items: Todo[] }
   | { id: string; kind: 'notes'; title: string; text: string }
+  | { id: string; kind: 'scripts'; title: string }
 
 interface PanelState {
   tabs: PanelTab[]
@@ -70,6 +71,17 @@ export function createPanel({ repo }: Repo) {
     })
     reveal()
     return id
+  }
+
+  /** The repository's scripts; there's only ever one such tab. */
+  function addScripts() {
+    const existing = tabs.value.find((t) => t.kind === 'scripts')
+    const id = existing?.id ?? newId()
+    update((s) => {
+      if (!existing) s.tabs.push({ id, kind: 'scripts', title: 'Scripts' })
+      s.active = id
+    })
+    reveal()
   }
 
   /** A Markdown notepad. */
@@ -137,7 +149,7 @@ export function createPanel({ repo }: Repo) {
     clearDone: (id: string) => editList(id, (items) => items.filter((x) => !x.done)),
   }
 
-  return { tabs, active, expanded, activate, addSlack, addTodos, addNotes, setNotes, close, move, rename, list }
+  return { tabs, active, expanded, activate, addSlack, addTodos, addNotes, setNotes, addScripts, close, move, rename, list }
 }
 
 export type Panel = ReturnType<typeof createPanel>

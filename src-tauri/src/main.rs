@@ -5,6 +5,7 @@ mod git;
 mod menu;
 mod pty;
 mod rebase;
+mod scripts;
 mod slack;
 mod watch;
 
@@ -34,6 +35,7 @@ fn main() {
             git::rev_parse,
             slack::slack_thread,
             slack::slack_canvas,
+            scripts::list_scripts,
             files::list_files,
             files::read_file,
             files::write_file,

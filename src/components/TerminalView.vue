@@ -106,7 +106,9 @@ onMounted(async () => {
     })
     if (disposed) return void pty.kill(id)
     ptyId = id
-    emit('title', shell)
+    emit('title', props.session.command ? props.session.title : shell)
+    // Typed in as if by hand, so the shell's own setup (PATH, aliases) applies, and you're left at its prompt after.
+    if (props.session.command) void pty.write(id, `${props.session.command}\r`)
   } catch (e) {
     showToast(`Could not start a shell: ${e}`, 'error')
     return emit('exit')

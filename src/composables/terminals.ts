@@ -6,6 +6,10 @@ export interface TerminalSession {
   key: number
   cwd: string
   title: string
+  /** Typed into the shell once it starts, as if you'd typed it (e.g. `npm run dev`). */
+  command?: string
+  /** The script it runs, for the Scripts tab (see `scriptKey`). */
+  script?: string
 }
 
 let nextKey = 1
@@ -16,10 +20,10 @@ export function createTerminals({ repo }: Repo) {
   const activeKey = ref<number | null>(null)
   const open = ref(prefs.terminalOpen.value)
 
-  /** Opens a terminal tab, in the repository or a folder inside it. */
-  function add(cwd?: string) {
+  /** Opens a terminal tab, in the repository or a folder inside it, optionally running a command. */
+  function add(cwd?: string, { title = 'Terminal', command, script }: { title?: string; command?: string; script?: string } = {}) {
     if (!repo.value) return
-    const session = { key: nextKey++, cwd: cwd ?? repo.value, title: 'Terminal' }
+    const session: TerminalSession = { key: nextKey++, cwd: cwd ?? repo.value, title, command, script }
     sessions.value.push(session)
     activeKey.value = session.key
     open.value = true
@@ -56,7 +60,13 @@ export function createTerminals({ repo }: Repo) {
     if (open.value && !sessions.value.length) add()
   }
 
-  return { sessions, activeKey, open, add, close, closeActive, step, move, toggle }
+  /** Brings a terminal tab into view. */
+  function show(key: number) {
+    activeKey.value = key
+    open.value = true
+  }
+
+  return { sessions, activeKey, open, add, close, closeActive, step, move, toggle, show }
 }
 
 export type Terminals = ReturnType<typeof createTerminals>
