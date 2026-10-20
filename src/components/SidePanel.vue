@@ -189,13 +189,22 @@ const hide = () => (prefs.panelOpen.value = false)
   max-width: 300px;
   margin: 0;
 }
+/* One button per row, all the same width. */
 .actions {
   display: flex;
-  gap: 6px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  width: min(220px, 100%);
 }
 .actions button {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  height: 28px;
+  padding: 0 10px;
+}
+.actions button kbd {
+  margin-left: auto;
 }
 </style>
