@@ -16,7 +16,8 @@ const box = ref<HTMLElement>()
 const files = computed(() => active.value?.files.openFiles.value ?? [])
 const preview = computed(() => active.value?.files.preview.value ?? null)
 const isCurrent = (f: OpenFile) => preview.value?.path === f.path && preview.value?.rev === f.rev
-const dirty = computed(() => !!active.value?.files.dirty.value)
+/** Files with unsaved edits waiting, the one on screen included. */
+const hasDraft = (f: OpenFile) => f.rev === null && !!active.value?.files.drafts.value.has(f.path)
 
 watch(open, async (o) => {
   if (!o) return
@@ -73,7 +74,7 @@ function onKey(e: KeyboardEvent) {
           >
             <FileIcon :path="f.path" />
             <span class="label">{{ splitPath(f.path).name }}</span>
-            <span v-if="isCurrent(f) && dirty" class="dirty" title="Unsaved changes" />
+            <span v-if="hasDraft(f)" class="dirty" title="Unsaved changes" />
             <span class="detail">{{ splitPath(f.path).dir }}</span>
             <span v-if="f.rev" class="rev" title="At this commit">{{ shortHash(f.rev) }}</span>
             <button class="ghost icon-btn" title="Close" @click.stop="close(f)"><Icon name="x" :size="12" /></button>

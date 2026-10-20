@@ -88,7 +88,7 @@ async function addWorkspace(path: string | null = null, { quiet = false, activat
 async function closeWorkspace(id: number) {
   const i = workspaces.value.findIndex((w) => w.id === id)
   if (i === -1) return
-  if (!(await workspaces.value[i].files.leaveEditor())) return
+  if (!(await workspaces.value[i].files.discardDrafts())) return
   workspaces.value[i].scope.stop()
   const rest = workspaces.value.filter((w) => w.id !== id)
   workspaces.value = rest

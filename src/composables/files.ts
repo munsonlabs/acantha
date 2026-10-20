@@ -30,8 +30,20 @@ export function createFiles({ repo }: Repo) {
   const diskChanged = ref(0)
   /** line: a line to scroll to and mark, from a search result. */
   const preview = shallowRef<{ path: string; rev: string | null; view: PreviewView; line?: number } | null>(null)
-  /** Set while the editor has unsaved changes, so nothing navigates away from them silently. */
+  /** Whether the file in the editor has unsaved changes. */
   const dirty = ref(false)
+  /**
+   * Unsaved edits per working-tree file: the editor's text, and the file as it was when the editing started. They're
+   * kept while you switch between files and come back with them; saving or discarding clears them.
+   */
+  const drafts = shallowRef(new Map<string, { text: string; base: string }>())
+  function setDraft(path: string, draft: { text: string; base: string } | null) {
+    if (!draft && !drafts.value.has(path)) return
+    const next = new Map(drafts.value)
+    if (draft) next.set(path, draft)
+    else next.delete(path)
+    drafts.value = next
+  }
   let seq = 0
 
   async function load() {
@@ -67,12 +79,17 @@ export function createFiles({ repo }: Repo) {
     expanded.value = next
   }
 
-  /** Asks before throwing away unsaved edits. Resolves true when it is fine to move on. */
-  async function leaveEditor() {
-    if (!dirty.value) return true
-    const name = preview.value?.path.split('/').pop()
-    if (!(await confirmAction('Unsaved Changes', `Discard your changes to \`${name}\`?`, 'Discard', true))) return false
-    dirty.value = false
+  /**
+   * Asks before throwing away the unsaved edits in `paths` (all files when omitted). Resolves true when it's fine to
+   * go ahead, with those drafts dropped.
+   */
+  async function discardDrafts(paths?: string[]) {
+    const lost = [...drafts.value.keys()].filter((p) => !paths || paths.includes(p))
+    if (!lost.length) return true
+    const what = lost.length === 1 ? `your changes to \`${lost[0].split('/').pop()}\`` : `your changes to ${lost.length} files`
+    if (!(await confirmAction('Unsaved Changes', `Discard ${what}?`, 'Discard', true))) return false
+    for (const p of lost) setDraft(p, null)
+    if (preview.value && lost.includes(preview.value.path)) dirty.value = false
     return true
   }
 
@@ -88,9 +105,7 @@ export function createFiles({ repo }: Repo) {
 
   async function open(path: string, view?: PreviewView, at: string | null = rev.value, line?: number) {
     view ??= defaultView(at)
-    const p = preview.value
-    // Switching between views of the same file keeps the editor's changes only while editing.
-    if (p && p.view === 'edit' && !(await leaveEditor())) return
+    // Unsaved edits stay behind as a draft, so switching never asks.
     preview.value = { path, rev: at, view, line }
     if (!openFiles.value.some((f) => sameFile(f, { path, rev: at }))) openFiles.value = [...openFiles.value, { path, rev: at }].slice(-40)
   }
@@ -100,8 +115,8 @@ export function createFiles({ repo }: Repo) {
     const p = preview.value
     const i = openFiles.value.findIndex((f) => sameFile(f, file))
     const rest = openFiles.value.filter((f) => !sameFile(f, file))
+    if (file.rev === null && !(await discardDrafts([file.path]))) return
     if (p && sameFile(p, file)) {
-      if (p.view === 'edit' && !(await leaveEditor())) return
       const next = rest[Math.min(Math.max(i, 0), rest.length - 1)]
       preview.value = next ? { path: next.path, rev: next.rev, view: defaultView(next.rev) } : null
     }
@@ -112,9 +127,14 @@ export function createFiles({ repo }: Repo) {
   const inside = (path: string, dir: string) => path === dir || path.startsWith(`${dir}/`)
   function renameOpen(from: string, to: string) {
     openFiles.value = openFiles.value.map((f) => (f.rev === null && inside(f.path, from) ? { ...f, path: to + f.path.slice(from.length) } : f))
+    // Drafts move with their files.
+    const next = new Map<string, { text: string; base: string }>()
+    for (const [p, d] of drafts.value) next.set(inside(p, from) ? to + p.slice(from.length) : p, d)
+    drafts.value = next
   }
   function forgetOpen(dir: string) {
     openFiles.value = openFiles.value.filter((f) => !(f.rev === null && inside(f.path, dir)))
+    drafts.value = new Map([...drafts.value].filter(([p]) => !inside(p, dir)))
   }
 
   /** Searching the files' contents (and names), at the same commit as the browser. */
@@ -167,7 +187,7 @@ export function createFiles({ repo }: Repo) {
   /** Closes the file on screen (and takes it off the open files), back to the graph. */
   async function closePreview() {
     const p = preview.value
-    if (p?.view === 'edit' && !(await leaveEditor())) return
+    if (p?.rev === null && !(await discardDrafts([p.path]))) return
     if (p) openFiles.value = openFiles.value.filter((f) => !sameFile(f, p))
     preview.value = null
   }
@@ -177,6 +197,7 @@ export function createFiles({ repo }: Repo) {
     list.value = []
     preview.value = null
     openFiles.value = []
+    drafts.value = new Map()
     dirty.value = false
     expanded.value = new Set()
     newFolders.value = new Set()
@@ -194,6 +215,8 @@ export function createFiles({ repo }: Repo) {
     preview,
     openFiles,
     dirty,
+    drafts,
+    setDraft,
     search,
     load,
     browse,
@@ -203,7 +226,7 @@ export function createFiles({ repo }: Repo) {
     closeFile,
     renameOpen,
     forgetOpen,
-    leaveEditor,
+    discardDrafts,
     runSearch,
   }
 }

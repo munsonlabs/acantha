@@ -20,7 +20,7 @@ import MarkdownView from './MarkdownView.vue'
 import Skeleton from './Skeleton.vue'
 
 const ws = useWorkspace()
-const { preview, dirty, open, closePreview, diskChanged, openFiles } = ws.files
+const { preview, dirty, open, closePreview, diskChanged, openFiles, drafts, setDraft } = ws.files
 const { stage, refresh } = ws.status
 const { repo, rows } = ws.repo
 const { select } = ws.details
@@ -66,6 +66,7 @@ function reloadFromDisk() {
   saved.value = diskText.value
   editor.value?.setDoc(diskText.value)
   dirty.value = false
+  if (preview.value) setDraft(preview.value.path, null)
   diskText.value = null
 }
 
@@ -80,6 +81,8 @@ const EDITORS = ['', 'Visual Studio Code', 'Cursor', 'Zed', 'Sublime Text', 'Tex
 const isMarkdown = computed(() => /\.(md|markdown|mdx)$/i.test(preview.value?.path ?? ''))
 const crumbs = computed(() => splitPath(preview.value?.path ?? ''))
 const text = computed(() => (content.value?.kind === 'text' ? content.value.text : ''))
+/** What the editor starts with: the file, or your unsaved draft of it. */
+const editorText = ref('')
 
 async function load() {
   const p = preview.value
@@ -97,13 +100,20 @@ async function load() {
     if (id !== seq) return
     // Only text can be edited: anything else (an image, say) opened for editing shows as a preview instead.
     if (p.view === 'edit' && file.kind !== 'text') return void open(p.path, 'preview', p.rev)
+    if (p.view === 'edit' && file.kind === 'text') {
+      // Coming back to a file with unsaved edits: pick them up where they were left.
+      const draft = drafts.value.get(p.path)
+      saved.value = draft?.base ?? file.text
+      editorText.value = draft?.text ?? file.text
+      dirty.value = !!draft
+      // It changed on disk while you were away.
+      diskText.value = draft && file.text !== draft.base ? file.text : null
+    }
     content.value = file
     blame.value = b
-    if (p.view === 'edit') {
-      saved.value = file.kind === 'text' ? file.text : ''
-      dirty.value = false
-      return
-    }
+    if (p.view === 'edit') return
+    // Other views show the saved file; the dot still says there's an unsaved draft of it.
+    dirty.value = p.rev === null && drafts.value.has(p.path)
     tokens.value = file.kind === 'text' ? await tokenize(file.text.replace(/\n$/, ''), p.path) : null
   } catch (e) {
     if (id === seq) error.value = String(e)
@@ -129,7 +139,12 @@ watch(
 
 const setView = (view: PreviewView) => preview.value && open(preview.value.path, view, preview.value.rev)
 
-const onEdit = (doc: string) => (dirty.value = doc !== saved.value)
+/** Every edit updates the file's draft, so switching away and back keeps it. */
+function onEdit(doc: string) {
+  const p = preview.value
+  dirty.value = doc !== saved.value
+  if (p && p.rev === null) setDraft(p.path, dirty.value ? { text: doc, base: saved.value } : null)
+}
 
 async function save(stageAfter = false) {
   const p = preview.value
@@ -149,6 +164,7 @@ async function save(stageAfter = false) {
     await git.writeFile(repo.value, p.path, doc)
     saved.value = doc
     dirty.value = false
+    setDraft(p.path, null)
     if (stageAfter) await stage([{ path: p.path, oldPath: null, index: '.', worktree: 'M', kind: 'changed' }])
     else void refresh()
     showToast(stageAfter ? `Saved and staged ${name}` : `Saved ${name}`)
@@ -302,7 +318,7 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
         ref="editor"
         :key="preview.path"
         :path="preview.path"
-        :text="text"
+        :text="editorText"
         @change="onEdit"
         @save="save()"
       />
