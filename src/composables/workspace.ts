@@ -5,6 +5,7 @@ import { createFiles } from './files'
 import { createUi } from './ui'
 import { createDiff } from './diff'
 import { createMenus } from './menus'
+import { createPanel } from './panel'
 import { prefs } from './prefs'
 import { createRepo } from './repo'
 import { createReveal } from './reveal'
@@ -42,6 +43,7 @@ function createWorkspace(id: number) {
       status,
       menus: createMenus(repo, { browse, rebaseFrom: (base, label) => (ui.rebase.value = { base, label }) }),
       terminals: createTerminals(repo),
+      panel: createPanel(repo),
     }
   })!
   return { id, scope, ...parts }

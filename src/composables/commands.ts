@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { prefs } from './prefs'
-import { promptSlackLink, toggleSlackPanel } from './slackLinks'
+import { promptSlackLink, togglePanel } from './slackLinks'
 import { useWorkspaces } from './workspace'
 
 /** App-wide overlays opened by commands. */
@@ -88,7 +88,8 @@ export const commands: Command[] = [
     keys: '⇧⌘L',
     run: () => active.value && promptSlackLink(active.value),
   },
-  { id: 'toggle-slack', label: 'Toggle Slack Panel', group: 'View', run: () => active.value && toggleSlackPanel(active.value) },
+  { id: 'toggle-panel', label: 'Toggle Panel (Slack and To-dos)', group: 'View', run: () => active.value && togglePanel(active.value) },
+  { id: 'new-todo-list', label: 'New To-do List', group: 'View', run: withRepo((ws) => ws.panel.addTodos('To-dos')) },
   {
     id: 'toggle-remotes',
     label: 'Toggle Remote Branches',

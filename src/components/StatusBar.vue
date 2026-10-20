@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { relativeDate } from '@/composables/dates'
 import { runCommand } from '@/composables/commands'
-import { toggleSlackPanel } from '@/composables/slackLinks'
+import { togglePanel } from '@/composables/slackLinks'
 import { prefs } from '@/composables/prefs'
 import { useWorkspaces } from '@/composables/workspace'
 import Icon from './Icon.vue'
@@ -74,11 +74,11 @@ const crumbs = computed(() => {
     <button
       v-if="active && repo"
       class="ghost status-btn"
-      :class="{ on: prefs.slackOpen.value || active.ui.slackExpanded.value }"
-      title="Show or hide the Slack panel"
-      @click="toggleSlackPanel(active)"
+      :class="{ on: prefs.panelOpen.value || active.panel.expanded.value }"
+      title="Show or hide the panel: Slack messages and to-do lists"
+      @click="togglePanel(active)"
     >
-      <Icon name="message" :size="12" /> Slack
+      <Icon name="message" :size="12" /> Panel
     </button>
   </footer>
 </template>

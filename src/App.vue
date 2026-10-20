@@ -10,7 +10,7 @@ import { prefs } from '@/composables/prefs'
 import { useWorkspaces } from '@/composables/workspace'
 import { closeDialog, useDialog } from '@/composables/useDialog'
 import { useContextMenu } from '@/composables/useContextMenu'
-import { openSlackLink } from '@/composables/slackLinks'
+import { pasteIntoPanel } from '@/composables/slackLinks'
 import CommandPalette from '@/components/CommandPalette.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
 import PromptDialog from '@/components/PromptDialog.vue'
@@ -101,7 +101,7 @@ function onKeydown(e: KeyboardEvent) {
     else if (ws?.ui.rebase.value) ws.ui.rebase.value = null
     else if (menu.value) closeMenu()
     else if (!typing && ws?.files.preview.value) void ws.files.closePreview()
-    else if (!typing && ws?.ui.slackExpanded.value) ws.ui.slackExpanded.value = false
+    else if (!typing && ws?.panel.expanded.value) ws.panel.expanded.value = false
     else if (!typing && ws?.details.details.value) ws.details.closeDetails()
   } else if (!typing && !dialog.value && !ws?.diff.diff.value && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && ws?.details.details.value) {
     e.preventDefault()
@@ -109,16 +109,13 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
-/** Pasting a Slack message or canvas link anywhere outside a text field opens it. */
+/** Pasting outside a text field: a Slack link opens in the panel, and a bulleted list becomes a to-do list there. */
 function onPaste(e: ClipboardEvent) {
   const target = e.target instanceof Element ? e.target : null
   if (target?.closest('input, textarea, [contenteditable], .cm-editor, .xterm')) return
   const ws = active.value
   const text = e.clipboardData?.getData('text/plain') ?? ''
-  if (ws && /slack\.com\//.test(text)) {
-    e.preventDefault()
-    void openSlackLink(ws, text)
-  }
+  if (ws?.repo.repo.value && pasteIntoPanel(ws, text)) e.preventDefault()
 }
 
 let lastFocusReload = 0

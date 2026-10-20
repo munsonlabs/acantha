@@ -3,47 +3,48 @@ import { computed, ref, shallowRef, watch } from 'vue'
 import DOMPurify from 'dompurify'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { formatDate } from '@/lib/format'
-import { canvasEmoji, renderSlackText, slack, type SlackCanvas, type SlackMessage, type SlackThread } from '@/lib/slack'
+import { canvasEmoji, parseSlackLink, renderSlackText, slack, type SlackCanvas, type SlackMessage, type SlackThread } from '@/lib/slack'
+import { parseBullets, slackPlain } from '@/lib/todos'
 import { displayDate } from '@/composables/dates'
 import { prefs } from '@/composables/prefs'
-import { openSlackLink, promptSlackLink } from '@/composables/slackLinks'
+import { openSlackLink } from '@/composables/slackLinks'
 import { useWorkspace } from '@/composables/workspace'
 import Icon from './Icon.vue'
 import Skeleton from './Skeleton.vue'
 
-/** docked: the panel under the terminal; otherwise expanded in place of the graph. */
-const props = defineProps<{ docked?: boolean }>()
+/** One Slack tab of the panel. docked: under the terminal (tighter); otherwise expanded over the graph. */
+const props = defineProps<{ tabId: string; url: string; docked?: boolean }>()
 const ws = useWorkspace()
-const current = ws.ui.slack
-const expanded = ws.ui.slackExpanded
 
 const thread = shallowRef<SlackThread | null>(null)
 const canvas = shallowRef<SlackCanvas | null>(null)
 const error = ref<string | null>(null)
 const loading = ref(false)
+const link = computed(() => parseSlackLink(props.url))
 let seq = 0
 
 async function load() {
-  const open = current.value
-  if (!open) return
+  const l = link.value
+  if (!l) return
   const id = ++seq
   loading.value = true
   error.value = null
   try {
     const allowed = prefs.slackChannels.value
-    if (open.link.kind === 'message') {
-      const t = await slack.thread(open.link.channel, open.link.ts, open.link.threadTs, allowed)
+    if (l.kind === 'message') {
+      const t = await slack.thread(l.channel, l.ts, l.threadTs, allowed)
       if (id === seq) {
         thread.value = t
         canvas.value = null
       }
     } else {
-      const c = await slack.canvas(open.link.file, allowed)
+      const c = await slack.canvas(l.file, allowed)
       if (id === seq) {
         canvas.value = c
         thread.value = null
       }
     }
+    if (id === seq) ws.panel.rename(props.tabId, title.value)
   } catch (e) {
     if (id === seq) error.value = String(e)
   } finally {
@@ -52,7 +53,7 @@ async function load() {
 }
 
 watch(
-  () => current.value?.url,
+  () => props.url,
   () => {
     thread.value = canvas.value = null
     void load()
@@ -60,16 +61,7 @@ watch(
   { immediate: true },
 )
 
-function close() {
-  current.value = null
-  expanded.value = false
-}
-const expand = () => (expanded.value = true)
-function dock() {
-  expanded.value = false
-  prefs.slackOpen.value = true
-}
-const collapse = () => (prefs.slackOpen.value = false)
+defineExpose({ load, loading })
 
 const seconds = (ts: string) => Math.floor(Number(ts))
 const author = (m: SlackMessage) => (m.user ? (thread.value?.users[m.user]?.name ?? m.user) : (m.author ?? 'Slack'))
@@ -77,7 +69,16 @@ const avatar = (m: SlackMessage) => (m.user ? thread.value?.users[m.user]?.avata
 const initial = (m: SlackMessage) => author(m).slice(0, 1).toUpperCase()
 const html = (m: SlackMessage) => DOMPurify.sanitize(renderSlackText(m.text, thread.value?.users))
 /** The message the link pointed at, when it's a reply further down a thread. */
-const target = computed(() => (current.value?.link.kind === 'message' ? current.value.link.ts : null))
+const target = computed(() => (link.value?.kind === 'message' ? link.value.ts : null))
+
+const names = computed(() => Object.fromEntries(Object.values(thread.value?.users ?? {}).map((u) => [u.id, u.name])))
+const bullets = (m: SlackMessage) => parseBullets(m.text)
+
+/** A message's bullet points as a new to-do list. */
+function makeTodos(m: SlackMessage) {
+  const items = bullets(m).map((b) => ({ ...b, text: slackPlain(b.text, names.value) }))
+  ws.panel.addTodos(`To-dos from ${author(m)}`, items)
+}
 
 // Slack's canvas export is a whole page; keep its content, drop its styles, and leave out pictures (they need the
 // token to load).
@@ -89,9 +90,8 @@ const canvasHtml = computed(() => {
   })
 })
 
+/** The tab's label once loaded. Slack writes a canvas title's emoji as :name: codes; it reads better without. */
 const title = computed(() => {
-  if (!current.value) return 'Slack'
-  // Slack writes a canvas title's emoji as :name: codes; the title reads better without them.
   if (canvas.value)
     return (
       canvas.value.title
@@ -99,42 +99,29 @@ const title = computed(() => {
         .replace(/\s+/g, ' ')
         .trim() || 'Canvas'
     )
-  const n = thread.value ? thread.value.messages.length - 1 : 0
-  return n > 0 ? `Slack thread · ${n} ${n === 1 ? 'reply' : 'replies'}` : 'Slack message'
+  const first = thread.value?.messages[0]
+  if (!first) return 'Slack'
+  const words = slackPlain(first.text, names.value)
+    .replace(/:[a-z0-9_+'-]+:/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return words.length > 32 ? `${words.slice(0, 30).trimEnd()}…` : words || author(first)
 })
 
-/** Links to other Slack messages open here; everything else in the browser. */
-async function onClick(e: MouseEvent) {
+/** Links to other Slack messages open in a new tab; everything else in the browser. */
+function onClick(e: MouseEvent) {
   const a = (e.target as Element).closest('a')
   const href = a?.getAttribute('href')
   if (!href) return
   e.preventDefault()
-  if (!(await openSlackLink(ws, href))) void openUrl(href)
+  if (!openSlackLink(ws, href)) void openUrl(href)
 }
 </script>
 
 <template>
-  <div class="slack-view" :class="{ pane: props.docked, docked: props.docked }">
-    <header class="pane-header">
-      <span class="title"><Icon name="message" :size="13" /> {{ title }}</span>
-      <div class="spacer" />
-      <template v-if="current">
-        <button class="ghost icon-btn" title="Refresh" :disabled="loading" @click="load"><Icon name="refresh" /></button>
-        <button class="ghost icon-btn" title="Open in Slack" @click="openUrl(current.url)"><Icon name="external" /></button>
-        <button v-if="props.docked" class="ghost icon-btn" title="Expand over the graph" @click="expand"><Icon name="maximize" /></button>
-        <button v-else class="ghost icon-btn" title="Back under the terminal (Esc)" @click="dock"><Icon name="minimize" /></button>
-        <button class="ghost icon-btn" title="Close this message" @click="close"><Icon name="x" /></button>
-      </template>
-      <button v-if="props.docked" class="ghost icon-btn" title="Hide the Slack panel" @click="collapse"><Icon name="minus" /></button>
-    </header>
-
+  <div class="slack-view" :class="{ docked: props.docked }">
     <div class="body" @click="onClick">
-      <div v-if="!current" class="empty">
-        <Icon name="message" :size="22" />
-        <p>Copy a Slack message or canvas link, then press <kbd>⌘V</kbd> anywhere outside a text box.</p>
-        <button class="ghost" @click="promptSlackLink(ws)">Paste a link… <kbd>⇧⌘L</kbd></button>
-      </div>
-      <p v-else-if="error" class="note error">{{ error }}</p>
+      <p v-if="error" class="note error">{{ error }}</p>
       <Skeleton v-else-if="!thread && !canvas" :lines="8" :gap="18" />
 
       <ol v-else-if="thread" class="messages">
@@ -148,6 +135,14 @@ async function onClick(e: MouseEvent) {
                 <span class="name">{{ author(m) }}</span>
                 <span class="time" :title="formatDate(seconds(m.ts))">{{ displayDate(seconds(m.ts)) }}</span>
                 <span v-if="m.edited" class="edited">(edited)</span>
+                <button
+                  v-if="bullets(m).length"
+                  class="ghost todo-btn"
+                  title="Make a to-do list from this message's bullet points"
+                  @click.stop="makeTodos(m)"
+                >
+                  <Icon name="check" :size="11" /> To-dos
+                </button>
               </div>
               <!-- eslint-disable-next-line vue/no-v-html -- built by renderSlackText, sanitised with DOMPurify -->
               <div class="text" v-html="html(m)" />
@@ -169,17 +164,6 @@ async function onClick(e: MouseEvent) {
 .slack-view {
   display: flex;
   flex-direction: column;
-}
-.title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  overflow: hidden;
-  padding: 0 6px;
-  font-weight: 600;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 .body {
   flex: 1;
@@ -230,6 +214,21 @@ async function onClick(e: MouseEvent) {
 .edited {
   color: var(--fg-faint);
   font-size: 11.5px;
+}
+.todo-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 5px;
+  color: var(--fg-faint);
+  font-size: 11px;
+  opacity: 0;
+}
+.message:hover .todo-btn {
+  opacity: 1;
 }
 .text {
   margin-top: 2px;
@@ -348,20 +347,6 @@ async function onClick(e: MouseEvent) {
 .docked .canvas {
   padding: 12px 16px 24px;
   font-size: 13px;
-}
-.empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 28px 20px;
-  color: var(--fg-faint);
-  font-size: 12px;
-  text-align: center;
-}
-.empty p {
-  max-width: 260px;
-  margin: 0;
 }
 .note {
   margin: 24px;

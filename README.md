@@ -29,7 +29,7 @@ Built with Tauri 2, Rust and Vue 3.
 - A terminal pane next to each graph, with its own tabs, starting in the repository (`portable-pty` + xterm.js)
 - A file browser for the working tree or any commit, with highlighted code, rendered Markdown, images, blame and file history
 - Search in files (⇧⌘F): file names, contents or both, through `git grep`, with match case, regular expressions and a filter for file types or folders (`ts, src/, !*.lock`)
-- Slack messages and canvases in a panel under the terminal: paste a link to read the thread or canvas beside the code (see [Slack](#slack))
+- A tabbed panel under the terminal for Slack messages and canvases (see [Slack](#slack)) and to-do lists: paste a bulleted list anywhere to turn it into to-dos. Tabs are kept per repository
 - A small editor (CodeMirror, optional Vim keys) for working-tree files: ⌘S to save, Save & Stage, a warning before losing unsaved changes or overwriting edits made elsewhere, and Open in VS Code, Cursor, Zed or another app
 - Branch filter: show any set of branches, or all of them; stashes in the graph, which can be hidden
 - A merge conflict resolver (accept current, incoming or both per conflict, or edit it by hand) with Continue/Abort for merges, rebases and cherry-picks
@@ -108,9 +108,14 @@ own Slack user token, which lives in the macOS Keychain; the app never stores it
 ### Use
 
 - Copy a message's link in Slack (**⋯ → Copy link**) or a canvas's link, click anywhere in Acantha outside a text box
-  and press ⌘V. ⇧⌘L opens a box to paste one into.
-- The **Slack** button at the bottom right shows or hides the panel; drag the bar between it and the terminal to
-  resize. **Expand** moves it over the graph, and Esc puts it back.
+  and press ⌘V: it opens in a tab of the panel under the terminal. ⇧⌘L opens a box to paste one into, and the panel's
+  **+** menu has the same.
+- Copy a bulleted, numbered or checkbox list and press ⌘V the same way to make a to-do list tab. A Slack message with
+  bullet points has a **To-dos** button that does the same for its bullets. Tick items off, click one to edit it, or
+  paste more lines into the box at the bottom.
+- The **Panel** button at the bottom right shows or hides the panel; drag the bar between it and the terminal to
+  resize. **Expand** moves it over the graph, and Esc puts it back. Double-click or right-click a tab to rename it.
+- Tabs, with their Slack links and to-dos, are remembered per repository.
 - To limit Acantha to certain channels, put their IDs (the `C…` in a message link) under **Settings → Slack →
   Allowed channels**. Anything from another channel is then refused before it's fetched. Left empty, any channel
   you can read is allowed.

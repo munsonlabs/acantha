@@ -8,7 +8,7 @@ import GraphPane from './GraphPane.vue'
 import ConflictResolver from './ConflictResolver.vue'
 import RebaseModal from './RebaseModal.vue'
 import Sidebar from './Sidebar.vue'
-import SlackView from './SlackView.vue'
+import SidePanel from './SidePanel.vue'
 import TerminalPane from './TerminalPane.vue'
 
 const props = defineProps<{ ws: Workspace; visible: boolean }>()
@@ -16,7 +16,7 @@ provideWorkspace(props.ws)
 
 const { repo } = props.ws.repo
 const { open, sessions } = props.ws.terminals
-const { slack, slackExpanded } = props.ws.ui
+const { tabs: panelTabs, expanded: panelExpanded } = props.ws.panel
 const el = ref<HTMLElement>()
 const width = prefs.terminalWidth
 const sidebarWidth = prefs.sidebarWidth
@@ -37,13 +37,13 @@ const sliding = ref<'sidebar' | 'terminal' | null>(null)
 watch(sidebarOpen, () => (sliding.value = 'sidebar'), { flush: 'sync' })
 
 /**
- * The right-hand column holds the terminal with the Slack panel under it; it's open while either is. (While a
- * Slack message is expanded over the graph, the panel leaves the column.)
+ * The right-hand column holds the terminal with the panel (Slack and to-do tabs) under it; it's open while either
+ * is. While the panel is expanded over the graph, it leaves the column.
  */
-const slackDocked = computed(() => prefs.slackOpen.value && !(slackExpanded.value && slack.value))
-const rightOpen = computed(() => (open.value && sessions.value.length > 0) || slackDocked.value)
+const panelDocked = computed(() => prefs.panelOpen.value && !(panelExpanded.value && panelTabs.value.length))
+const rightOpen = computed(() => (open.value && sessions.value.length > 0) || panelDocked.value)
 /** What a closed column has to show when peeked at. */
-const rightPeekable = computed(() => sessions.value.length > 0 || (!!slack.value && !slackExpanded.value))
+const rightPeekable = computed(() => sessions.value.length > 0 || (panelTabs.value.length > 0 && !panelExpanded.value))
 watch(rightOpen, () => (sliding.value = 'terminal'), { flush: 'sync' })
 const doneSliding = (e: TransitionEvent) => e.propertyName === 'width' && (sliding.value = null)
 
@@ -129,13 +129,13 @@ onBeforeUnmount(() => {
 })
 
 const showTerminal = computed(() => sessions.value.length > 0 && (open.value || peek.value === 'terminal'))
-const showSlack = computed(() => slackDocked.value || (peek.value === 'terminal' && rightPeekable.value && !!slack.value && !slackExpanded.value))
+const showPanel = computed(() => panelDocked.value || (peek.value === 'terminal' && panelTabs.value.length > 0 && !panelExpanded.value))
 const column = ref<HTMLElement>()
 
-/** Drags the bar between the terminal and the Slack panel; Slack's height is kept as a share of the column. */
+/** Drags the bar between the terminal and the panel; the panel's height is kept as a share of the column. */
 function startSplit(e: MouseEvent) {
   const box = column.value!.getBoundingClientRect()
-  const move = (ev: MouseEvent) => (prefs.slackHeight.value = Math.min(Math.max((box.bottom - ev.clientY) / box.height, 0.15), 0.85))
+  const move = (ev: MouseEvent) => (prefs.panelHeight.value = Math.min(Math.max((box.bottom - ev.clientY) / box.height, 0.15), 0.85))
   const up = () => {
     window.removeEventListener('mousemove', move)
     window.removeEventListener('mouseup', up)
@@ -197,7 +197,7 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
       @mouseleave="edgeLeave"
     />
     <div
-      v-if="repo && (sessions.length || slackDocked || slack)"
+      v-if="repo && (sessions.length || panelDocked || panelTabs.length)"
       ref="rightSlot"
       class="slot right"
       :class="{
@@ -215,13 +215,13 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
       <div class="gutter" @mousedown="startResize($event, 'terminal')" />
       <div ref="column" class="column" :style="{ width: `${terminalPx}px` }">
         <TerminalPane v-if="sessions.length" v-show="showTerminal" class="terminal" :visible="visible && showTerminal" />
-        <div v-if="showTerminal && showSlack" class="split" @mousedown="startSplit" />
-        <SlackView
-          v-if="showSlack"
+        <div v-if="showTerminal && showPanel" class="split" @mousedown="startSplit" />
+        <SidePanel
+          v-if="showPanel"
           docked
-          class="slack-dock"
+          class="panel-dock"
           :class="{ alone: !showTerminal }"
-          :style="showTerminal ? { height: `${Math.round(prefs.slackHeight.value * 100)}%` } : undefined"
+          :style="showTerminal ? { height: `${Math.round(prefs.panelHeight.value * 100)}%` } : undefined"
         />
       </div>
     </div>
@@ -272,14 +272,14 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
   flex: 1;
   min-height: 120px;
 }
-.slack-dock {
+.panel-dock {
   flex: none;
   min-height: 120px;
 }
-.slack-dock.alone {
+.panel-dock.alone {
   flex: 1;
 }
-/* The bar between the terminal and Slack. */
+/* The bar between the terminal and the panel. */
 .split {
   flex: none;
   height: 10px;

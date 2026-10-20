@@ -1,32 +1,37 @@
 import { parseSlackLink } from '@/lib/slack'
+import { parseBullets } from '@/lib/todos'
 import { prefs } from './prefs'
 import { ask } from './useDialog'
 import { showToast } from './useToast'
 import type { Workspace } from './workspace'
 
-/**
- * Opens a Slack message or canvas link in the panel under the terminal, or in place of the graph when it's been
- * expanded there. Returns false when it isn't one.
- */
-export async function openSlackLink(ws: Workspace, text: string) {
-  const link = parseSlackLink(text)
-  if (!link) return false
-  if (ws.ui.slackExpanded.value && ws.files.preview.value) {
-    await ws.files.closePreview()
-    if (ws.files.preview.value) return true // kept open for unsaved edits
-  }
-  ws.ui.slack.value = { url: text.trim(), link }
-  if (!ws.ui.slackExpanded.value) prefs.slackOpen.value = true
+/** Opens a Slack message or canvas link in a panel tab. Returns false when it isn't one. */
+export function openSlackLink(ws: Workspace, text: string) {
+  if (!parseSlackLink(text)) return false
+  ws.panel.addSlack(text.trim())
   return true
 }
 
-/** Shows or hides the Slack panel; from the expanded view, puts it back under the terminal. */
-export function toggleSlackPanel(ws: Workspace) {
-  if (ws.ui.slackExpanded.value) {
-    ws.ui.slackExpanded.value = false
-    prefs.slackOpen.value = true
+/**
+ * What a paste outside a text box can become: a Slack link opens in the panel, and a bulleted list (two or more
+ * items) becomes a new to-do list. Returns false for anything else.
+ */
+export function pasteIntoPanel(ws: Workspace, text: string) {
+  if (openSlackLink(ws, text)) return true
+  const items = parseBullets(text)
+  if (items.length < 2) return false
+  ws.panel.addTodos('To-dos', items)
+  showToast(`Made a to-do list of ${items.length} items`)
+  return true
+}
+
+/** Shows or hides the panel; from the expanded view, puts it back under the terminal. */
+export function togglePanel(ws: Workspace) {
+  if (ws.panel.expanded.value) {
+    ws.panel.expanded.value = false
+    prefs.panelOpen.value = true
   } else {
-    prefs.slackOpen.value = !prefs.slackOpen.value
+    prefs.panelOpen.value = !prefs.panelOpen.value
   }
 }
 
@@ -37,5 +42,5 @@ export async function promptSlackLink(ws: Workspace) {
     fields: [{ name: 'link', label: 'Link', placeholder: 'https://….slack.com/archives/…', required: true }],
     confirm: 'Open',
   })
-  if (values && !(await openSlackLink(ws, String(values.link)))) showToast("That isn't a Slack message or canvas link", 'error')
+  if (values && !openSlackLink(ws, String(values.link))) showToast("That isn't a Slack message or canvas link", 'error')
 }
