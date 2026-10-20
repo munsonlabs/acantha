@@ -9,7 +9,7 @@ import { activateTabNumber, overlays, runCommand } from '@/composables/commands'
 import { prefs } from '@/composables/prefs'
 import { useWorkspaces } from '@/composables/workspace'
 import { closeDialog, useDialog } from '@/composables/useDialog'
-import { useContextMenu } from '@/composables/useContextMenu'
+import { onMakeTodos, useContextMenu } from '@/composables/useContextMenu'
 import { pasteIntoPanel } from '@/composables/slackLinks'
 import CommandPalette from '@/components/CommandPalette.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
@@ -108,6 +108,13 @@ function onKeydown(e: KeyboardEvent) {
     ws.details.step(e.key === 'ArrowDown' ? 1 : -1)
   }
 }
+
+// Right-click → Make To-do List on selected text.
+onMakeTodos((items) => {
+  const ws = active.value
+  if (!ws?.repo.repo.value) return
+  ws.panel.addTodos('To-dos', items)
+})
 
 /** Pasting outside a text field: a Slack link opens in the panel, and a bulleted list becomes a to-do list there. */
 function onPaste(e: ClipboardEvent) {

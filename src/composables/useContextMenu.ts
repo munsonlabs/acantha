@@ -1,6 +1,7 @@
 import { readText } from '@tauri-apps/plugin-clipboard-manager'
 import { shallowRef } from 'vue'
 import type { IconName } from '@/lib/icons'
+import { parseLines } from '@/lib/todos'
 
 export interface MenuItem {
   label: string
@@ -45,6 +46,18 @@ export function useContextMenu() {
  * WebKit's own right-click menu offers things that do nothing here, like "Show Fonts". Wherever the app hasn't shown
  * a menu of its own, text fields get a plain editing menu instead and everything else gets none.
  */
+/** Set by the app: turns selected text into a to-do list in the active repository's panel. */
+let makeTodos: ((items: ReturnType<typeof parseLines>) => void) | null = null
+export const onMakeTodos = (fn: typeof makeTodos) => (makeTodos = fn)
+
+/** "Make To-do List" for selected text, each line one to-do. */
+function todoItem(selection: string): MenuEntry[] {
+  const items = parseLines(selection)
+  if (!makeTodos || !items.length) return []
+  const make = makeTodos
+  return [{ label: items.length === 1 ? 'Make To-do' : `Make To-do List (${items.length})`, icon: 'check', run: () => make(items) }]
+}
+
 export function replaceNativeMenu() {
   window.addEventListener('contextmenu', (e) => {
     if (e.defaultPrevented) return
@@ -73,7 +86,7 @@ function readMenu(target: Element): MenuEntry[] {
   }
   if (selection.trim()) {
     if (items.length) items.push('separator')
-    items.push({ label: 'Copy', shortcut: '⌘C', run: () => navigator.clipboard.writeText(selection) })
+    items.push({ label: 'Copy', shortcut: '⌘C', run: () => navigator.clipboard.writeText(selection) }, ...todoItem(selection))
   }
   // Text you can select (messages, canvases, previews) gets Select All for that block.
   const block = target.closest<HTMLElement>('.canvas, .markdown, .code') ?? target.closest<HTMLElement>('.slack-view .text')
@@ -106,6 +119,7 @@ function editMenu(field: HTMLElement): MenuEntry[] {
   return [
     { label: 'Cut', shortcut: '⌘X', disabled: !selection || !editable, run: async () => (await copy(), edit('delete')) },
     { label: 'Copy', shortcut: '⌘C', disabled: !selection, run: copy },
+    ...todoItem(selection),
     {
       label: 'Paste',
       shortcut: '⌘V',
