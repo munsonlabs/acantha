@@ -11,7 +11,10 @@ export interface Todo {
 }
 
 /** A tab in the panel under the terminal: a Slack message or canvas, or a to-do list. */
-export type PanelTab = { id: string; kind: 'slack'; url: string; title?: string } | { id: string; kind: 'todos'; title: string; items: Todo[] }
+export type PanelTab =
+  | { id: string; kind: 'slack'; url: string; title?: string }
+  | { id: string; kind: 'todos'; title: string; items: Todo[] }
+  | { id: string; kind: 'notes'; title: string; text: string }
 
 interface PanelState {
   tabs: PanelTab[]
@@ -69,6 +72,23 @@ export function createPanel({ repo }: Repo) {
     return id
   }
 
+  /** A Markdown notepad. */
+  function addNotes(title = 'Notes') {
+    const id = newId()
+    update((s) => {
+      s.tabs.push({ id, kind: 'notes', title, text: '' })
+      s.active = id
+    })
+    reveal()
+  }
+
+  function setNotes(id: string, text: string) {
+    update((s) => {
+      const t = s.tabs.find((x) => x.id === id)
+      if (t?.kind === 'notes') t.text = text
+    })
+  }
+
   function close(id: string) {
     update((s) => {
       const i = s.tabs.findIndex((t) => t.id === id)
@@ -117,7 +137,7 @@ export function createPanel({ repo }: Repo) {
     clearDone: (id: string) => editList(id, (items) => items.filter((x) => !x.done)),
   }
 
-  return { tabs, active, expanded, activate, addSlack, addTodos, close, move, rename, list }
+  return { tabs, active, expanded, activate, addSlack, addTodos, addNotes, setNotes, close, move, rename, list }
 }
 
 export type Panel = ReturnType<typeof createPanel>

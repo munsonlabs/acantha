@@ -90,6 +90,7 @@ export const commands: Command[] = [
   },
   { id: 'toggle-panel', label: 'Toggle Panel (Slack and To-dos)', group: 'View', run: () => active.value && togglePanel(active.value) },
   { id: 'new-todo-list', label: 'New To-do List', group: 'View', run: withRepo((ws) => ws.panel.addTodos('To-dos')) },
+  { id: 'new-notes', label: 'New Notes', group: 'View', run: withRepo((ws) => ws.panel.addNotes()) },
   {
     id: 'toggle-remotes',
     label: 'Toggle Remote Branches',

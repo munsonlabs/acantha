@@ -13,17 +13,19 @@ import { showToast } from '@/composables/useToast'
 import { useWorkspace } from '@/composables/workspace'
 import Icon from './Icon.vue'
 import SlackView from './SlackView.vue'
+import NotesView from './NotesView.vue'
 import TodoList from './TodoList.vue'
 
 /** The panel's tabs: Slack messages and canvases, and to-do lists. docked: under the terminal; otherwise over the graph. */
 const props = defineProps<{ docked?: boolean }>()
 const ws = useWorkspace()
-const { tabs, active, expanded, activate, addTodos, close, move, rename } = ws.panel
+const { tabs, active, expanded, activate, addTodos, addNotes, close, move, rename } = ws.panel
 const strip = ref<HTMLElement>()
 const slackView = ref<InstanceType<typeof SlackView>>()
 
 const label = (t: PanelTab) => {
   if (t.kind === 'slack') return t.title ?? 'Slack'
+  if (t.kind === 'notes') return t.title
   const left = t.items.filter((i) => !i.done).length
   return left ? `${t.title} (${left})` : t.title
 }
@@ -49,6 +51,7 @@ function newTab(e: MouseEvent) {
     { label: 'Slack Message or Canvas…', icon: 'message', shortcut: '⇧⌘L', run: () => promptSlackLink(ws) },
     'separator',
     { label: 'To-do List', icon: 'check', run: () => addTodos('To-dos') },
+    { label: 'Notes', icon: 'pencil', run: () => addNotes() },
     { label: 'To-do List from Clipboard', icon: 'copy', run: newListFromClipboard },
   ])
 }
@@ -96,7 +99,7 @@ const hide = () => (prefs.panelOpen.value = false)
           @auxclick.middle="close(t.id)"
           @contextmenu.prevent="tabMenu($event, t)"
         >
-          <Icon :name="t.kind === 'slack' ? 'message' : 'check'" :size="13" />
+          <Icon :name="t.kind === 'slack' ? 'message' : t.kind === 'notes' ? 'pencil' : 'check'" :size="13" />
           <span class="label">{{ label(t) }}</span>
           <button class="tab-close" title="Close Tab" @mousedown.stop @click.stop="close(t.id)"><Icon name="x" :size="12" /></button>
         </div>
@@ -121,6 +124,7 @@ const hide = () => (prefs.panelOpen.value = false)
         <div class="actions">
           <button class="ghost" @click="promptSlackLink(ws)"><Icon name="message" :size="12" /> Slack link… <kbd>⇧⌘L</kbd></button>
           <button class="ghost" @click="addTodos('To-dos')"><Icon name="check" :size="12" /> To-do list</button>
+          <button class="ghost" @click="addNotes()"><Icon name="pencil" :size="12" /> Notes</button>
         </div>
       </div>
       <SlackView
@@ -131,6 +135,7 @@ const hide = () => (prefs.panelOpen.value = false)
         :url="current.url"
         :docked="props.docked"
       />
+      <NotesView v-else-if="current.kind === 'notes'" :key="current.id" :tab-id="current.id" :text="current.text" />
       <TodoList v-else :key="current.id" :tab-id="current.id" :items="current.items" />
     </div>
   </section>
