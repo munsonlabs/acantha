@@ -3,6 +3,8 @@ import type { Scripts as ScriptList } from '@/lib/scripts'
 
 /** Each repository's list, kept for the session (across tab switches); Refresh asks again. */
 const cache = new Map<string, ScriptList>()
+/** Which folders you've opened, per repository; everything starts closed. */
+const opened = new Map<string, Set<string>>()
 </script>
 
 <script setup lang="ts">
@@ -45,8 +47,11 @@ async function load(fresh = false) {
 }
 onMounted(() => load())
 
-/** Folders you've closed. While filtering, everything that matches shows. */
-const collapsed = ref(new Set<string>())
+/** Folders start closed, root included; the ones you open are remembered for the session. While filtering,
+ * everything that matches shows. */
+const open = ref(new Set<string>(opened.get(repo.value ?? '') ?? []))
+const allFolders = computed(() => (data.value ? scriptRows(data.value.scripts).flatMap((r) => (r.kind === 'folder' ? [r.path] : [])) : []))
+const collapsed = computed(() => new Set(allFolders.value.filter((p) => !open.value.has(p))))
 
 const rows = computed(() => {
   const d = data.value
@@ -57,9 +62,10 @@ const rows = computed(() => {
 })
 
 function toggle(path: string) {
-  const next = new Set(collapsed.value)
+  const next = new Set(open.value)
   if (!next.delete(path)) next.add(path)
-  collapsed.value = next
+  open.value = next
+  if (repo.value) opened.set(repo.value, next)
 }
 
 /** The tool's logo beside each script: npm's, or Vite's for Vite+ tasks (from the file icons). */
