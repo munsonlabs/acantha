@@ -3,8 +3,18 @@ import { computed } from 'vue'
 import { UNCOMMITTED, type Commit } from '@/lib/git'
 import { colorFor, edgePath, nodeX, rowY, NODE_R, ROW_H, type GraphLayout } from '@/lib/graph'
 
-/** `highlight` is a lane colour to emphasise, dimming the rest. */
-const props = defineProps<{ layout: GraphLayout; rows: Commit[]; head: string | null; highlight?: number | null }>()
+/**
+ * `highlight` is a lane colour to emphasise, dimming the rest. `range` is the rows on screen (with some to spare):
+ * only their nodes are drawn, since a long history would otherwise mean thousands of them. The lines are drawn whole,
+ * as one path per colour, which stays small.
+ */
+const props = defineProps<{
+  layout: GraphLayout
+  rows: Commit[]
+  head: string | null
+  highlight?: number | null
+  range?: { start: number; end: number }
+}>()
 
 /** One <path> per colour keeps the DOM small even for thousands of commits. */
 const paths = computed(() => {
@@ -18,8 +28,11 @@ const paths = computed(() => {
   return [...groups.entries()]
 })
 
-const nodes = computed(() =>
-  props.layout.nodes.map((n, i) => {
+const nodes = computed(() => {
+  const start = props.range?.start ?? 0
+  const end = props.range?.end ?? props.layout.nodes.length
+  return props.layout.nodes.slice(start, end).map((n, j) => {
+    const i = start + j
     const hash = props.rows[i].hash
     return {
       key: hash,
@@ -29,8 +42,8 @@ const nodes = computed(() =>
       lane: n.color,
       kind: hash === UNCOMMITTED ? 'uncommitted' : props.rows[i].stash ? 'stash' : hash === props.head ? 'head' : 'commit',
     }
-  }),
-)
+  })
+})
 </script>
 
 <template>

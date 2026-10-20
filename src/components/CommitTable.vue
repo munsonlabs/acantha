@@ -25,6 +25,34 @@ const root = ref<HTMLElement>()
 const scroller = ref<HTMLElement>()
 
 /**
+ * Only the rows near the visible part of the list are rendered (rows have a fixed height, so their place is known
+ * without measuring); the list keeps its full height, so scrolling and jumping to a commit work as before. OVERSCAN
+ * rows either side keep fast scrolling from showing gaps.
+ */
+const OVERSCAN = 20
+const scrollTop = ref(0)
+const viewHeight = ref(0)
+let scrollFrame = 0
+function onScroll() {
+  hideCard()
+  cancelAnimationFrame(scrollFrame)
+  scrollFrame = requestAnimationFrame(() => (scrollTop.value = scroller.value?.scrollTop ?? 0))
+}
+const viewObserver = new ResizeObserver(([entry]) => (viewHeight.value = entry.contentRect.height))
+onMounted(() => scroller.value && viewObserver.observe(scroller.value))
+onBeforeUnmount(() => {
+  viewObserver.disconnect()
+  cancelAnimationFrame(scrollFrame)
+})
+const range = computed(() => {
+  const n = rows.value.length
+  const start = Math.max(0, Math.floor(scrollTop.value / ROW_H) - OVERSCAN)
+  const end = Math.min(n, Math.ceil((scrollTop.value + (viewHeight.value || 800)) / ROW_H) + OVERSCAN)
+  return { start, end: Math.max(start, end) }
+})
+const windowRows = computed(() => rows.value.slice(range.value.start, range.value.end).map((c, j) => ({ c, i: range.value.start + j })))
+
+/**
  * Columns after the graph, in their default order. Each shows when it isn't turned off in the header's menu and the
  * table is at least `min` wide, so narrow windows drop the least useful first. Quick actions only fit on wide windows.
  * The subject can be moved but not hidden.
@@ -272,77 +300,79 @@ onBeforeUnmount(() => {
       </template>
       <span v-if="drop" class="drop-marker" :style="{ left: `${drop.x}px` }" />
     </div>
-    <div ref="scroller" class="scroller" @scroll.passive="hideCard()">
+    <div ref="scroller" class="scroller" @scroll.passive="onScroll">
       <div v-if="!rows.length" class="no-commits">This repository has no commits yet.</div>
-      <div class="rows">
+      <div class="rows" :style="{ height: `${rows.length * ROW_H}px` }">
         <div class="graph-layer">
-          <CommitGraph :layout="layout" :rows="rows" :head="log!.head" :highlight="highlight" />
+          <CommitGraph :layout="layout" :rows="rows" :head="log!.head" :highlight="highlight" :range="range" />
         </div>
-        <div
-          v-for="(c, i) in rows"
-          :key="c.hash"
-          class="row commit"
-          :class="{
-            selected: c.hash === selected || c.hash === compareWith,
-            uncommitted: c.hash === UNCOMMITTED,
-            stash: !!c.stash,
-            head: c.hash === log!.head,
-            match: matchSet.has(i),
-            'match-current': current === i,
-            fresh: fresh.has(c.hash),
-          }"
-          @click="onClick($event, c)"
-          @dblclick="onDoubleClick"
-          @contextmenu.prevent="onContextMenu($event, c)"
-          @mouseenter="onEnter($event, c, i)"
-          @mousemove="trackMouse"
-          @mouseleave="onLeave"
-        >
-          <div />
-          <div v-if="shown.has('sha')" class="sha c-sha">{{ c.hash === UNCOMMITTED ? '' : shortHash(c.hash) }}</div>
-          <div class="desc c-subject">
-            <span v-if="c.stash" class="stash-label"><Icon name="archive" :size="11" /> {{ c.stash.selector }}</span>
-            <RefLabels
-              v-if="refsByHash.has(c.hash) || (c.hash === log!.head && !log!.headBranch)"
-              :refs="refsByHash.get(c.hash)"
-              :color="colorFor(layout.nodes[i].color)"
-              :head-branch="log!.headBranch"
-              :detached="c.hash === log!.head && !log!.headBranch"
-            />
-            <span class="subject">{{ c.subject }}</span>
-          </div>
-          <div v-if="shown.has('changes')" class="c-changes">
-            <template v-if="stats.get(c.hash)?.files">
-              <span class="files"><Icon name="file" :size="11" />{{ stats.get(c.hash)!.files }}</span>
-              <span class="add">+{{ stats.get(c.hash)!.additions }}</span>
-              <span class="del">−{{ stats.get(c.hash)!.deletions }}</span>
-            </template>
-          </div>
-          <div v-if="shown.has('author')" class="c-author" :title="c.email">
-            <template v-if="c.hash !== UNCOMMITTED">
-              <Avatar :name="c.author" :email="c.email" :size="18" />
-              <span class="author">{{ c.author }}</span>
-            </template>
-          </div>
-          <div v-if="shown.has('date')" class="c-date" :title="formatDate(c.date)">{{ c.hash === UNCOMMITTED ? '' : displayDate(c.date) }}</div>
-          <div v-if="shown.has('actions')" class="c-actions" @click.stop @dblclick.stop @mouseenter="hideCard()">
-            <template v-if="c.stash">
-              <button class="ghost icon-btn" title="Apply stash" @click="runItem(stashMenu(c.stash), 'Apply Stash')">
-                <Icon name="inbox" :size="14" />
-              </button>
-            </template>
-            <template v-else-if="c.hash !== UNCOMMITTED">
-              <button class="ghost icon-btn" :title="checkoutTitle(c)" :disabled="c.hash === log!.head && !checkoutRef(c)" @click="checkout(c)">
-                <Icon name="checkout" :size="14" />
-              </button>
-              <button class="ghost icon-btn" title="Create branch here" @click="runItem(commitMenu(c), 'Create Branch…')">
-                <Icon name="branch" :size="14" />
-              </button>
-              <button class="ghost icon-btn" title="Cherry pick" :disabled="c.hash === log!.head" @click="runItem(commitMenu(c), 'Cherry Pick…')">
-                <Icon name="cherry" :size="14" />
-              </button>
-            </template>
-            <button class="ghost icon-btn" title="More actions" @click="onContextMenu($event, c)"><Icon name="ellipsis" :size="14" /></button>
+        <div class="window" :style="{ transform: `translateY(${range.start * ROW_H}px)` }">
+          <div
+            v-for="{ c, i } in windowRows"
+            :key="c.hash"
+            class="row commit"
+            :class="{
+              selected: c.hash === selected || c.hash === compareWith,
+              uncommitted: c.hash === UNCOMMITTED,
+              stash: !!c.stash,
+              head: c.hash === log!.head,
+              match: matchSet.has(i),
+              'match-current': current === i,
+              fresh: fresh.has(c.hash),
+            }"
+            @click="onClick($event, c)"
+            @dblclick="onDoubleClick"
+            @contextmenu.prevent="onContextMenu($event, c)"
+            @mouseenter="onEnter($event, c, i)"
+            @mousemove="trackMouse"
+            @mouseleave="onLeave"
+          >
+            <div />
+            <div v-if="shown.has('sha')" class="sha c-sha">{{ c.hash === UNCOMMITTED ? '' : shortHash(c.hash) }}</div>
+            <div class="desc c-subject">
+              <span v-if="c.stash" class="stash-label"><Icon name="archive" :size="11" /> {{ c.stash.selector }}</span>
+              <RefLabels
+                v-if="refsByHash.has(c.hash) || (c.hash === log!.head && !log!.headBranch)"
+                :refs="refsByHash.get(c.hash)"
+                :color="colorFor(layout.nodes[i].color)"
+                :head-branch="log!.headBranch"
+                :detached="c.hash === log!.head && !log!.headBranch"
+              />
+              <span class="subject">{{ c.subject }}</span>
+            </div>
+            <div v-if="shown.has('changes')" class="c-changes">
+              <template v-if="stats.get(c.hash)?.files">
+                <span class="files"><Icon name="file" :size="11" />{{ stats.get(c.hash)!.files }}</span>
+                <span class="add">+{{ stats.get(c.hash)!.additions }}</span>
+                <span class="del">−{{ stats.get(c.hash)!.deletions }}</span>
+              </template>
+            </div>
+            <div v-if="shown.has('author')" class="c-author" :title="c.email">
+              <template v-if="c.hash !== UNCOMMITTED">
+                <Avatar :name="c.author" :email="c.email" :size="18" />
+                <span class="author">{{ c.author }}</span>
+              </template>
+            </div>
+            <div v-if="shown.has('date')" class="c-date" :title="formatDate(c.date)">{{ c.hash === UNCOMMITTED ? '' : displayDate(c.date) }}</div>
+            <div v-if="shown.has('actions')" class="c-actions" @click.stop @dblclick.stop @mouseenter="hideCard()">
+              <template v-if="c.stash">
+                <button class="ghost icon-btn" title="Apply stash" @click="runItem(stashMenu(c.stash), 'Apply Stash')">
+                  <Icon name="inbox" :size="14" />
+                </button>
+              </template>
+              <template v-else-if="c.hash !== UNCOMMITTED">
+                <button class="ghost icon-btn" :title="checkoutTitle(c)" :disabled="c.hash === log!.head && !checkoutRef(c)" @click="checkout(c)">
+                  <Icon name="checkout" :size="14" />
+                </button>
+                <button class="ghost icon-btn" title="Create branch here" @click="runItem(commitMenu(c), 'Create Branch…')">
+                  <Icon name="branch" :size="14" />
+                </button>
+                <button class="ghost icon-btn" title="Cherry pick" :disabled="c.hash === log!.head" @click="runItem(commitMenu(c), 'Cherry Pick…')">
+                  <Icon name="cherry" :size="14" />
+                </button>
+              </template>
+              <button class="ghost icon-btn" title="More actions" @click="onContextMenu($event, c)"><Icon name="ellipsis" :size="14" /></button>
+            </div>
           </div>
         </div>
       </div>
