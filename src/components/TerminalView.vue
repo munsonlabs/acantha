@@ -45,8 +45,17 @@ function theme(): ITheme {
   }
 }
 
+/**
+ * Refit to the pane at most once a frame. The shell hears about the new size only once resizing pauses: every size
+ * change makes it redraw its prompt and screen, which flashed on every pixel of a drag.
+ */
+let fitFrame = 0
+let ptyTimer: ReturnType<typeof setTimeout> | undefined
 const fitNow = () => {
-  if (el.value && el.value.offsetWidth > 0 && el.value.offsetHeight > 0) fit?.fit()
+  cancelAnimationFrame(fitFrame)
+  fitFrame = requestAnimationFrame(() => {
+    if (el.value && el.value.offsetWidth > 0 && el.value.offsetHeight > 0) fit?.fit()
+  })
 }
 const updateTheme = () => term && (term.options.theme = theme())
 
@@ -75,7 +84,8 @@ onMounted(async () => {
   } catch {
     // The DOM renderer is a fine fallback.
   }
-  fitNow()
+  // Straight away, not on the next frame: the shell starts at this size.
+  if (el.value && el.value.offsetWidth > 0 && el.value.offsetHeight > 0) fit?.fit()
 
   term.attachCustomKeyEventHandler((e) => {
     if (!e.metaKey || e.type !== 'keydown') return true
@@ -100,7 +110,10 @@ onMounted(async () => {
   }
 
   term.onData((data) => ptyId && void pty.write(ptyId, data))
-  term.onResize(({ cols, rows }) => ptyId && void pty.resize(ptyId, cols, rows))
+  term.onResize(({ cols, rows }) => {
+    clearTimeout(ptyTimer)
+    ptyTimer = setTimeout(() => ptyId && void pty.resize(ptyId, cols, rows), 120)
+  })
   term.onTitleChange((title) => title && emit('title', title))
   observer = new ResizeObserver(fitNow)
   observer.observe(el.value!)
@@ -127,6 +140,8 @@ watch(
 onBeforeUnmount(() => {
   disposed = true
   observer?.disconnect()
+  cancelAnimationFrame(fitFrame)
+  clearTimeout(ptyTimer)
   scheme.removeEventListener('change', updateTheme)
   if (ptyId) void pty.kill(ptyId)
   term?.dispose()
