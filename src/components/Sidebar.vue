@@ -16,7 +16,9 @@ const pill = useSlidingPill(nav, () => [sidebarTab.value, files.value.length])
 
 <template>
   <section class="pane sidebar-pane">
-    <Transition name="fade" mode="out-in">
+    <!-- The old tab goes at once and only the new one fades in: fading both (out, then in) could leave the previous
+         tab's text showing when switching quickly, or as a WebKit repaint leftover. -->
+    <Transition name="tab-in">
       <FileBrowser v-if="sidebarTab === 'files'" class="content" />
       <SearchPanel v-else-if="sidebarTab === 'search'" class="content" />
       <SourceControl v-else class="content" />
