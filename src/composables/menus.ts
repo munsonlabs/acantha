@@ -111,13 +111,31 @@ export function createMenus({ repo, log, rows, run, lastFetch, refsByHash, branc
             fields: [
               { name: 'name', label: 'Name', required: true },
               { name: 'message', label: 'Message', placeholder: 'Optional, makes an annotated tag' },
+              // Pushing straight away saves a trip to the tag's own menu; Undo still only removes the local tag.
+              ...(remotes().length
+                ? [
+                    {
+                      name: 'push',
+                      label:
+                        remotes().length === 1
+                          ? `Push to ${remotes()[0]} (Undo removes only the local tag)`
+                          : 'Push it too (Undo removes only the local tag)',
+                      type: 'checkbox' as const,
+                      value: false,
+                    },
+                    ...(remotes().length > 1 ? [remoteField()] : []),
+                  ]
+                : []),
             ],
             confirm: 'Add Tag',
           })
           if (v) {
             const root = repo.value!
-            await run(v.message ? ['tag', '-a', v.name, '-m', v.message, c.hash] : ['tag', v.name, c.hash], {
-              done: `Created tag ${v.name}`,
+            const create = v.message ? ['tag', '-a', v.name, '-m', v.message, c.hash] : ['tag', v.name, c.hash]
+            const remote = v.remote ?? remotes()[0]
+            await run(v.push ? [create, ['push', remote, `refs/tags/${v.name}`]] : create, {
+              busy: v.push ? 'Pushing…' : undefined,
+              done: v.push ? `Created tag ${v.name} and pushed it to ${remote}` : `Created tag ${v.name}`,
               undo: { label: `tag ${v.name}`, run: () => git.action(root, ['tag', '-d', v.name]) },
             })
           }
