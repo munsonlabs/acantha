@@ -11,9 +11,10 @@ use std::time::{Duration, Instant};
 #[derive(Serialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Script {
-    /// Vite+: the package for `package#task`, None for the workspace root. npm: the package.json's folder, "" for
-    /// the repository root.
+    /// Vite+ only: the package for `package#task`, None for the workspace root.
     package: Option<String>,
+    /// The folder it belongs to, relative to the repository ("" for the root).
+    dir: String,
     name: String,
     command: String,
 }
@@ -41,6 +42,7 @@ fn parse_vp(out: &str) -> Vec<Script> {
             };
             Some(Script {
                 package,
+                dir: String::new(),
                 name: name.to_string(),
                 command: command.to_string(),
             })
@@ -80,27 +82,33 @@ fn vp_list(repo: &str) -> Result<String, String> {
     reader.join().map_err(|_| "Couldn't read vp's output".to_string())
 }
 
-fn npm_scripts(repo: &str) -> Result<Vec<Script>, String> {
+/// Every package.json in the repository (tracked or new, not ignored, not in node_modules): its folder and contents.
+fn manifests(repo: &str) -> Result<Vec<(String, serde_json::Value)>, String> {
     let out = git(repo, ["ls-files", "-z", "--cached", "--others", "--exclude-standard"])?;
-    let mut manifests: Vec<&str> = out
+    let mut paths: Vec<&str> = out
         .split('\0')
         .filter(|p| (*p == "package.json" || p.ends_with("/package.json")) && !p.contains("node_modules/"))
         .collect();
-    manifests.sort_by_key(|p| (p.matches('/').count(), p.to_string()));
-    manifests.dedup();
+    paths.sort_by_key(|p| (p.matches('/').count(), p.to_string()));
+    paths.dedup();
+    Ok(paths
+        .into_iter()
+        .filter_map(|path| {
+            let json = serde_json::from_str(&std::fs::read_to_string(Path::new(repo).join(path)).ok()?).ok()?;
+            let dir = path.strip_suffix("package.json").unwrap_or("").trim_end_matches('/').to_string();
+            Some((dir, json))
+        })
+        .collect())
+}
+
+fn npm_scripts(repo: &str) -> Result<Vec<Script>, String> {
     let mut scripts = Vec::new();
-    for manifest in manifests {
-        let Ok(text) = std::fs::read_to_string(Path::new(repo).join(manifest)) else {
-            continue;
-        };
-        let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) else {
-            continue;
-        };
-        let dir = manifest.strip_suffix("package.json").unwrap_or("").trim_end_matches('/');
+    for (dir, json) in manifests(repo)? {
         for (name, command) in json["scripts"].as_object().into_iter().flatten() {
             if let Some(command) = command.as_str() {
                 scripts.push(Script {
-                    package: Some(dir.to_string()),
+                    package: None,
+                    dir: dir.clone(),
                     name: name.clone(),
                     command: command.to_string(),
                 });
@@ -110,11 +118,26 @@ fn npm_scripts(repo: &str) -> Result<Vec<Script>, String> {
     Ok(scripts)
 }
 
+/// `vp run` names packages, not folders: find each one's folder from the `name` in its package.json.
+fn place_vp_packages(repo: &str, scripts: &mut [Script]) {
+    let Ok(found) = manifests(repo) else { return };
+    let dirs: std::collections::HashMap<String, String> = found
+        .into_iter()
+        .filter_map(|(dir, json)| Some((json["name"].as_str()?.to_string(), dir)))
+        .collect();
+    for s in scripts.iter_mut() {
+        if let Some(pkg) = &s.package {
+            s.dir = dirs.get(pkg).cloned().unwrap_or_else(|| pkg.clone());
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn list_scripts(repo: String) -> Result<Scripts, String> {
     if Path::new(&repo).join("node_modules/.bin/vp").exists() {
-        let scripts = parse_vp(&vp_list(&repo)?);
+        let mut scripts = parse_vp(&vp_list(&repo)?);
         if !scripts.is_empty() {
+            place_vp_packages(&repo, &mut scripts);
             return Ok(Scripts { tool: "vp", scripts });
         }
     }
@@ -137,6 +160,7 @@ mod tests {
             s[1],
             Script {
                 package: None,
+                dir: String::new(),
                 name: "sim:shots".into(),
                 command: "vp run --filter app sim:shots".into()
             }
@@ -157,8 +181,13 @@ mod tests {
         std::fs::write(dir.join(".gitignore"), "node_modules\n").unwrap();
         std::fs::write(dir.join("web/node_modules/x/package.json"), r#"{"scripts":{"no":"x"}}"#).unwrap();
         let s = npm_scripts(&repo).unwrap();
-        let names: Vec<_> = s.iter().map(|s| format!("{}:{}", s.package.as_deref().unwrap(), s.name)).collect();
+        let names: Vec<_> = s.iter().map(|s| format!("{}:{}", s.dir, s.name)).collect();
         assert_eq!(names, [":test", "web:build", "web:dev"]);
+        // Vite+ packages land in the folder whose package.json has their name.
+        std::fs::write(dir.join("web/package.json"), r#"{"name":"site","scripts":{}}"#).unwrap();
+        let mut vp = parse_vp("  site#dev: vite\n  check: vp check\n");
+        place_vp_packages(&repo, &mut vp);
+        assert_eq!((vp[0].dir.as_str(), vp[1].dir.as_str()), ("web", ""));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

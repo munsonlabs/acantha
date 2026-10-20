@@ -7,8 +7,9 @@ const cache = new Map<string, ScriptList>()
 
 <script setup lang="ts">
 import { computed, onMounted, ref, shallowRef } from 'vue'
-import { listScripts, scriptKey, scriptRun, type Script, type Scripts } from '@/lib/scripts'
+import { listScripts, scriptKey, scriptRows, scriptRun, type Script, type Scripts } from '@/lib/scripts'
 import { useWorkspace } from '@/composables/workspace'
+import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
 import Skeleton from './Skeleton.vue'
 
@@ -44,18 +45,25 @@ async function load(fresh = false) {
 }
 onMounted(() => load())
 
-const groups = computed(() => {
+/** Folders you've closed. While filtering, everything that matches shows. */
+const collapsed = ref(new Set<string>())
+
+const rows = computed(() => {
   const d = data.value
   if (!d) return []
   const q = filter.value.trim().toLowerCase()
-  const byPackage = new Map<string, Script[]>()
-  for (const s of d.scripts) {
-    if (q && !`${s.package ?? ''} ${s.name} ${s.command}`.toLowerCase().includes(q)) continue
-    const key = s.package ?? ''
-    byPackage.set(key, [...(byPackage.get(key) ?? []), s])
-  }
-  return [...byPackage].map(([pkg, scripts]) => ({ label: pkg || (d.tool === 'vp' ? 'Workspace' : 'Root'), pkg, scripts }))
+  const shown = q ? d.scripts.filter((s) => `${s.dir} ${s.package ?? ''} ${s.name} ${s.command}`.toLowerCase().includes(q)) : d.scripts
+  return scriptRows(shown, q ? new Set() : collapsed.value)
 })
+
+function toggle(path: string) {
+  const next = new Set(collapsed.value)
+  if (!next.delete(path)) next.add(path)
+  collapsed.value = next
+}
+
+/** The tool's logo beside each script: npm's, or Vite's for Vite+ tasks (from the file icons). */
+const logo = computed(() => (data.value?.tool === 'vp' ? 'vite.config.ts' : '.npmrc'))
 
 const terminalFor = (s: Script) => data.value && sessions.value.find((t) => t.script === scriptKey(data.value!.tool, s))
 
@@ -84,23 +92,28 @@ function run(s: Script) {
       <p v-if="error" class="note error">{{ error }}</p>
       <Skeleton v-else-if="!data" :lines="8" :gap="14" />
       <p v-else-if="!data.scripts.length" class="note">No scripts found: no Vite+ tasks, and no package.json with scripts.</p>
-      <p v-else-if="!groups.length" class="note">Nothing matches.</p>
-      <section v-for="g in groups" :key="g.pkg">
-        <h4>{{ g.label }}</h4>
-        <div v-for="s in g.scripts" :key="s.name" class="row" :class="{ open: terminalFor(s) }">
-          <span class="name">{{ s.name }}</span>
-          <span class="command" :title="s.command">{{ s.command }}</span>
-          <template v-if="terminalFor(s)">
-            <button class="ghost icon-btn" title="Show its terminal" @click="ws.terminals.show(terminalFor(s)!.key)">
+      <p v-else-if="!rows.length" class="note">Nothing matches.</p>
+      <template v-for="r in rows" :key="r.kind === 'folder' ? `f:${r.path}` : `s:${r.script.dir}:${r.script.name}`">
+        <div v-if="r.kind === 'folder'" class="row folder" :style="{ paddingLeft: `${6 + r.depth * 14}px` }" :title="r.path" @click="toggle(r.path)">
+          <Icon name="chevron" :size="11" class="chev" :class="{ open: !collapsed.has(r.path) || filter.trim() }" />
+          <FileIcon :path="r.path" folder :open="!collapsed.has(r.path)" />
+          <span class="folder-name">{{ r.label }}</span>
+        </div>
+        <div v-else class="row" :class="{ open: terminalFor(r.script) }" :style="{ paddingLeft: `${8 + r.depth * 14}px` }">
+          <FileIcon :path="logo" />
+          <span class="name">{{ r.script.name }}</span>
+          <span class="command" :title="r.script.command">{{ r.script.command }}</span>
+          <template v-if="terminalFor(r.script)">
+            <button class="ghost icon-btn" title="Show its terminal" @click="ws.terminals.show(terminalFor(r.script)!.key)">
               <Icon name="terminal" :size="13" />
             </button>
-            <button class="ghost icon-btn" title="Stop and close its terminal" @click="ws.terminals.close(terminalFor(s)!.key)">
+            <button class="ghost icon-btn" title="Stop and close its terminal" @click="ws.terminals.close(terminalFor(r.script)!.key)">
               <Icon name="stop" :size="12" />
             </button>
           </template>
-          <button v-else class="ghost icon-btn run" title="Run in a terminal tab" @click="run(s)"><Icon name="play" :size="12" /></button>
+          <button v-else class="ghost icon-btn run" title="Run in a terminal tab" @click="run(r.script)"><Icon name="play" :size="12" /></button>
         </div>
-      </section>
+      </template>
     </div>
   </div>
 </template>
@@ -156,11 +169,23 @@ function run(s: Script) {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar) transparent;
 }
-h4 {
-  margin: 10px 8px 4px;
-  color: var(--fg-muted);
-  font-size: 11px;
-  font-weight: 600;
+.folder {
+  gap: 5px;
+  cursor: default;
+}
+.folder-name {
+  overflow: hidden;
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chev {
+  flex: none;
+  color: var(--fg-faint);
+  transition: transform 0.12s;
+}
+.chev.open {
+  transform: rotate(90deg);
 }
 .row {
   display: flex;
