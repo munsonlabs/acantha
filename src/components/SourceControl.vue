@@ -175,6 +175,9 @@ textarea {
   background: var(--input-bg);
   color: var(--fg);
   font: 12.5px/1.45 var(--font);
+  /* Wrap long words too (branch names, paths, URLs), so the box never scrolls sideways. */
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
   resize: vertical;
   outline: none;
   user-select: text;
