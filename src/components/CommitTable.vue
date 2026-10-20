@@ -4,6 +4,7 @@ import { UNCOMMITTED, type Commit } from '@/lib/git'
 import { colorFor, ROW_H } from '@/lib/graph'
 import { formatDate, shortHash } from '@/lib/format'
 import { displayDate } from '@/composables/dates'
+import { prefs } from '@/composables/prefs'
 import { useWorkspace } from '@/composables/workspace'
 import { openMenu, useContextMenu } from '@/composables/useContextMenu'
 import Avatar from './Avatar.vue'
@@ -67,7 +68,7 @@ function onEnter(e: MouseEvent, c: Commit, i: number) {
   mouseX = e.clientX
   clearTimeout(hideTimer)
   clearTimeout(showTimer)
-  if (c.hash === UNCOMMITTED || c.stash) return hideCard(150)
+  if (c.hash === UNCOMMITTED || c.stash || !prefs.hoverCards.value) return hideCard(150)
   const row = e.currentTarget as HTMLElement
   showTimer = setTimeout(
     () => {
@@ -79,6 +80,7 @@ function onEnter(e: MouseEvent, c: Commit, i: number) {
 }
 
 const keepCard = () => clearTimeout(hideTimer)
+watch(prefs.hoverCards, (on) => !on && hideCard())
 
 function openCard() {
   if (card.value) void select(card.value.commit.hash)

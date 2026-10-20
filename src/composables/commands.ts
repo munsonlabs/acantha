@@ -47,6 +47,7 @@ export const commands: Command[] = [
   { id: 'toggle-sidebar', label: 'Toggle Sidebar', group: 'View', keys: '⌘B', run: () => (prefs.sidebarOpen.value = !prefs.sidebarOpen.value) },
   { id: 'toggle-terminal', label: 'Toggle Terminal', group: 'View', keys: '⌘J', run: withRepo((ws) => ws.terminals.toggle()) },
   { id: 'new-terminal', label: 'New Terminal', group: 'View', keys: '⌃⇧`', run: withRepo((ws) => ws.terminals.add()) },
+  { id: 'toggle-hover-cards', label: 'Toggle Commit Hover Cards', group: 'View', run: () => (prefs.hoverCards.value = !prefs.hoverCards.value) },
   { id: 'refresh', label: 'Refresh', group: 'View', keys: '⌘R', run: withRepo((ws) => ws.repo.reload()) },
   {
     id: 'find',

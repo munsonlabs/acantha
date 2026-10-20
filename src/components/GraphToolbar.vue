@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { prefs } from '@/composables/prefs'
 import { useWorkspace } from '@/composables/workspace'
 import BranchFilter from './BranchFilter.vue'
 import Icon from './Icon.vue'
@@ -6,6 +7,7 @@ import Icon from './Icon.vue'
 const ws = useWorkspace()
 const { log, showRemotes, showStashes, reload, setShowRemotes } = ws.repo
 const { fetchAll } = ws.menus
+const hoverCards = prefs.hoverCards
 </script>
 
 <template>
@@ -13,6 +15,14 @@ const { fetchAll } = ws.menus
     <span class="title"><Icon name="history" :size="13" /> History</span>
     <BranchFilter />
     <div class="spacer" />
+    <button
+      class="ghost icon-btn"
+      :class="{ on: hoverCards }"
+      :title="hoverCards ? 'Turn off commit cards on hover' : 'Show commit cards on hover'"
+      @click="hoverCards = !hoverCards"
+    >
+      <Icon name="message" />
+    </button>
     <button
       class="ghost icon-btn"
       :class="{ on: showStashes }"

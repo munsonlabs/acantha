@@ -12,6 +12,8 @@ export const prefs = {
   sidebarOpen: usePersisted('sidebar-open', true),
   workspaces: usePersisted<string[]>('workspaces', []),
   editorVim: usePersisted('editor-vim', false),
+  /** The card with a commit's details that appears when hovering a row in the graph. */
+  hoverCards: usePersisted('hover-cards', true),
   dateStyle: usePersisted<'relative' | 'absolute'>('date-style', 'relative'),
   /** Author pictures from GitHub and Gravatar. Gravatar gets a hash of the email, never the address. */
   avatars: usePersisted('avatars', true),
