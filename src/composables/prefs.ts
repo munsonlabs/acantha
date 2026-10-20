@@ -14,6 +14,8 @@ export const prefs = {
   editorVim: usePersisted('editor-vim', false),
   /** The card with a commit's details that appears when hovering a row in the graph. */
   hoverCards: usePersisted('hover-cards', true),
+  /** Columns of the graph turned off from the header's right-click menu. */
+  hiddenColumns: usePersisted<string[]>('hidden-columns', []),
   dateStyle: usePersisted<'relative' | 'absolute'>('date-style', 'relative'),
   /** Author pictures from GitHub and Gravatar. Gravatar gets a hash of the email, never the address. */
   avatars: usePersisted('avatars', true),
