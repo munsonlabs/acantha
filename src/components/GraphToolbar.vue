@@ -8,6 +8,7 @@ const ws = useWorkspace()
 const { log, showRemotes, showStashes, reload, setShowRemotes } = ws.repo
 const { fetchAll } = ws.menus
 const hoverCards = prefs.hoverCards
+const dimIdle = prefs.dimIdleGraph
 </script>
 
 <template>
@@ -15,6 +16,14 @@ const hoverCards = prefs.hoverCards
     <span class="title"><Icon name="history" :size="13" /> History</span>
     <BranchFilter />
     <div class="spacer" />
+    <button
+      class="ghost icon-btn"
+      :class="{ on: dimIdle }"
+      :title="dimIdle ? 'Keep the graph at full strength' : 'Fade the graph while you work elsewhere'"
+      @click="dimIdle = !dimIdle"
+    >
+      <Icon name="moon" />
+    </button>
     <button
       class="ghost icon-btn"
       :class="{ on: hoverCards }"

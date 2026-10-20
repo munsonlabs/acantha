@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { prefs } from '@/composables/prefs'
 import { useWorkspace } from '@/composables/workspace'
 import CommitTable from './CommitTable.vue'
 import DetailsPanel from './DetailsPanel.vue'
@@ -19,7 +20,7 @@ const panelHere = computed(() => expanded.value && tabs.value.length > 0)
 
 <template>
   <!-- The graph and the commit details are separate panes stacked in one column, like the panes either side. -->
-  <div class="graph-column">
+  <div class="graph-column" :class="{ 'dim-idle': prefs.dimIdleGraph.value && !preview && !panelHere }">
     <section class="pane graph-pane">
       <Transition name="slide">
         <FilePreview v-if="preview" class="graph-body" />
@@ -44,6 +45,13 @@ const panelHere = computed(() => expanded.value && tabs.value.length > 0)
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+/* Faded while you work elsewhere: back to full as soon as the pointer or focus comes into the graph. */
+.graph-column > * {
+  transition: opacity 0.25s var(--ease-out);
+}
+.graph-column.dim-idle:not(:hover):not(:focus-within) > * {
+  opacity: 0.45;
 }
 .graph-pane {
   display: flex;

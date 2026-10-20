@@ -16,6 +16,8 @@ export const prefs = {
   editByDefault: usePersisted('edit-by-default', true),
   /** The card with a commit's details that appears when hovering a row in the graph. */
   hoverCards: usePersisted('hover-cards', true),
+  /** Fade the graph while you're working elsewhere (pointer away, nothing in it focused). */
+  dimIdleGraph: usePersisted('dim-idle-graph', false),
   /** Slack channel IDs whose messages and canvases may be opened. Empty allows any the token can see. */
   slackChannels: usePersisted<string[]>('slack-channels', []),
   /** The panel under the terminal (Slack and to-do tabs), and its share of that column's height when both show. */
