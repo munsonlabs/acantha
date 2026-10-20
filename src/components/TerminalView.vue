@@ -46,16 +46,19 @@ function theme(): ITheme {
 }
 
 /**
- * Refit to the pane at most once a frame. The shell hears about the new size only once resizing pauses: every size
- * change makes it redraw its prompt and screen, which flashed on every pixel of a drag.
+ * Refitting resizes the terminal's canvas, which blanks it until the next draw, so doing it on every frame of a drag
+ * made the text flash. While a panel edge is being dragged the terminal keeps its layout and refits once on release
+ * (`panel-resize-end`); other size changes (the window, a panel sliding open) refit once the size settles. The shell
+ * also hears about a new size only once it has settled, since each one makes it redraw its prompt.
  */
-let fitFrame = 0
+let fitTimer: ReturnType<typeof setTimeout> | undefined
 let ptyTimer: ReturnType<typeof setTimeout> | undefined
 const fitNow = () => {
-  cancelAnimationFrame(fitFrame)
-  fitFrame = requestAnimationFrame(() => {
+  clearTimeout(fitTimer)
+  if (document.body.classList.contains('resizing') || document.body.classList.contains('resizing-rows')) return
+  fitTimer = setTimeout(() => {
     if (el.value && el.value.offsetWidth > 0 && el.value.offsetHeight > 0) fit?.fit()
-  })
+  }, 80)
 }
 const updateTheme = () => term && (term.options.theme = theme())
 
@@ -117,6 +120,7 @@ onMounted(async () => {
   term.onTitleChange((title) => title && emit('title', title))
   observer = new ResizeObserver(fitNow)
   observer.observe(el.value!)
+  window.addEventListener('panel-resize-end', fitNow)
   scheme.addEventListener('change', updateTheme)
   if (props.active) term.focus()
 })
@@ -140,7 +144,8 @@ watch(
 onBeforeUnmount(() => {
   disposed = true
   observer?.disconnect()
-  cancelAnimationFrame(fitFrame)
+  window.removeEventListener('panel-resize-end', fitNow)
+  clearTimeout(fitTimer)
   clearTimeout(ptyTimer)
   scheme.removeEventListener('change', updateTheme)
   if (ptyId) void pty.kill(ptyId)

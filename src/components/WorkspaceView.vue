@@ -140,6 +140,7 @@ function startSplit(e: MouseEvent) {
     window.removeEventListener('mousemove', move)
     window.removeEventListener('mouseup', up)
     document.body.classList.remove('resizing-rows')
+    window.dispatchEvent(new Event('panel-resize-end'))
   }
   document.body.classList.add('resizing-rows')
   window.addEventListener('mousemove', move)
@@ -158,6 +159,7 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
     window.removeEventListener('mousemove', move)
     window.removeEventListener('mouseup', up)
     document.body.classList.remove('resizing')
+    window.dispatchEvent(new Event('panel-resize-end'))
   }
   document.body.classList.add('resizing')
   window.addEventListener('mousemove', move)
