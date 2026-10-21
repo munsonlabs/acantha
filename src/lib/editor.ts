@@ -183,6 +183,13 @@ export function createEditor(parent: HTMLElement, { doc, path, vim: vimMode, fil
       view.dispatch({ changes: { from: start, to: old.length - end, insert: text.slice(start, text.length - end) } })
     },
     setVim: (on: boolean) => view.dispatch({ effects: keys.reconfigure(on ? vim() : []) }),
+    /** Puts the cursor at the start of a line (1-based, and a column if given) and scrolls it to the middle. */
+    goTo: (line: number, col = 1) => {
+      const doc = view.state.doc
+      const l = doc.line(Math.min(Math.max(line, 1), doc.lines))
+      const at = Math.min(l.from + Math.max(col - 1, 0), l.to)
+      view.dispatch({ selection: { anchor: at }, effects: EditorView.scrollIntoView(at, { y: 'center' }) })
+    },
     focus: () => view.focus(),
     destroy: () => view.destroy(),
   }

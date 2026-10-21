@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Terminal, type ITheme } from '@xterm/xterm'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Terminal, type ILink, type ITheme } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import '@xterm/xterm/css/xterm.css'
 import { pty } from '@/lib/pty'
+import { findFileRefs, resolveFileRef } from '@/lib/termLinks'
 import { prefs } from '@/composables/prefs'
 import type { TerminalSession } from '@/composables/terminals'
 import { showToast } from '@/composables/useToast'
+import { useWorkspace } from '@/composables/workspace'
 
 const props = defineProps<{ session: TerminalSession; active: boolean }>()
 const emit = defineEmits<{ exit: []; title: [title: string] }>()
@@ -24,6 +26,32 @@ let ptyId: number | null = null
 let observer: ResizeObserver | null = null
 let disposed = false
 const scheme = window.matchMedia('(prefers-color-scheme: dark)')
+
+const ws = useWorkspace()
+const known = computed(() => new Set(ws.files.list.value))
+
+/**
+ * Paths in the output that name a file in the repository (`src/x.ts:42:7`, `./App.vue`, `README.md`) are links: ⌘-click
+ * opens the file at that line, like ⌘-click opens a web link.
+ */
+function fileLinks(y: number, callback: (links: ILink[] | undefined) => void) {
+  const root = ws.repo.repo.value
+  const text = term?.buffer.active.getLine(y - 1)?.translateToString(true)
+  if (!root || !text) return callback(undefined)
+  const links = findFileRefs(text).flatMap((ref): ILink[] => {
+    const path = resolveFileRef(ref.path, root, props.session.cwd, ws.files.list.value, known.value)
+    if (!path) return []
+    return [
+      {
+        range: { start: { x: ref.start + 1, y }, end: { x: ref.end, y } },
+        text: text.slice(ref.start, ref.end),
+        decorations: { pointerCursor: true, underline: true },
+        activate: (e) => e.metaKey && void ws.files.open(path, undefined, null, ref.line),
+      },
+    ]
+  })
+  callback(links.length ? links : undefined)
+}
 
 const css = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 
@@ -103,6 +131,9 @@ onMounted(async () => {
   fit = new FitAddon()
   term.loadAddon(fit)
   term.loadAddon(new WebLinksAddon((e, uri) => e.metaKey && void openUrl(uri)))
+  term.registerLinkProvider({ provideLinks: fileLinks })
+  // Links are checked against the repository's files, which the sidebar may not have loaded yet.
+  if (!ws.files.list.value.length) void ws.files.load()
   term.open(el.value!)
   try {
     const webgl = new WebglAddon()

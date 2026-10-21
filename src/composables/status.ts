@@ -101,6 +101,34 @@ export function createStatus({ repo, log, reload, prepareUndo, undoLast }: Repo)
     )
   }
 
+  /**
+   * Stages, unstages or discards some of a file's lines, given a patch of them (see `buildPatch`). Discarding copies
+   * the file aside first, so it can be undone.
+   */
+  async function applyLines(file: StatusFile, patch: string, action: 'stage' | 'unstage' | 'discard') {
+    const root = repo.value
+    if (!root) return false
+    busy.value = true
+    try {
+      if (action === 'discard') {
+        const backup = await git.backupFiles(root, [file.path])
+        const finish = await prepareUndo({ label: 'discarding the lines', run: () => git.restoreFiles(root, backup) })
+        await git.applyPatch(root, patch, false, true)
+        const entry = await finish()
+        showToast('Discarded the lines', 'ok', entry ? { label: 'Undo', run: undoLast } : undefined)
+      } else {
+        await git.applyPatch(root, patch, true, action === 'unstage')
+      }
+      return true
+    } catch (e) {
+      showToast(String(e), 'error')
+      return false
+    } finally {
+      busy.value = false
+      await refresh()
+    }
+  }
+
   async function setAmend(value: boolean) {
     amend.value = value
     // Start from the previous message, as `git commit --amend` would.
@@ -185,6 +213,7 @@ export function createStatus({ repo, log, reload, prepareUndo, undoLast }: Repo)
     stage,
     unstage,
     discard,
+    applyLines,
     setAmend,
     commit,
     push,

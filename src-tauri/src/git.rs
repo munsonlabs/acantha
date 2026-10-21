@@ -676,6 +676,41 @@ pub async fn run_action(repo: String, args: Vec<String>) -> Result<String, Strin
     Ok(text.join("\n"))
 }
 
+/// Applies a patch of some of a file's lines: to the index (`cached`), or to the working tree. `reverse` takes the
+/// patch's changes back out, for unstaging or discarding.
+#[tauri::command]
+pub async fn apply_patch(repo: String, patch: String, cached: bool, reverse: bool) -> Result<(), String> {
+    use std::io::Write;
+    use std::process::Stdio;
+    let mut cmd = command(&repo);
+    cmd.args(["apply", "--whitespace=nowarn"]);
+    if cached {
+        cmd.arg("--cached");
+    }
+    if reverse {
+        cmd.arg("-R");
+    }
+    let mut child = cmd
+        .arg("-")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    child
+        .stdin
+        .take()
+        .ok_or("no stdin")?
+        .write_all(patch.as_bytes())
+        .map_err(|e| e.to_string())?;
+    let out = child.wait_with_output().map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(stderr_or_code(&out))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -702,6 +737,24 @@ mod tests {
         sh(&["merge", "-q", "--no-ff", "feature", "-m", "merge"]);
         std::fs::write(dir.join("new.txt"), "x\n").unwrap();
         path
+    }
+
+    #[test]
+    fn applies_a_patch_to_the_index() {
+        let dir = std::env::temp_dir().join(format!("acantha-apply-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let repo = dir.to_string_lossy().into_owned();
+        git(&repo, ["init", "-q"]).unwrap();
+        std::fs::write(dir.join("f.txt"), "a\nb\n").unwrap();
+        git(&repo, ["add", "f.txt"]).unwrap();
+        let patch = "--- a/f.txt\n+++ b/f.txt\n@@ -1,2 +1,3 @@\n a\n+x\n b\n";
+        block_on(apply_patch(repo.clone(), patch.into(), true, false)).unwrap();
+        assert_eq!(git(&repo, ["show", ":f.txt"]).unwrap(), "a\nx\nb\n");
+        block_on(apply_patch(repo.clone(), patch.into(), true, true)).unwrap();
+        assert_eq!(git(&repo, ["show", ":f.txt"]).unwrap(), "a\nb\n");
+        assert!(block_on(apply_patch(repo.clone(), "nonsense".into(), true, false)).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

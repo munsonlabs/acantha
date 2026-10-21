@@ -149,6 +149,8 @@ export const git = {
   revParse: (repo: string, rev: string) => invoke<string | null>('rev_parse', { repo, rev }),
   backupFiles: (repo: string, paths: string[]) => invoke<string>('backup_files', { repo, paths }),
   restoreFiles: (repo: string, backup: string) => invoke<void>('restore_files', { repo, backup }),
+  /** Applies a patch of some lines to the index (`cached`) or the working tree; `reverse` takes them back out. */
+  applyPatch: (repo: string, patch: string, cached: boolean, reverse: boolean) => invoke<void>('apply_patch', { repo, patch, cached, reverse }),
   /** Watches a repository for changes made outside the app. "git" means commits, branches or the index changed. */
   watch: (repo: string, onChange: (kind: 'git' | 'tree') => void) => {
     const channel = new Channel<'git' | 'tree'>()

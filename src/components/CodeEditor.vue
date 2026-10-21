@@ -6,7 +6,7 @@ import { wordsIn } from '@/lib/words'
 import { prefs } from '@/composables/prefs'
 import { useWorkspace } from '@/composables/workspace'
 
-const props = defineProps<{ path: string; text: string }>()
+const props = defineProps<{ path: string; text: string; line?: number }>()
 const emit = defineEmits<{ change: [doc: string]; save: [] }>()
 
 const el = ref<HTMLElement>()
@@ -52,6 +52,7 @@ onMounted(async () => {
     onSave: () => emit('save'),
   })
   loading.value = false
+  if (props.line) editor.goTo(props.line)
   editor.focus()
   void gatherWords()
 })
@@ -60,6 +61,11 @@ onMounted(async () => {
 watch([ws.files.openFiles, ws.files.diskChanged], () => void gatherWords())
 
 watch(prefs.editorVim, (on) => editor?.setVim(on))
+// Opening the same file again at another line, from a search result or a path in the terminal.
+watch(
+  () => props.line,
+  (line) => line && editor?.goTo(line),
+)
 
 onBeforeUnmount(() => {
   disposed = true

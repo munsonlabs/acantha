@@ -319,6 +319,7 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
         :key="preview.path"
         :path="preview.path"
         :text="editorText"
+        :line="preview.line"
         @change="onEdit"
         @save="save()"
       />

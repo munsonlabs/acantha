@@ -60,6 +60,7 @@ fn main() {
             git::run_action,
             git::get_status,
             git::get_status_diff,
+            git::apply_patch,
             git::get_stats,
             git::head_state,
             git::rev_parse,
