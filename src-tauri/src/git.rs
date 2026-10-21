@@ -29,6 +29,7 @@ const ACTIONS: &[&str] = &[
     "restore",
     "rm",
     "commit",
+    "worktree",
 ];
 
 #[derive(Serialize)]
