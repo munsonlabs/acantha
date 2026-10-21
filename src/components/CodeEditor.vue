@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Editor } from '@/lib/editor'
+import { git } from '@/lib/git'
+import { wordsIn } from '@/lib/words'
 import { prefs } from '@/composables/prefs'
 import { useWorkspace } from '@/composables/workspace'
 
@@ -13,6 +15,28 @@ const loading = ref(true)
 let editor: Editor | null = null
 let disposed = false
 
+/** Words from the other open files, for completion: their unsaved drafts, or what's on disk or at their commit. */
+let words: readonly string[] = []
+let gathering = 0
+async function gatherWords() {
+  const id = ++gathering
+  const repo = ws.repo.repo.value
+  if (!repo) return
+  const found = new Set<string>()
+  const others = ws.files.openFiles.value.filter((f) => !(f.path === props.path && f.rev === null))
+  const texts = await Promise.all(
+    others.map(async (f) => {
+      const draft = f.rev === null ? ws.files.drafts.value.get(f.path) : undefined
+      if (draft) return draft.text
+      const file = await git.readFile(repo, f.rev, f.path).catch(() => null)
+      return file?.kind === 'text' ? file.text : ''
+    }),
+  )
+  if (id !== gathering || disposed) return
+  for (const text of texts) for (const w of wordsIn(text)) found.add(w)
+  words = [...found]
+}
+
 onMounted(async () => {
   // Import paths complete from the file list, which the sidebar may not have loaded yet.
   if (!ws.files.list.value.length) void ws.files.load()
@@ -23,12 +47,17 @@ onMounted(async () => {
     path: props.path,
     vim: prefs.editorVim.value,
     files: () => ws.files.list.value,
+    words: () => words,
     onChange: (doc) => emit('change', doc),
     onSave: () => emit('save'),
   })
   loading.value = false
   editor.focus()
+  void gatherWords()
 })
+
+// Files opened or closed since, or changed on disk.
+watch([ws.files.openFiles, ws.files.diskChanged], () => void gatherWords())
 
 watch(prefs.editorVim, (on) => editor?.setVim(on))
 

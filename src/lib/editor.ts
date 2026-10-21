@@ -72,6 +72,8 @@ export interface EditorOptions {
   vim: boolean
   /** The repository's files, for completing import paths. */
   files?: () => string[]
+  /** Words from the other open files, suggested alongside the ones in this file. */
+  words?: () => readonly string[]
   onChange: (doc: string) => void
   onSave: () => void
 }
@@ -103,7 +105,23 @@ function importPaths(path: string, files: () => string[]) {
   }
 }
 
-export function createEditor(parent: HTMLElement, { doc, path, vim: vimMode, files, onChange, onSave }: EditorOptions) {
+/** Completes words found in the other open files. Words also in this file come up once: the duplicates merge. */
+function otherWords(words: () => readonly string[]) {
+  let from: readonly string[] = []
+  let options: Completion[] = []
+  return (ctx: CompletionContext) => {
+    const word = ctx.matchBefore(/[\p{L}\p{N}_$]+/u)
+    if (!word || (word.from === word.to && !ctx.explicit)) return null
+    const now = words()
+    if (now !== from) {
+      from = now
+      options = now.map((label) => ({ label, type: 'text' }))
+    }
+    return { from: word.from, options, validFor: /^[\p{L}\p{N}_$]*$/u }
+  }
+}
+
+export function createEditor(parent: HTMLElement, { doc, path, vim: vimMode, files, words, onChange, onSave }: EditorOptions) {
   const language = new Compartment()
   const keys = new Compartment()
 
@@ -127,8 +145,9 @@ export function createEditor(parent: HTMLElement, { doc, path, vim: vimMode, fil
           indentWithTab,
         ]),
         language.of([]),
-        // Alongside each language's own suggestions: any word already in the file, and import paths.
+        // Alongside each language's own suggestions: any word already in this file or the other open ones, and import paths.
         EditorState.languageData.of(() => [{ autocomplete: completeAnyWord }]),
+        ...(words ? [EditorState.languageData.of(() => [{ autocomplete: otherWords(words) }])] : []),
         ...(files && SCRIPT.test(path) ? [EditorState.languageData.of(() => [{ autocomplete: importPaths(path, files) }])] : []),
         theme,
         syntaxHighlighting(highlight),
