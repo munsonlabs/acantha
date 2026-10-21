@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import type { RefGroup } from '@/composables/repo'
 
-defineProps<{ refs: RefGroup | undefined; color: string; headBranch: string | null; detached: boolean }>()
+defineProps<{
+  refs: RefGroup | undefined
+  color: string
+  headBranch: string | null
+  detached: boolean
+  /** Branches checked out in another worktree, and that worktree's folder name. */
+  elsewhere?: Map<string, string>
+}>()
 </script>
 
 <template>
@@ -11,14 +18,23 @@ defineProps<{ refs: RefGroup | undefined; color: string; headBranch: string | nu
       v-for="b in refs.branches"
       :key="b.name"
       class="ref branch"
-      :class="{ current: b.name === headBranch }"
+      :class="{ current: b.name === headBranch, elsewhere: elsewhere?.has(b.name) }"
       :style="{ '--ref-color': color }"
       data-ref-kind="branch"
       :data-ref-name="b.name"
-      :title="b.name === headBranch ? `${b.name} (checked out)` : b.name"
+      :title="
+        b.name === headBranch
+          ? `${b.name} (checked out)`
+          : elsewhere?.has(b.name)
+            ? `${b.name} (checked out in the worktree ${elsewhere.get(b.name)})`
+            : b.name
+      "
     >
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M5 9c0-3 6-2 6-6" /></svg>
       {{ b.name }}
+      <svg v-if="elsewhere?.has(b.name)" class="wt" viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3H6l1.5 1.5h5A1.5 1.5 0 0 1 14 6v5.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5z" />
+      </svg>
       <span
         v-for="r in b.remotes"
         :key="r"
@@ -76,6 +92,14 @@ defineProps<{ refs: RefGroup | undefined; color: string; headBranch: string | nu
   stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+/* Checked out in another worktree: a dashed ring, and a folder after the name. */
+.ref.elsewhere {
+  outline: 1px dashed color-mix(in oklab, var(--ref-color) 55%, transparent);
+  outline-offset: -1px;
+}
+.ref .wt {
+  opacity: 0.75;
 }
 /* The checked-out branch: stronger tint and a ring. */
 .ref.current {

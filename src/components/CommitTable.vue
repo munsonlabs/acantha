@@ -15,6 +15,10 @@ import RefLabels from './RefLabels.vue'
 
 const ws = useWorkspace()
 const { log, rows, layout, refsByHash, stats, loadMore } = ws.repo
+/** Branches checked out in other worktrees, marked on their labels. */
+const elsewhere = computed(
+  () => new Map((log.value?.worktrees ?? []).filter((w) => w.branch && !w.current).map((w) => [w.branch!, w.path.split('/').pop() ?? w.path])),
+)
 const { selected, compareWith, select, compare, closeDetails } = ws.details
 const { matchSet, current } = ws.search
 const { target } = ws.reveal
@@ -337,6 +341,7 @@ onBeforeUnmount(() => {
                 :color="colorFor(layout.nodes[i].color)"
                 :head-branch="log!.headBranch"
                 :detached="c.hash === log!.head && !log!.headBranch"
+                :elsewhere="elsewhere"
               />
               <span class="subject">{{ c.subject }}</span>
             </div>

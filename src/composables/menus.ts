@@ -1,5 +1,6 @@
-import { git, type Commit, type Stash } from '@/lib/git'
+import { git, type Commit, type Stash, type Worktree } from '@/lib/git'
 import { shortHash } from '@/lib/format'
+import { folderOpenItems } from './openers'
 import { ask, confirmAction, type DialogField } from './useDialog'
 import type { Repo } from './repo'
 import { showToast } from './useToast'
@@ -21,14 +22,25 @@ interface MenuActions {
   browse: (rev: string | null) => void
   /** base: rebase the commits after it; null for the whole history. */
   rebaseFrom: (base: string | null, label: string) => void
+  /** Shows a worktree in its own tab: the one it's already open in, or a new one. */
+  openWorktree: (path: string) => void
+  /** Closes any tab showing a worktree, before it's removed. False when unsaved edits there were kept. */
+  closeWorktree: (path: string) => Promise<boolean>
 }
 
-export function createMenus({ repo, log, rows, run, lastFetch, refsByHash, branches, setBranches }: Repo, { browse, rebaseFrom }: MenuActions) {
+export function createMenus(
+  { repo, log, rows, run, lastFetch, refsByHash, branches, setBranches }: Repo,
+  { browse, rebaseFrom, openWorktree, closeWorktree }: MenuActions,
+) {
   const currentBranch = () => log.value?.headBranch ?? null
   const remotes = () => log.value?.remotes ?? []
   const hasLocalBranch = (name: string) => !!log.value?.refs.some((r) => r.kind === 'branch' && r.name === name)
   /** The commit a branch or tag points at, so deleting it can be undone. */
   const refHash = (kind: 'branch' | 'tag', name: string) => log.value?.refs.find((r) => r.kind === kind && r.name === name)?.hash
+  const worktrees = () => log.value?.worktrees ?? []
+  /** The other worktree a branch is checked out in, if any: git won't check it out a second time. */
+  const worktreeOf = (name: string) => worktrees().find((w) => w.branch === name && !w.current)
+  const folderName = (path: string) => path.split('/').pop() || path
   const into = () => (currentBranch() ? `\`${currentBranch()}\`` : 'the detached HEAD')
 
   const remoteField = (): DialogField => ({
@@ -73,6 +85,11 @@ export function createMenus({ repo, log, rows, run, lastFetch, refsByHash, branc
 
   async function checkoutBranch(name: string) {
     if (name === currentBranch()) return
+    const elsewhere = worktreeOf(name)
+    if (elsewhere) {
+      showToast(`${name} is checked out in ${folderName(elsewhere.path)}`)
+      return openWorktree(elsewhere.path)
+    }
     await run(['checkout', name], { done: `Checked out ${name}`, undo: { label: `checking out ${name}`, checkout: true } })
   }
 
@@ -171,6 +188,7 @@ export function createMenus({ repo, log, rows, run, lastFetch, refsByHash, branc
         },
       },
       'separator',
+      { label: 'New Worktree from Here…', icon: 'folder', run: () => addWorktree({ from: c.hash, label: `\`${s}\`` }) },
       { label: 'Browse Files at this Commit', icon: 'files', run: () => browse(c.hash) },
       'separator',
       {
@@ -358,9 +376,13 @@ export function createMenus({ repo, log, rows, run, lastFetch, refsByHash, branc
 
   function branchMenu(name: string): MenuEntry[] {
     const isCurrent = name === currentBranch()
+    const elsewhere = worktreeOf(name)
     return [
-      { header: name, detail: isCurrent ? 'Current branch' : 'Local branch' },
-      { label: 'Checkout Branch', icon: 'checkout', disabled: isCurrent, run: () => checkoutBranch(name) },
+      { header: name, detail: isCurrent ? 'Current branch' : elsewhere ? `Checked out in ${folderName(elsewhere.path)}` : 'Local branch' },
+      elsewhere
+        ? { label: 'Open its Worktree', icon: 'external', run: () => openWorktree(elsewhere.path) }
+        : { label: 'Checkout Branch', icon: 'checkout', disabled: isCurrent, run: () => checkoutBranch(name) },
+      { label: 'Check Out in New Worktree…', icon: 'folder', disabled: isCurrent || !!elsewhere, run: () => addWorktree({ branch: name }) },
       {
         label: 'Rename Branch…',
         icon: 'pencil',
@@ -382,7 +404,7 @@ export function createMenus({ repo, log, rows, run, lastFetch, refsByHash, branc
       {
         label: 'Delete Branch…',
         icon: 'trash',
-        disabled: isCurrent,
+        disabled: isCurrent || !!elsewhere,
         danger: true,
         run: async () => {
           // The same branch on a remote can go too, but only when asked: that changes the remote for everyone.
@@ -512,11 +534,81 @@ export function createMenus({ repo, log, rows, run, lastFetch, refsByHash, branc
     ]
   }
 
+  /** Where a new worktree goes unless told otherwise: next to the main one, named after it and the branch. */
+  function worktreePath(branch: string) {
+    const main = worktrees().find((w) => w.main)?.path ?? repo.value!
+    return `${main}-${branch.replace(/[^\w.-]+/g, '-')}`
+  }
+
+  /** Adds a worktree, for an existing branch or a new one starting at `from`, and opens it in a tab of its own. */
+  async function addWorktree(target: { branch: string } | { from: string; label: string }) {
+    const existing = 'branch' in target
+    const v = await ask({
+      title: 'New Worktree',
+      message: existing
+        ? `Check out \`${target.branch}\` in a folder of its own, to work on it alongside this one.`
+        : `A new branch from ${target.label}, checked out in a folder of its own.`,
+      fields: [
+        ...(existing ? [] : [{ name: 'name', label: 'New branch', required: true }]),
+        { name: 'path', label: 'Folder', placeholder: 'Next to this repository, named after the branch' },
+      ],
+      confirm: 'Create',
+    })
+    if (!v) return
+    const branch = existing ? target.branch : String(v.name).trim()
+    const path = String(v.path ?? '').trim() || worktreePath(branch)
+    await run(existing ? ['worktree', 'add', path, branch] : ['worktree', 'add', '-b', branch, path, target.from], {
+      busy: 'Creating worktree…',
+      done: `Checked out ${branch} in ${folderName(path)}`,
+    })
+    const made = worktreeOf(branch)
+    if (made) openWorktree(made.path)
+  }
+
+  async function removeWorktree(w: Worktree) {
+    const v = await ask({
+      title: 'Remove Worktree',
+      message: `Delete the folder \`${w.path}\`? ${w.branch ? `The branch \`${w.branch}\` and its` : 'Its'} commits stay in the repository.`,
+      fields: [{ name: 'force', label: 'Even with uncommitted changes, which are lost', type: 'checkbox', value: false }],
+      confirm: 'Remove',
+      danger: true,
+    })
+    if (!v || !(await closeWorktree(w.path))) return
+    // A locked worktree takes forcing twice.
+    const force = v.force ? (w.locked ? ['-f', '-f'] : ['-f']) : []
+    await run(['worktree', 'remove', ...force, w.path], { busy: 'Removing worktree…', done: `Removed ${folderName(w.path)}` })
+  }
+
+  function worktreeMenu(w: Worktree): MenuEntry[] {
+    return [
+      { header: folderName(w.path), detail: w.branch ?? (w.head ? `Detached at ${shortHash(w.head)}` : w.path) },
+      { label: 'Open in New Tab', icon: 'external', disabled: w.current || w.prunable, run: () => openWorktree(w.path) },
+      ...(w.prunable ? [] : folderOpenItems(w.path)),
+      'separator',
+      w.prunable
+        ? { label: 'Prune Missing Worktrees', icon: 'trash', run: () => run(['worktree', 'prune'], { done: 'Pruned missing worktrees' }) }
+        : { label: 'Remove Worktree…', icon: 'trash', danger: true, disabled: w.main || w.current, run: () => removeWorktree(w) },
+    ]
+  }
+
   async function fetchAll() {
     if (!repo.value) return
     await run(['fetch', '--all', '--prune'], { busy: 'Fetching…', done: 'Fetched from all remotes' })
     lastFetch.value = Date.now()
   }
 
-  return { commitMenu, stashMenu, uncommittedMenu, branchMenu, remoteBranchMenu, tagMenu, checkoutBranch, checkoutRemoteBranch, fetchAll }
+  return {
+    commitMenu,
+    stashMenu,
+    uncommittedMenu,
+    branchMenu,
+    remoteBranchMenu,
+    tagMenu,
+    worktreeMenu,
+    addWorktree,
+    openWorktree,
+    checkoutBranch,
+    checkoutRemoteBranch,
+    fetchAll,
+  }
 }
