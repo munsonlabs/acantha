@@ -1,6 +1,7 @@
 use serde::Serialize;
 use std::collections::HashMap;
 use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 const EMPTY_TREE_SHA1: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
@@ -28,6 +29,7 @@ const ACTIONS: &[&str] = &[
     "restore",
     "rm",
     "commit",
+    "worktree",
 ];
 
 #[derive(Serialize)]
@@ -64,6 +66,24 @@ pub struct Log {
     stashes: Vec<Stash>,
     /// The first remote's URL, to link commits to their web page.
     remote_url: Option<String>,
+    /// Every working tree of the repository, this one included (`git worktree list`).
+    worktrees: Vec<Worktree>,
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Worktree {
+    path: String,
+    head: Option<String>,
+    /// The checked-out branch's short name; none when detached.
+    branch: Option<String>,
+    /// The main working tree, which git won't remove.
+    main: bool,
+    /// The one this window has open.
+    current: bool,
+    locked: bool,
+    /// Its folder is gone: `git worktree prune` would tidy it away.
+    prunable: bool,
 }
 
 #[derive(Serialize, Default)]
@@ -506,10 +526,14 @@ pub async fn get_log(repo: String, limit: usize, branches: Vec<String>, show_rem
 
     let stashes = parse_stashes(&git(&repo, ["stash", "list", "--format=%H%x1f%P%x1f%gd%x1f%gs%x1f%an%x1f%ae%x1f%at"]).unwrap_or_default());
 
+    let here = Path::new(&repo).canonicalize().unwrap_or_else(|_| PathBuf::from(&repo));
+    let worktrees = parse_worktrees(&git(&repo, ["worktree", "list", "--porcelain"]).unwrap_or_default(), &here);
+
     let has_more = commits.len() > limit;
     commits.truncate(limit);
     Ok(Log {
         remote_url,
+        worktrees,
         commits,
         refs,
         remotes,
@@ -519,6 +543,41 @@ pub async fn get_log(repo: String, limit: usize, branches: Vec<String>, show_rem
         has_more,
         stashes,
     })
+}
+
+/// Parses `git worktree list --porcelain`: blocks of `key value` lines, a blank line between worktrees, the main
+/// one first. Bare repositories have no working tree to show, so they're left out.
+fn parse_worktrees(out: &str, current: &Path) -> Vec<Worktree> {
+    let same = |p: &str| Path::new(p).canonicalize().map(|p| p == current).unwrap_or(false);
+    out.split("\n\n")
+        .filter(|block| !block.trim().is_empty())
+        .enumerate()
+        .filter_map(|(i, block)| {
+            let mut wt = Worktree {
+                path: String::new(),
+                head: None,
+                branch: None,
+                main: i == 0,
+                current: false,
+                locked: false,
+                prunable: false,
+            };
+            for line in block.lines() {
+                let (key, value) = line.split_once(' ').unwrap_or((line, ""));
+                match key {
+                    "worktree" => wt.path = value.to_string(),
+                    "HEAD" => wt.head = Some(value.to_string()),
+                    "branch" => wt.branch = Some(value.strip_prefix("refs/heads/").unwrap_or(value).to_string()),
+                    "bare" => return None,
+                    "locked" => wt.locked = true,
+                    "prunable" => wt.prunable = true,
+                    _ => {}
+                }
+            }
+            wt.current = same(&wt.path);
+            (!wt.path.is_empty()).then_some(wt)
+        })
+        .collect()
 }
 
 /// Parses the summary line of `--shortstat`, e.g. " 3 files changed, 10 insertions(+), 2 deletions(-)".
@@ -755,6 +814,44 @@ mod tests {
         assert_eq!(git(&repo, ["show", ":f.txt"]).unwrap(), "a\nb\n");
         assert!(block_on(apply_patch(repo.clone(), "nonsense".into(), true, false)).is_err());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn parses_worktrees() {
+        let out = "worktree /nowhere/main\nHEAD aaa\nbranch refs/heads/main\n\nworktree /nowhere/fix\nHEAD bbb\ndetached\nlocked\nprunable gitdir file points to non-existent location\n\n";
+        let list = parse_worktrees(out, Path::new("/elsewhere"));
+        assert_eq!(list.len(), 2);
+        assert_eq!((list[0].branch.as_deref(), list[0].main, list[0].current), (Some("main"), true, false));
+        assert_eq!(
+            (list[1].branch.as_deref(), list[1].locked, list[1].prunable, list[1].main),
+            (None, true, true, false)
+        );
+        assert!(parse_worktrees("worktree /nowhere/bare.git\nbare\n", Path::new("/x")).is_empty());
+    }
+
+    #[test]
+    fn lists_linked_worktrees() {
+        let dir = std::env::temp_dir().join(format!("acantha-worktrees-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let repo = dir.to_string_lossy().into_owned();
+        git(&repo, ["init", "-q", "-b", "main"]).unwrap();
+        git(
+            &repo,
+            ["-c", "user.name=T", "-c", "user.email=t@t", "commit", "-qm", "first", "--allow-empty"],
+        )
+        .unwrap();
+        let linked = format!("{repo}-linked");
+        let _ = std::fs::remove_dir_all(&linked);
+        git(&repo, ["worktree", "add", "-q", "-b", "feature", linked.as_str()]).unwrap();
+        let log = block_on(get_log(linked.clone(), 100, vec![], true)).unwrap();
+        let current: Vec<_> = log.worktrees.iter().filter(|w| w.current).collect();
+        assert_eq!(log.worktrees.len(), 2);
+        assert_eq!(
+            (current.len(), current[0].branch.as_deref(), current[0].main),
+            (1, Some("feature"), false)
+        );
+        let _ = std::fs::remove_dir_all(&linked);
     }
 
     #[test]

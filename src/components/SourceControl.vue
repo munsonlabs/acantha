@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useWorkspace } from '@/composables/workspace'
 import Icon from './Icon.vue'
 import StatusSection from './StatusSection.vue'
+import WorktreeList from './WorktreeList.vue'
 
 const ws = useWorkspace()
 const { log } = ws.repo
@@ -93,6 +94,7 @@ function onKeydown(e: KeyboardEvent) {
         <StatusSection title="Staged changes" :files="staged" mode="staged" />
         <StatusSection title="Changes" :files="unstaged" mode="unstaged" />
         <p v-if="clean" class="clean"><Icon name="check" :size="13" /> Working tree clean</p>
+        <WorktreeList />
       </div>
     </div>
   </div>

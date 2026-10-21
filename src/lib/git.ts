@@ -41,6 +41,22 @@ export interface Log {
   hasMore: boolean
   stashes: Stash[]
   remoteUrl: string | null
+  /** Every working tree of the repository, this one included. */
+  worktrees: Worktree[]
+}
+
+export interface Worktree {
+  path: string
+  head: string | null
+  /** The checked-out branch; null when detached. */
+  branch: string | null
+  /** The main working tree, which git won't remove. */
+  main: boolean
+  /** The one this tab has open. */
+  current: boolean
+  locked: boolean
+  /** Its folder is gone; `git worktree prune` tidies it away. */
+  prunable: boolean
 }
 
 export interface Stat {

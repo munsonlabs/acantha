@@ -44,7 +44,12 @@ function createWorkspace(id: number) {
       search: createSearch(repo, reveal),
       diff,
       status,
-      menus: createMenus(repo, { browse, rebaseFrom: (base, label) => (ui.rebase.value = { base, label }) }),
+      menus: createMenus(repo, {
+        browse,
+        rebaseFrom: (base, label) => (ui.rebase.value = { base, label }),
+        openWorktree: (path) => void showRepo(path),
+        closeWorktree: closeRepo,
+      }),
       terminals: createTerminals(repo),
       panel: createPanel(repo),
     }
@@ -115,6 +120,22 @@ function stepWorkspace(delta: number) {
   const list = workspaces.value
   const i = list.findIndex((w) => w.id === activeId.value)
   if (list.length > 1) activate(list[(i + delta + list.length) % list.length].id)
+}
+
+/** Shows the tab that has a repository open, or opens it in a new one. */
+async function showRepo(path: string) {
+  const open = workspaces.value.find((w) => w.repo.repo.value === path)
+  if (open) activate(open.id)
+  else await addWorkspace(path)
+}
+
+/** Closes the tabs showing a repository, before its folder goes. False when unsaved edits there were kept. */
+async function closeRepo(path: string) {
+  for (const w of workspaces.value.filter((w) => w.repo.repo.value === path)) {
+    await closeWorkspace(w.id)
+    if (workspaces.value.includes(w)) return false
+  }
+  return true
 }
 
 /** Opens a repository in the current tab when it is empty, otherwise in a new one. */
