@@ -3,6 +3,8 @@
  * Colours come from the app's CSS variables, so the editor follows the light and dark themes on its own.
  */
 import { basicSetup } from 'codemirror'
+import { completeAnyWord, startCompletion, type Completion, type CompletionContext } from '@codemirror/autocomplete'
+import { importCandidates } from './importPaths'
 import { EditorView, keymap } from '@codemirror/view'
 import { Compartment, EditorState } from '@codemirror/state'
 import { indentWithTab } from '@codemirror/commands'
@@ -68,11 +70,40 @@ export interface EditorOptions {
   doc: string
   path: string
   vim: boolean
+  /** The repository's files, for completing import paths. */
+  files?: () => string[]
   onChange: (doc: string) => void
   onSave: () => void
 }
 
-export function createEditor(parent: HTMLElement, { doc, path, vim: vimMode, onChange, onSave }: EditorOptions) {
+/** Files whose imports name other files by path. */
+const SCRIPT = /\.(m?[jt]sx?|cjs|cts|mts|vue|svelte|astro)$/
+
+/**
+ * Completes the path in an import (`from './…'`, `import('../…')`, `require('./…')`) from the repository's files.
+ * Picking a folder opens its contents straight away.
+ */
+function importPaths(path: string, files: () => string[]) {
+  return (ctx: CompletionContext) => {
+    const line = ctx.state.doc.lineAt(ctx.pos)
+    const m = line.text.slice(0, ctx.pos - line.from).match(/(?:\bfrom|\bimport|\brequire\s*\()\s*\(?\s*['"](\.{1,2}\/[^'"]*)$/)
+    if (!m) return null
+    const typed = m[1]
+    const cut = typed.lastIndexOf('/') + 1
+    const options: Completion[] = importCandidates(path, typed.slice(0, cut), files()).map((c) => ({
+      label: c.label,
+      type: c.folder ? 'namespace' : 'variable',
+      boost: c.folder ? 1 : 0,
+      apply: (view, _completion, from, to) => {
+        view.dispatch({ changes: { from, to, insert: c.label }, selection: { anchor: from + c.label.length } })
+        if (c.folder) startCompletion(view)
+      },
+    }))
+    return { from: ctx.pos - (typed.length - cut), options, validFor: /^[\w.@-]*$/ }
+  }
+}
+
+export function createEditor(parent: HTMLElement, { doc, path, vim: vimMode, files, onChange, onSave }: EditorOptions) {
   const language = new Compartment()
   const keys = new Compartment()
 
@@ -96,6 +127,9 @@ export function createEditor(parent: HTMLElement, { doc, path, vim: vimMode, onC
           indentWithTab,
         ]),
         language.of([]),
+        // Alongside each language's own suggestions: any word already in the file, and import paths.
+        EditorState.languageData.of(() => [{ autocomplete: completeAnyWord }]),
+        ...(files && SCRIPT.test(path) ? [EditorState.languageData.of(() => [{ autocomplete: importPaths(path, files) }])] : []),
         theme,
         syntaxHighlighting(highlight),
         EditorView.updateListener.of((u) => {

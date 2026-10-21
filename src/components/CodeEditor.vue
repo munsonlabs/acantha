@@ -2,22 +2,27 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Editor } from '@/lib/editor'
 import { prefs } from '@/composables/prefs'
+import { useWorkspace } from '@/composables/workspace'
 
 const props = defineProps<{ path: string; text: string }>()
 const emit = defineEmits<{ change: [doc: string]; save: [] }>()
 
 const el = ref<HTMLElement>()
+const ws = useWorkspace()
 const loading = ref(true)
 let editor: Editor | null = null
 let disposed = false
 
 onMounted(async () => {
+  // Import paths complete from the file list, which the sidebar may not have loaded yet.
+  if (!ws.files.list.value.length) void ws.files.load()
   const { createEditor } = await import('@/lib/editor')
   if (disposed) return
   editor = createEditor(el.value!, {
     doc: props.text,
     path: props.path,
     vim: prefs.editorVim.value,
+    files: () => ws.files.list.value,
     onChange: (doc) => emit('change', doc),
     onSave: () => emit('save'),
   })

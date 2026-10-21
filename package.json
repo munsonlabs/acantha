@@ -22,6 +22,7 @@
     "icon": "node scripts/build-icon.mjs && tauri icon icon.svg -o src-tauri/icons && rm -rf src-tauri/icons/android src-tauri/icons/ios"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "6.20.3",
     "@codemirror/commands": "6.11.1",
     "@codemirror/language": "6.13.1",
     "@codemirror/language-data": "6.5.2",
