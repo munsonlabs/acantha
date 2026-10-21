@@ -307,6 +307,17 @@ button:hover:not(:disabled) {
   background: var(--hover);
 }
 
+/* The hand over things you press: buttons, links, dropdowns and checkboxes. Rows in lists and draggable tabs keep the
+   arrow, as in an editor. */
+button:not(:disabled),
+a[href],
+select:not(:disabled),
+input[type='checkbox']:not(:disabled),
+input[type='radio']:not(:disabled),
+label:has(> input[type='checkbox']:not(:disabled)) {
+  cursor: pointer;
+}
+
 button:disabled {
   opacity: 0.4;
 }
