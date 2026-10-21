@@ -24,6 +24,8 @@ export const prefs = {
   disabledFeatures: usePersisted<string[]>('disabled-features', []),
   /** The file browser also lists what .gitignore leaves out (node_modules, build output), dimmed. */
   showIgnored: usePersisted('show-ignored', false),
+  /** The best Commit Snake score, from the game where the collapsed graph was. */
+  gameBest: usePersisted('game-best', 0),
   /** Slack channel IDs whose messages and canvases may be opened. Empty allows any the token can see. */
   slackChannels: usePersisted<string[]>('slack-channels', []),
   /** The panel under the terminal (Slack and to-do tabs), and its share of that column's height when both show. */
