@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useSlidingPill, useTabDrag, useTabScroll } from '@/composables/tabs'
+import { openMenu } from '@/composables/useContextMenu'
+import { ask } from '@/composables/useDialog'
+import type { TerminalSession } from '@/composables/terminals'
 import { useWorkspace } from '@/composables/workspace'
 import Icon from './Icon.vue'
 import TerminalView from './TerminalView.vue'
@@ -9,7 +12,7 @@ defineProps<{ visible: boolean }>()
 const { sessions, activeKey, add, close, move, toggle } = useWorkspace().terminals
 const strip = ref<HTMLElement>()
 
-const pill = useSlidingPill(strip, () => [activeKey.value, sessions.value.map((s) => `${s.key}:${s.title}`)])
+const pill = useSlidingPill(strip, () => [activeKey.value, sessions.value.map((s) => `${s.key}:${s.name ?? s.title}`)])
 const { dragging, onPointerDown } = useTabDrag(strip, move)
 useTabScroll(strip, () => activeKey.value)
 
@@ -22,12 +25,31 @@ function onTabDown(e: PointerEvent, key: number, index: number) {
   onPointerDown(e, index)
 }
 
-/** Numbers tabs that would otherwise share a name, like "zsh" and "zsh 2". */
+/** A name you gave a tab as it is; the shell's titles numbered where they'd otherwise match, like "zsh" and "zsh 2". */
 const label = (i: number) => {
-  const title = sessions.value[i].title
-  const n = sessions.value.slice(0, i).filter((s) => s.title === title).length
-  return n ? `${title} ${n + 1}` : title
+  const s = sessions.value[i]
+  if (s.name) return s.name
+  const n = sessions.value.slice(0, i).filter((o) => !o.name && o.title === s.title).length
+  return n ? `${s.title} ${n + 1}` : s.title
 }
+
+/** Names a tab, so you can tell your terminals apart. Left empty, it goes back to following the shell. */
+async function rename(s: TerminalSession) {
+  const v = await ask({
+    title: 'Rename Terminal',
+    message: 'Leave it empty to name it after what’s running, as before.',
+    fields: [{ name: 'name', label: 'Name', value: s.name ?? '', placeholder: s.title }],
+    confirm: 'Rename',
+  })
+  if (v) s.name = String(v.name).trim() || undefined
+}
+
+const tabMenu = (e: MouseEvent, s: TerminalSession) =>
+  openMenu(e, [
+    { label: 'Rename…', icon: 'pencil', run: () => rename(s) },
+    'separator',
+    { label: 'Close Terminal', icon: 'x', run: () => close(s.key) },
+  ])
 </script>
 
 <template>
@@ -43,6 +65,8 @@ const label = (i: number) => {
           :title="s.cwd"
           @pointerdown="onTabDown($event, s.key, i)"
           @auxclick.middle="close(s.key)"
+          @dblclick="rename(s)"
+          @contextmenu.prevent="tabMenu($event, s)"
         >
           <Icon name="terminal" :size="13" />
           <span>{{ label(i) }}</span>

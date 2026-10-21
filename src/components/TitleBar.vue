@@ -5,6 +5,7 @@ import { basename } from '@/lib/format'
 import { useWorkspaces, type Workspace } from '@/composables/workspace'
 import { openMenu, type MenuEntry } from '@/composables/useContextMenu'
 import { folderOpenItems } from '@/composables/openers'
+import { ask } from '@/composables/useDialog'
 import { prefs } from '@/composables/prefs'
 import { freshTabColor, TAB_COLORS, tabColor } from '@/lib/tabColors'
 import { useSlidingPill, useTabDrag, useTabScroll } from '@/composables/tabs'
@@ -22,7 +23,28 @@ const query = computed({
   },
 })
 
-const label = (ws: Workspace) => (ws.repo.repo.value ? basename(ws.repo.repo.value) : 'New Tab')
+const label = (ws: Workspace) => {
+  const path = ws.repo.repo.value
+  return path ? (prefs.tabNames.value[path] ?? basename(path)) : 'New Tab'
+}
+
+/** Names a repository's tab (kept for next time); left empty, it goes back to the folder's name. */
+async function renameTab(ws: Workspace) {
+  const path = ws.repo.repo.value
+  if (!path) return
+  const v = await ask({
+    title: 'Rename Tab',
+    message: `Leave it empty to use the folder’s name, ${basename(path)}.`,
+    fields: [{ name: 'name', label: 'Name', value: prefs.tabNames.value[path] ?? '', placeholder: basename(path) }],
+    confirm: 'Rename',
+  })
+  if (!v) return
+  const names = { ...prefs.tabNames.value }
+  const name = String(v.name).trim()
+  if (name && name !== basename(path)) names[path] = name
+  else delete names[path]
+  prefs.tabNames.value = names
+}
 
 const pill = useSlidingPill(strip, () => [activeId.value, workspaces.value.map((w) => `${w.id}:${label(w)}:${w.repo.log.value?.headBranch ?? ''}`)])
 const { dragging, onPointerDown } = useTabDrag(strip, moveWorkspace)
@@ -72,6 +94,7 @@ function tabMenu(e: MouseEvent, ws: Workspace) {
         selected: colorOf(ws),
         pick: (color) => pickColor(path, color),
       },
+      { label: 'Rename Tab…', icon: 'pencil', run: () => renameTab(ws) },
       'separator',
     )
   }
@@ -125,6 +148,7 @@ defineExpose({ focusSearch: () => input.value?.select() })
         @pointerdown="onTabDown($event, ws, i)"
         @auxclick.middle="closeWorkspace(ws.id)"
         @contextmenu.prevent="tabMenu($event, ws)"
+        @dblclick="renameTab(ws)"
       >
         <span v-if="colorOf(ws)" class="dot" :style="{ background: colorOf(ws)! }" />
         <Icon v-else :name="ws.repo.repo.value ? 'history' : 'folder'" :size="13" />

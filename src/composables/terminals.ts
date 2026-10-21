@@ -5,7 +5,10 @@ import { prefs } from './prefs'
 export interface TerminalSession {
   key: number
   cwd: string
+  /** What the shell calls itself (its window title), kept up to date as it changes. */
   title: string
+  /** A name you gave the tab; it wins over the shell's title. */
+  name?: string
   /** Typed into the shell once it starts, as if you'd typed it (e.g. `npm run dev`). */
   command?: string
   /** The script it runs, for the Scripts tab (see `scriptKey`). */

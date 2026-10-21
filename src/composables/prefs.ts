@@ -39,6 +39,8 @@ export const prefs = {
   uiZoom: usePersisted('ui-zoom', 1),
   /** Tab colours picked per repository path. 'none' turns the colour off. */
   tabColors: usePersisted<Record<string, string>>('tab-colors', {}),
+  /** Names given to repository tabs, by repository path, in place of the folder's name. */
+  tabNames: usePersisted<Record<string, string>>('tab-names', {}),
   /** Fetch every open repository in the background, every `autoFetchMinutes`. */
   autoFetch: usePersisted('auto-fetch', true),
   autoFetchMinutes: usePersisted('auto-fetch-minutes', 5),
