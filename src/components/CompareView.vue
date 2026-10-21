@@ -87,7 +87,7 @@ const STATUS: Record<string, string> = { A: 'Added', M: 'Modified', D: 'Deleted'
 <template>
   <div class="compare">
     <div class="pickers">
-      <label class="pick">
+      <label class="pick base">
         <span>base</span>
         <select :value="base" @change="pick('base', ($event.target as HTMLSelectElement).value)">
           <option v-if="![...refs.branches, ...refs.remotes, ...refs.tags].includes(base)" :value="base">{{ base }}</option>
@@ -102,8 +102,8 @@ const STATUS: Record<string, string> = { A: 'Added', M: 'Modified', D: 'Deleted'
           </optgroup>
         </select>
       </label>
-      <button class="ghost icon-btn" title="Swap the two" @click="swap"><Icon name="merge" :size="13" /></button>
-      <label class="pick">
+      <button class="ghost icon-btn swap" title="Swap the two" @click="swap"><Icon name="merge" :size="13" /></button>
+      <label class="pick head">
         <span>compare</span>
         <select :value="head" @change="pick('head', ($event.target as HTMLSelectElement).value)">
           <option v-if="![...refs.branches, ...refs.remotes, ...refs.tags].includes(head)" :value="head">{{ head }}</option>
@@ -118,12 +118,11 @@ const STATUS: Record<string, string> = { A: 'Added', M: 'Modified', D: 'Deleted'
           </optgroup>
         </select>
       </label>
-      <div class="spacer" />
       <label v-if="head === current" class="check" title="Count changes not committed yet, as if they were">
         <input type="checkbox" :checked="uncommitted" @change="setCompare(tabId, { uncommitted: ($event.target as HTMLInputElement).checked })" />
         uncommitted
       </label>
-      <button class="ghost icon-btn" title="Refresh" :disabled="loading" @click="load"><Icon name="refresh" :size="13" /></button>
+      <button class="ghost icon-btn refresh" title="Refresh" :disabled="loading" @click="load"><Icon name="refresh" :size="13" /></button>
     </div>
 
     <p v-if="error" class="note error">{{ error }}</p>
@@ -142,7 +141,9 @@ const STATUS: Record<string, string> = { A: 'Added', M: 'Modified', D: 'Deleted'
         <li v-for="c in result.ahead" :key="c.hash" :title="`${c.subject}\n${c.author}`" @click="ws.details.select(c.hash)">
           <span class="sha">{{ shortHash(c.hash) }}</span>
           <span class="subject">{{ c.subject }}</span>
-          <span class="meta">{{ c.author }} · {{ compactDate(c.date) }}</span>
+          <span class="meta"
+            ><span class="author">{{ c.author }} · </span>{{ compactDate(c.date) }}</span
+          >
         </li>
       </ul>
 
@@ -173,15 +174,35 @@ const STATUS: Record<string, string> = { A: 'Added', M: 'Modified', D: 'Deleted'
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  container-type: inline-size;
 }
+/* One row when there's room: base ⇄ compare, then the options. */
 .pickers {
-  display: flex;
+  display: grid;
   flex: none;
+  grid-template-areas: 'base swap head check refresh';
+  grid-template-columns: minmax(0, 220px) auto minmax(0, 220px) 1fr auto;
   align-items: center;
   gap: 6px;
   padding: 8px 10px;
   border-bottom: 1px solid var(--border);
   font-size: 12px;
+}
+.base {
+  grid-area: base;
+}
+.head {
+  grid-area: head;
+}
+.swap {
+  grid-area: swap;
+}
+.check {
+  grid-area: check;
+  justify-self: end;
+}
+.refresh {
+  grid-area: refresh;
 }
 .pick {
   display: flex;
@@ -190,11 +211,14 @@ const STATUS: Record<string, string> = { A: 'Added', M: 'Modified', D: 'Deleted'
   min-width: 0;
 }
 .pick span {
+  flex: none;
   color: var(--fg-faint);
   font-size: 11px;
 }
 .pick select {
-  max-width: 180px;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
   height: 26px;
 }
 .check {
@@ -203,9 +227,6 @@ const STATUS: Record<string, string> = { A: 'Added', M: 'Modified', D: 'Deleted'
   gap: 4px;
   color: var(--fg-muted);
   font-size: 11.5px;
-}
-.spacer {
-  flex: 1;
 }
 .icon-btn {
   width: 26px;
@@ -313,5 +334,30 @@ li:hover {
 .error {
   color: var(--del);
   white-space: pre-wrap;
+}
+/* Narrow: each branch on its own row, labels lined up, the options under them. */
+@container (max-width: 520px) {
+  .pickers {
+    grid-template-areas:
+      'base refresh'
+      'head swap'
+      'check check';
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 4px;
+  }
+  .pick span {
+    width: 52px;
+  }
+  .check {
+    justify-self: start;
+    padding-left: 58px;
+  }
+  .author,
+  .dir {
+    display: none;
+  }
+  .name {
+    flex: 1;
+  }
 }
 </style>
