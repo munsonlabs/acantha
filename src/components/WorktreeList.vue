@@ -54,7 +54,7 @@ const add = () => addWorktree({ from: 'HEAD', label: log.value?.headBranch ? `\`
           <template v-if="w.branch"><Icon name="branch" :size="10" /> {{ w.branch }}</template>
           <template v-else-if="w.head">{{ shortHash(w.head) }}</template>
         </span>
-        <span v-if="w.locked" class="flag" title="Locked: git won't remove or prune it without forcing">locked</span>
+        <span v-if="w.locked" class="flag" :title="`Locked${w.lockReason ? `: ${w.lockReason}` : ''}. Right-click to unlock it`">locked</span>
         <span v-if="w.prunable" class="flag">missing</span>
         <span v-if="w.current" class="flag here">this tab</span>
       </li>

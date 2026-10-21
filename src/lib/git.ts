@@ -55,6 +55,8 @@ export interface Worktree {
   /** The one this tab has open. */
   current: boolean
   locked: boolean
+  /** Why it's locked, if whoever locked it said. */
+  lockReason: string | null
   /** Its folder is gone; `git worktree prune` tidies it away. */
   prunable: boolean
 }

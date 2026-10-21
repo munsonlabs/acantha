@@ -82,6 +82,8 @@ pub struct Worktree {
     /// The one this window has open.
     current: bool,
     locked: bool,
+    /// Why it's locked, when whoever locked it said (`git worktree lock --reason`).
+    lock_reason: Option<String>,
     /// Its folder is gone: `git worktree prune` would tidy it away.
     prunable: bool,
 }
@@ -560,6 +562,7 @@ fn parse_worktrees(out: &str, current: &Path) -> Vec<Worktree> {
                 main: i == 0,
                 current: false,
                 locked: false,
+                lock_reason: None,
                 prunable: false,
             };
             for line in block.lines() {
@@ -569,7 +572,10 @@ fn parse_worktrees(out: &str, current: &Path) -> Vec<Worktree> {
                     "HEAD" => wt.head = Some(value.to_string()),
                     "branch" => wt.branch = Some(value.strip_prefix("refs/heads/").unwrap_or(value).to_string()),
                     "bare" => return None,
-                    "locked" => wt.locked = true,
+                    "locked" => {
+                        wt.locked = true;
+                        wt.lock_reason = (!value.is_empty()).then(|| value.to_string());
+                    }
                     "prunable" => wt.prunable = true,
                     _ => {}
                 }
@@ -818,7 +824,7 @@ mod tests {
 
     #[test]
     fn parses_worktrees() {
-        let out = "worktree /nowhere/main\nHEAD aaa\nbranch refs/heads/main\n\nworktree /nowhere/fix\nHEAD bbb\ndetached\nlocked\nprunable gitdir file points to non-existent location\n\n";
+        let out = "worktree /nowhere/main\nHEAD aaa\nbranch refs/heads/main\n\nworktree /nowhere/fix\nHEAD bbb\ndetached\nlocked claude code agent\nprunable gitdir file points to non-existent location\n\n";
         let list = parse_worktrees(out, Path::new("/elsewhere"));
         assert_eq!(list.len(), 2);
         assert_eq!((list[0].branch.as_deref(), list[0].main, list[0].current), (Some("main"), true, false));
@@ -826,6 +832,8 @@ mod tests {
             (list[1].branch.as_deref(), list[1].locked, list[1].prunable, list[1].main),
             (None, true, true, false)
         );
+        assert_eq!(list[1].lock_reason.as_deref(), Some("claude code agent"));
+        assert_eq!(list[0].lock_reason, None);
         assert!(parse_worktrees("worktree /nowhere/bare.git\nbare\n", Path::new("/x")).is_empty());
     }
 

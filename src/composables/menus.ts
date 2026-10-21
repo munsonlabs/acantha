@@ -4,7 +4,7 @@ import { folderOpenItems } from './openers'
 import { ask, confirmAction, type DialogField } from './useDialog'
 import type { Repo } from './repo'
 import { showToast } from './useToast'
-import type { MenuEntry } from './useContextMenu'
+import type { MenuEntry, MenuItem } from './useContextMenu'
 
 async function copy(text: string, what: string) {
   try {
@@ -565,18 +565,29 @@ export function createMenus(
     if (made) openWorktree(made.path)
   }
 
+  const lockedBy = (w: Worktree) => (w.lockReason ? `locked: ${w.lockReason}` : 'locked')
+
   async function removeWorktree(w: Worktree) {
     const v = await ask({
       title: 'Remove Worktree',
-      message: `Delete the folder \`${w.path}\`? ${w.branch ? `The branch \`${w.branch}\` and its` : 'Its'} commits stay in the repository.`,
-      fields: [{ name: 'force', label: 'Even with uncommitted changes, which are lost', type: 'checkbox', value: false }],
+      message: `Delete the folder \`${w.path}\`? ${w.branch ? `The branch \`${w.branch}\` and its` : 'Its'} commits stay in the repository.${
+        w.locked ? ` It's ${lockedBy(w)}, so something may still be using it.` : ''
+      }`,
+      fields: [
+        // Git won't remove a locked worktree; unlocking first keeps the uncommitted-changes check separate.
+        ...(w.locked ? [{ name: 'unlock', label: 'Unlock it and remove it anyway', type: 'checkbox' as const, value: true }] : []),
+        { name: 'force', label: 'Even with uncommitted changes, which are lost', type: 'checkbox', value: false },
+      ],
       confirm: 'Remove',
       danger: true,
     })
-    if (!v || !(await closeWorktree(w.path))) return
-    // A locked worktree takes forcing twice.
-    const force = v.force ? (w.locked ? ['-f', '-f'] : ['-f']) : []
-    await run(['worktree', 'remove', ...force, w.path], { busy: 'Removing worktree…', done: `Removed ${folderName(w.path)}` })
+    if (!v) return
+    if (w.locked && !v.unlock) return showToast(`${folderName(w.path)} is ${lockedBy(w)}; unlock it to remove it`, 'error')
+    if (!(await closeWorktree(w.path))) return
+    await run([...(w.locked ? [['worktree', 'unlock', w.path]] : []), ['worktree', 'remove', ...(v.force ? ['-f'] : []), w.path]], {
+      busy: 'Removing worktree…',
+      done: `Removed ${folderName(w.path)}`,
+    })
   }
 
   function worktreeMenu(w: Worktree): MenuEntry[] {
@@ -585,6 +596,15 @@ export function createMenus(
       { label: 'Open in New Tab', icon: 'external', disabled: w.current || w.prunable, run: () => openWorktree(w.path) },
       ...(w.prunable ? [] : folderOpenItems(w.path)),
       'separator',
+      ...(w.locked
+        ? [
+            {
+              label: 'Unlock Worktree',
+              icon: 'check',
+              run: () => run(['worktree', 'unlock', w.path], { done: `Unlocked ${folderName(w.path)}` }),
+            } satisfies MenuItem,
+          ]
+        : []),
       w.prunable
         ? { label: 'Prune Missing Worktrees', icon: 'trash', run: () => run(['worktree', 'prune'], { done: 'Pruned missing worktrees' }) }
         : { label: 'Remove Worktree…', icon: 'trash', danger: true, disabled: w.main || w.current, run: () => removeWorktree(w) },
