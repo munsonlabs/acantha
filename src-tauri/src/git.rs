@@ -586,6 +586,58 @@ fn parse_worktrees(out: &str, current: &Path) -> Vec<Worktree> {
         .collect()
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Comparison {
+    /// Where the two split: what the changed files are measured from.
+    merge_base: Option<String>,
+    /// Commits in `head` that `base` doesn't have, newest first, and the other way round.
+    ahead: Vec<Commit>,
+    behind: usize,
+    /// The head's commit, for opening a file's diff.
+    head_hash: Option<String>,
+}
+
+/// The repository's main branch, as its remote names it (`origin/HEAD`), else a local `main` or `master`.
+#[tauri::command]
+pub async fn default_branch(repo: String) -> Option<String> {
+    if let Some(remote) = trimmed(git(&repo, ["symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD"])) {
+        let local = remote.trim_start_matches("origin/");
+        // The local branch when there is one: it's what you'd merge into.
+        if trimmed(git(&repo, ["rev-parse", "--verify", "-q", &format!("refs/heads/{local}")])).is_some() {
+            return Some(local.to_string());
+        }
+        return Some(remote);
+    }
+    ["main", "master"]
+        .into_iter()
+        .find(|b| trimmed(git(&repo, ["rev-parse", "--verify", "-q", &format!("refs/heads/{b}")])).is_some())
+        .map(String::from)
+}
+
+/// How `head` differs from `base`: the commits only `head` has (up to 200), how many only `base` has, and where they
+/// split, for the files changed since.
+#[tauri::command]
+pub async fn compare_refs(repo: String, base: String, head: String) -> Result<Comparison, String> {
+    let head_hash =
+        trimmed(git(&repo, ["rev-parse", "--verify", "-q", &format!("{head}^{{commit}}")])).ok_or_else(|| format!("{head} doesn't exist"))?;
+    trimmed(git(&repo, ["rev-parse", "--verify", "-q", &format!("{base}^{{commit}}")])).ok_or_else(|| format!("{base} doesn't exist"))?;
+    let merge_base = trimmed(git(&repo, ["merge-base", base.as_str(), head_hash.as_str()]));
+    let ahead = parse_commits(&git(
+        &repo,
+        ["log", "--max-count=200", COMMIT_FORMAT, &format!("{base}..{head_hash}"), "--"],
+    )?);
+    let behind = trimmed(git(&repo, ["rev-list", "--count", &format!("{head_hash}..{base}")]))
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(0);
+    Ok(Comparison {
+        merge_base,
+        ahead,
+        behind,
+        head_hash: Some(head_hash),
+    })
+}
+
 /// Parses the summary line of `--shortstat`, e.g. " 3 files changed, 10 insertions(+), 2 deletions(-)".
 fn parse_shortstat(line: &str) -> Stat {
     let mut stat = Stat::default();
@@ -802,6 +854,31 @@ mod tests {
         sh(&["merge", "-q", "--no-ff", "feature", "-m", "merge"]);
         std::fs::write(dir.join("new.txt"), "x\n").unwrap();
         path
+    }
+
+    #[test]
+    fn compares_two_branches() {
+        let dir = std::env::temp_dir().join(format!("acantha-compare-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let repo = dir.to_string_lossy().into_owned();
+        let commit = |m: &str| git(&repo, ["-c", "user.name=T", "-c", "user.email=t@t", "commit", "-qm", m, "--allow-empty"]).unwrap();
+        git(&repo, ["init", "-q", "-b", "main"]).unwrap();
+        commit("first");
+        git(&repo, ["checkout", "-qb", "feature"]).unwrap();
+        commit("a");
+        commit("b");
+        git(&repo, ["checkout", "-q", "main"]).unwrap();
+        commit("on main");
+        let c = block_on(compare_refs(repo.clone(), "main".into(), "feature".into())).unwrap();
+        assert_eq!((c.ahead.len(), c.behind), (2, 1));
+        assert_eq!(c.ahead[0].subject, "b");
+        let c = block_on(compare_refs(repo.clone(), "feature".into(), "main".into())).unwrap();
+        assert_eq!((c.ahead.len(), c.behind), (1, 2));
+        assert!(c.merge_base.is_some());
+        assert!(block_on(compare_refs(repo.clone(), "nope".into(), "main".into())).is_err());
+        assert_eq!(block_on(default_branch(repo)).as_deref(), Some("main"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

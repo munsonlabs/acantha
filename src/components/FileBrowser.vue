@@ -239,6 +239,9 @@ function rowMenu(e: MouseEvent, r: Row) {
       ? [
           { label: 'Edit', icon: 'pencil' as const, run: () => open(r.path, 'edit') },
           { label: 'Preview', icon: 'eye' as const, run: () => open(r.path, 'preview') },
+          ...(/\.(md|markdown|mdx)$/i.test(r.path)
+            ? [{ label: 'Preview in Panel', icon: 'eye' as const, run: () => ws.panel.addMarkdown(r.path) }]
+            : []),
           'separator' as const,
           ...changeItems(r),
         ]

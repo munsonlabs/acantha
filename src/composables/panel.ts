@@ -10,12 +10,19 @@ export interface Todo {
   done: boolean
 }
 
-/** A tab in the panel under the terminal: a Slack message or canvas, or a to-do list. */
+/** A tab in the panel under the terminal. */
 export type PanelTab =
   | { id: string; kind: 'slack'; url: string; title?: string }
   | { id: string; kind: 'todos'; title: string; items: Todo[] }
   | { id: string; kind: 'notes'; title: string; text: string }
   | { id: string; kind: 'scripts'; title: string }
+  /** Two branches side by side. null base: the repository's main branch; null head: the one checked out. */
+  | { id: string; kind: 'compare'; title: string; base: string | null; head: string | null; uncommitted: boolean }
+  | { id: string; kind: 'github'; title: string }
+  /** A Markdown file from the repository, rendered, following its edits. */
+  | { id: string; kind: 'markdown'; title: string; path: string }
+  /** A package's README, from node_modules or npm. */
+  | { id: string; kind: 'readme'; title: string; pkg: string }
 
 interface PanelState {
   tabs: PanelTab[]
@@ -84,6 +91,46 @@ export function createPanel({ repo }: Repo) {
     reveal()
   }
 
+  /** Shows the first tab that `match`es, or adds `make()` when there's none. */
+  function showOrAdd(match: (t: PanelTab) => boolean, make: (id: string) => PanelTab) {
+    const existing = tabs.value.find(match)
+    const id = existing?.id ?? newId()
+    update((s) => {
+      if (!existing) s.tabs.push(make(id))
+      s.active = id
+    })
+    reveal()
+  }
+
+  const addCompare = () =>
+    showOrAdd(
+      () => false,
+      (id) => ({ id, kind: 'compare', title: 'Compare', base: null, head: null, uncommitted: false }),
+    )
+  const addGithub = () =>
+    showOrAdd(
+      (t) => t.kind === 'github',
+      (id) => ({ id, kind: 'github', title: 'GitHub' }),
+    )
+  const addMarkdown = (path: string) =>
+    showOrAdd(
+      (t) => t.kind === 'markdown' && t.path === path,
+      (id) => ({ id, kind: 'markdown', title: path.split('/').pop() ?? path, path }),
+    )
+  const addReadme = (pkg: string) =>
+    showOrAdd(
+      (t) => t.kind === 'readme' && t.pkg === pkg,
+      (id) => ({ id, kind: 'readme', title: pkg, pkg }),
+    )
+
+  /** Changes a compare tab's branches or options. */
+  function setCompare(id: string, change: Partial<{ base: string | null; head: string | null; uncommitted: boolean }>) {
+    update((s) => {
+      const t = s.tabs.find((x) => x.id === id)
+      if (t?.kind === 'compare') Object.assign(t, change)
+    })
+  }
+
   /** A Markdown notepad. */
   function addNotes(title = 'Notes') {
     const id = newId()
@@ -149,7 +196,26 @@ export function createPanel({ repo }: Repo) {
     clearDone: (id: string) => editList(id, (items) => items.filter((x) => !x.done)),
   }
 
-  return { tabs, active, expanded, activate, addSlack, addTodos, addNotes, setNotes, addScripts, close, move, rename, list }
+  return {
+    tabs,
+    active,
+    expanded,
+    activate,
+    addSlack,
+    addTodos,
+    addNotes,
+    setNotes,
+    addScripts,
+    addCompare,
+    setCompare,
+    addGithub,
+    addMarkdown,
+    addReadme,
+    close,
+    move,
+    rename,
+    list,
+  }
 }
 
 export type Panel = ReturnType<typeof createPanel>

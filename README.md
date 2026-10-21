@@ -29,7 +29,7 @@ Built with Tauri 2, Rust and Vue 3.
 - A terminal pane next to each graph, with its own tabs, starting in the repository (`portable-pty` + xterm.js). ⌘-click a file path in the output (`src/x.ts:42:7`) to open it in the editor at that line
 - A file browser for the working tree or any commit, with highlighted code, rendered Markdown, images, blame and file history
 - Search in files (⇧⌘F): file names, contents or both, through `git grep`, with match case, regular expressions and a filter for file types or folders (`ts, src/, !*.lock`)
-- A tabbed panel under the terminal for Slack messages and canvases (see [Slack](#slack)) and to-do lists: paste a bulleted list anywhere to turn it into to-dos. Tabs are kept per repository
+- A tabbed panel under the terminal for Slack messages and canvases (see [Slack](#slack)) and to-do lists: paste a bulleted list anywhere to turn it into to-dos. Tabs are kept per repository. Also in the panel: notes, scripts, two branches compared (commits and changed files), GitHub (the branch's pull request and checks, Actions runs and open pull requests, through the `gh` CLI), a live Markdown preview of a repository file, and any npm package's README
 - A small editor (CodeMirror, optional Vim keys) for working-tree files: ⌘S to save, Save & Stage, a warning before losing unsaved changes or overwriting edits made elsewhere, and Open in VS Code, Cursor, Zed or another app
 - Branch filter: show any set of branches, or all of them; stashes in the graph, which can be hidden
 - A merge conflict resolver (accept current, incoming or both per conflict, or edit it by hand) with Continue/Abort for merges, rebases and cherry-picks

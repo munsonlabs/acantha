@@ -2,7 +2,9 @@
 
 mod files;
 mod git;
+mod github;
 mod menu;
+mod packages;
 mod pty;
 mod rebase;
 mod scripts;
@@ -61,6 +63,10 @@ fn main() {
             git::get_status,
             git::get_status_diff,
             git::apply_patch,
+            git::default_branch,
+            git::compare_refs,
+            github::run_gh,
+            packages::package_readme,
             git::get_stats,
             git::head_state,
             git::rev_parse,

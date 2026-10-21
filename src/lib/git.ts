@@ -45,6 +45,22 @@ export interface Log {
   worktrees: Worktree[]
 }
 
+export interface Comparison {
+  mergeBase: string | null
+  /** Commits only the head has, newest first (up to 200). */
+  ahead: Commit[]
+  /** How many commits only the base has. */
+  behind: number
+  headHash: string | null
+}
+
+export interface PackageReadme {
+  name: string
+  version: string | null
+  source: 'installed' | 'npm'
+  text: string
+}
+
 export interface Worktree {
   path: string
   head: string | null
@@ -167,6 +183,11 @@ export const git = {
   revParse: (repo: string, rev: string) => invoke<string | null>('rev_parse', { repo, rev }),
   backupFiles: (repo: string, paths: string[]) => invoke<string>('backup_files', { repo, paths }),
   restoreFiles: (repo: string, backup: string) => invoke<void>('restore_files', { repo, backup }),
+  /** The repository's main branch (`origin/HEAD`, else `main` or `master`). */
+  defaultBranch: (repo: string) => invoke<string | null>('default_branch', { repo }),
+  /** How `head` differs from `base`: its own commits, how far behind it is, and where the two split. */
+  compare: (repo: string, base: string, head: string) => invoke<Comparison>('compare_refs', { repo, base, head }),
+  packageReadme: (repo: string, name: string) => invoke<PackageReadme>('package_readme', { repo, name }),
   /** Applies a patch of some lines to the index (`cached`) or the working tree; `reverse` takes them back out. */
   applyPatch: (repo: string, patch: string, cached: boolean, reverse: boolean) => invoke<void>('apply_patch', { repo, patch, cached, reverse }),
   /** Watches a repository for changes made outside the app. "git" means commits, branches or the index changed. */
