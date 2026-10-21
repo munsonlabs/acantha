@@ -23,9 +23,27 @@ const width = prefs.terminalWidth
 const sidebarWidth = prefs.sidebarWidth
 const sidebarOpen = prefs.sidebarOpen
 
-/** The terminal is sized as a share of the workspace, worked out in pixels so it keeps its width while sliding. */
+/**
+ * The terminal is sized as a share of the workspace, worked out in pixels so it keeps its width while sliding. The two
+ * side columns share what's left once the graph has its minimum width (`.center`), so neither dragging a gutter nor
+ * narrowing the window pushes anything off screen: the terminal gives way first, then the sidebar.
+ */
 const workspaceWidth = ref(0)
-const terminalPx = computed(() => Math.max(280, Math.round(workspaceWidth.value * width.value)))
+const CENTER_MIN = 320
+const GUTTER = 10
+const SIDEBAR_MIN = 220
+const TERMINAL_MIN = 280
+/** Room for the side columns and their gutters. */
+const room = computed(() => workspaceWidth.value - CENTER_MIN)
+const sidebarPx = computed(() =>
+  Math.max(SIDEBAR_MIN, Math.min(sidebarWidth.value, room.value - GUTTER - (rightOpen.value ? TERMINAL_MIN + GUTTER : 0))),
+)
+const terminalPx = computed(() =>
+  Math.max(
+    TERMINAL_MIN,
+    Math.min(Math.round(workspaceWidth.value * width.value), room.value - GUTTER - (sidebarOpen.value ? sidebarPx.value + GUTTER : 0)),
+  ),
+)
 const observer = new ResizeObserver(([entry]) => (workspaceWidth.value = entry.contentRect.width))
 onMounted(() => el.value && observer.observe(el.value))
 onBeforeUnmount(() => observer.disconnect())
@@ -188,12 +206,21 @@ function startSplit(e: MouseEvent) {
   e.preventDefault()
 }
 
-/** Drags a gutter: the sidebar is sized in pixels from the left, the terminal as a fraction from the right. */
+/**
+ * Drags a gutter: the sidebar is sized in pixels from the left, the terminal as a fraction from the right. Each stops
+ * where the graph would get narrower than its minimum, with the other column where it is.
+ */
 function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
   const box = el.value!.getBoundingClientRect()
   const move = (ev: MouseEvent) => {
-    if (side === 'sidebar') sidebarWidth.value = Math.min(Math.max(ev.clientX - box.left - 8, 220), 520)
-    else width.value = Math.min(Math.max((box.right - ev.clientX) / box.width, 0.2), 0.8)
+    if (side === 'sidebar') {
+      const most = Math.min(520, room.value - GUTTER - (rightOpen.value ? terminalPx.value + GUTTER : 0))
+      sidebarWidth.value = Math.max(SIDEBAR_MIN, Math.min(ev.clientX - box.left - 8, most))
+    } else {
+      const most = room.value - GUTTER - (sidebarOpen.value ? sidebarPx.value + GUTTER : 0)
+      const px = Math.max(TERMINAL_MIN, Math.min(box.right - 10 - ev.clientX, most))
+      width.value = Math.min(Math.max(px / workspaceWidth.value, 0.2), 0.8)
+    }
   }
   const up = () => {
     window.removeEventListener('mousemove', move)
@@ -221,13 +248,13 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
         peek: peek === 'sidebar',
         leaving: peek === 'sidebar' && leaving,
       }"
-      :style="{ width: sidebarOpen ? `${sidebarWidth + 10}px` : peek === 'sidebar' ? `${sidebarWidth}px` : '0px' }"
+      :style="{ width: sidebarOpen ? `${sidebarPx + 10}px` : peek === 'sidebar' ? `${sidebarPx}px` : '0px' }"
       @transitionend.self="doneSliding"
       @animationend="peekDone"
       @mouseenter="peek && peekEnter()"
       @mouseleave="peek && peekLeave()"
     >
-      <Sidebar class="sidebar" :style="{ width: `${sidebarWidth}px` }" />
+      <Sidebar class="sidebar" :style="{ width: `${sidebarPx}px` }" />
       <div class="gutter" @mousedown="startResize($event, 'sidebar')" />
     </div>
     <!--
