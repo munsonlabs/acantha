@@ -62,8 +62,32 @@ const fitNow = () => {
 }
 const updateTheme = () => term && (term.options.theme = theme())
 
+/**
+ * The WebGL renderer draws each letter once into a texture and reuses it. Letters drawn while a font was still
+ * loading, or before the display's scale changed (another screen, waking from sleep), stay slightly off, so the text
+ * looks wobbly until something redraws it, like selecting it. Those times, the texture is thrown away and redrawn.
+ */
+const redraw = () => {
+  if (!term) return
+  term.clearTextureAtlas()
+  term.refresh(0, term.rows - 1)
+}
+const onVisible = () => document.visibilityState === 'visible' && redraw()
+let scale: MediaQueryList | null = null
+function watchScale() {
+  scale?.removeEventListener('change', onScale)
+  scale = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)
+  scale.addEventListener('change', onScale)
+}
+function onScale() {
+  redraw()
+  watchScale()
+}
+
 onMounted(async () => {
-  await document.fonts.load('13px "JetBrains Mono"').catch(() => {})
+  // Both weights: bold drawn in a stand-in font until JetBrains Mono's arrives looks out of line.
+  const size = prefs.terminalFontSize.value
+  await Promise.all([document.fonts.load(`${size}px "JetBrains Mono"`), document.fonts.load(`bold ${size}px "JetBrains Mono"`)]).catch(() => {})
   if (disposed) return
 
   term = new Terminal({
@@ -124,6 +148,10 @@ onMounted(async () => {
   observer.observe(el.value!)
   window.addEventListener('panel-resize-end', fitNow)
   scheme.addEventListener('change', updateTheme)
+  document.fonts.addEventListener('loadingdone', redraw)
+  document.addEventListener('visibilitychange', onVisible)
+  window.addEventListener('focus', redraw)
+  watchScale()
   if (props.active) term.focus()
 })
 
@@ -132,6 +160,7 @@ watch(prefs.terminalScrollback, (lines) => term && (term.options.scrollback = li
 watch(prefs.terminalFontSize, (size) => {
   if (!term) return
   term.options.fontSize = size
+  redraw()
   fitNow()
 })
 
@@ -141,6 +170,7 @@ watch(
     if (!active) return
     await nextTick()
     fitNow()
+    redraw()
     term?.focus()
   },
 )
@@ -152,6 +182,10 @@ onBeforeUnmount(() => {
   clearTimeout(fitTimer)
   clearTimeout(ptyTimer)
   scheme.removeEventListener('change', updateTheme)
+  document.fonts.removeEventListener('loadingdone', redraw)
+  document.removeEventListener('visibilitychange', onVisible)
+  window.removeEventListener('focus', redraw)
+  scale?.removeEventListener('change', onScale)
   if (ptyId) void pty.kill(ptyId)
   term?.dispose()
 })
