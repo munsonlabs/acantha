@@ -193,16 +193,9 @@ const hide = () => (prefs.panelOpen.value = false)
       <div v-if="!current" class="empty">
         <Icon name="message" :size="22" />
         <p>Copy a Slack message or canvas link, or a bulleted list, then press <kbd>⌘V</kbd> anywhere outside a text box. A list becomes to-dos.</p>
-        <div class="actions">
-          <button class="ghost" @click="promptSlackLink(ws)"><Icon name="message" :size="12" /> Slack link… <kbd>⇧⌘L</kbd></button>
-          <button class="ghost" @click="addTodos('To-dos')"><Icon name="check" :size="12" /> To-do list</button>
-          <button class="ghost" @click="addNotes()"><Icon name="pencil" :size="12" /> Notes</button>
-          <button class="ghost" @click="addScripts()"><Icon name="play" :size="12" /> Scripts</button>
-          <button class="ghost" @click="addCompare()"><Icon name="merge" :size="12" /> Compare branches</button>
-          <button class="ghost" @click="addGithub()"><Icon name="cloud" :size="12" /> GitHub</button>
-          <button class="ghost" @click="pickMarkdown"><Icon name="eye" :size="12" /> Markdown preview</button>
-          <button class="ghost" @click="pickPackage"><Icon name="archive" :size="12" /> Package README</button>
-        </div>
+        <p>
+          Or press <span class="plus"><Icon name="plus" :size="11" /></span> above for any other kind of tab.
+        </p>
       </div>
       <SlackView
         v-else-if="current.kind === 'slack'"
@@ -261,7 +254,8 @@ const hide = () => (prefs.panelOpen.value = false)
 }
 .empty {
   display: flex;
-  flex: none;
+  flex: 1;
+  justify-content: center;
   flex-direction: column;
   align-items: center;
   gap: 10px;
@@ -274,22 +268,21 @@ const hide = () => (prefs.panelOpen.value = false)
   max-width: 300px;
   margin: 0;
 }
-/* One button per row, all the same width. */
-.actions {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
-  width: min(220px, 100%);
-}
-.actions button {
-  display: flex;
+.plus {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
   align-items: center;
-  gap: 8px;
-  height: 28px;
-  padding: 0 10px;
+  justify-content: center;
+  margin: 0 1px;
+  border-radius: 4px;
+  background: var(--pill);
+  color: var(--fg-muted);
+  /* The middle of the text line, not its baseline; a pixel up for the x-height. */
+  vertical-align: middle;
+  transform: translateY(-1px);
 }
-.actions button kbd {
-  margin-left: auto;
+.plus :deep(svg) {
+  display: block;
 }
 </style>
