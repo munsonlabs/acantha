@@ -75,6 +75,8 @@ fn main() {
             scripts::list_scripts,
             files::list_files,
             files::list_new_folders,
+            files::list_ignored,
+            files::list_dir,
             files::read_file,
             files::write_file,
             files::create_file,

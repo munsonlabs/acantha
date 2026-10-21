@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { git } from '@/lib/git'
 import { resolveName } from '@/lib/paths'
 import { shortHash } from '@/lib/format'
+import { prefs } from '@/composables/prefs'
 import { useWorkspace } from '@/composables/workspace'
 import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
@@ -30,19 +31,63 @@ interface Row {
   path: string
   name: string
   depth: number
+  /** Left out by .gitignore: shown dimmed, when asked for. */
+  ignored?: boolean
 }
+
+/**
+ * What .gitignore leaves out, while "Show ignored files" is on: the top-level entries git reports (an ignored folder is
+ * one entry, `node_modules/`), and the contents of each ignored folder that's been opened, read a level at a time so a
+ * huge one costs nothing until you look inside.
+ */
+const showIgnored = computed(() => prefs.showIgnored.value && rev.value === null)
+const ignoredTop = shallowRef<string[]>([])
+const ignoredInside = shallowRef(new Map<string, string[]>())
+/** The ignored entries themselves, folders without their slash: everything at or under one is ignored. */
+const ignoredRoots = computed(() => ignoredTop.value.map((p) => p.replace(/\/$/, '')))
+const isIgnored = (path: string) => showIgnored.value && ignoredRoots.value.some((r) => path === r || path.startsWith(`${r}/`))
+
+async function loadIgnored() {
+  const root = ws.repo.repo.value
+  ignoredInside.value = new Map()
+  if (!showIgnored.value || !root) return void (ignoredTop.value = [])
+  ignoredTop.value = await git.listIgnored(root).catch(() => [])
+  await openIgnored()
+}
+
+/** Reads every opened ignored folder that hasn't been read yet. */
+async function openIgnored() {
+  const root = ws.repo.repo.value
+  if (!showIgnored.value || !root) return
+  const wanted = [...expanded.value].filter((p) => isIgnored(p) && !ignoredInside.value.has(p))
+  if (!wanted.length) return
+  const read = await Promise.all(wanted.map((p) => git.listDir(root, p).catch(() => [] as string[])))
+  const next = new Map(ignoredInside.value)
+  wanted.forEach((p, i) => next.set(p, read[i]))
+  ignoredInside.value = next
+}
+
+watch(showIgnored, () => void loadIgnored(), { immediate: true })
+// The listing was refreshed (files came or went), and folders opened.
+watch(list, () => showIgnored.value && void loadIgnored())
+watch(expanded, () => void openIgnored())
 
 const tree = computed(() => {
   const root: Dir = { dirs: new Map(), files: [] }
-  for (const path of list.value) {
-    const parts = path.split('/')
+  const folder = (path: string) => {
     let dir = root
-    for (const part of parts.slice(0, -1)) {
+    for (const part of path.split('/').filter(Boolean)) {
       let next = dir.dirs.get(part)
       if (!next) dir.dirs.set(part, (next = { dirs: new Map(), files: [] }))
       dir = next
     }
-    dir.files.push(path)
+    return dir
+  }
+  const file = (path: string) => folder(path.split('/').slice(0, -1).join('/')).files.push(path)
+  for (const path of list.value) file(path)
+  if (showIgnored.value) {
+    for (const p of ignoredTop.value) void (p.endsWith('/') ? folder(p) : file(p))
+    for (const [dir, names] of ignoredInside.value) for (const n of names) void (n.endsWith('/') ? folder(`${dir}/${n}`) : file(`${dir}/${n}`))
   }
   // Folders git can't list through their files: new and empty ones, from git and made here.
   if (rev.value === null)
@@ -208,10 +253,11 @@ const visible = computed<Row[]>(() => {
   const walk = (dir: Dir, prefix: string, depth: number) => {
     for (const name of [...dir.dirs.keys()].sort((a, b) => a.localeCompare(b))) {
       const path = prefix + name
-      out.push({ kind: 'dir', path, name, depth })
+      out.push({ kind: 'dir', path, name, depth, ignored: isIgnored(path) })
       if (expanded.value.has(path)) walk(dir.dirs.get(name)!, `${path}/`, depth + 1)
     }
-    for (const path of [...dir.files].sort((a, b) => a.localeCompare(b))) out.push({ kind: 'file', path, name: path.slice(prefix.length), depth })
+    for (const path of [...dir.files].sort((a, b) => a.localeCompare(b)))
+      out.push({ kind: 'file', path, name: path.slice(prefix.length), depth, ignored: isIgnored(path) })
   }
   walk(tree.value, '', 0)
   // The row a new file or folder is named in: first inside its folder (or at the top).
@@ -274,6 +320,15 @@ watch(status, (now, before) => {
       <div class="spacer" />
       <button v-if="rev" class="ghost icon-btn" title="Back to the working tree" @click="browse(null)"><Icon name="x" /></button>
       <button v-if="working" class="ghost icon-btn" title="New file or folder" @click="rootMenu"><Icon name="plus" /></button>
+      <button
+        v-if="working"
+        class="ghost icon-btn"
+        :class="{ on: prefs.showIgnored.value }"
+        :title="prefs.showIgnored.value ? 'Hide ignored files' : 'Show ignored files (node_modules, build output…)'"
+        @click="prefs.showIgnored.value = !prefs.showIgnored.value"
+      >
+        <Icon name="eye" />
+      </button>
       <button class="ghost icon-btn" title="Refresh" @click="load"><Icon name="refresh" /></button>
     </header>
     <div class="filter">
@@ -286,7 +341,10 @@ watch(status, (now, before) => {
       <template v-for="r in visible" :key="r.path">
         <div
           class="row"
-          :class="[r.kind, { active: r.kind === 'file' && preview?.path === r.path && preview?.rev === rev, editing: isEditing(r) }]"
+          :class="[
+            r.kind,
+            { active: r.kind === 'file' && preview?.path === r.path && preview?.rev === rev, editing: isEditing(r), ignored: r.ignored },
+          ]"
           :style="{ paddingLeft: `${(r.kind === 'dir' ? 8 : 24) + r.depth * 14}px` }"
           :title="r.kind === 'new' ? undefined : r.path"
           @click="isEditing(r) || r.kind === 'new' ? undefined : r.kind === 'dir' ? toggle(r.path) : open(r.path)"
@@ -435,5 +493,11 @@ watch(status, (now, before) => {
   margin: 12px 8px;
   color: var(--fg-faint);
   font-size: 12px;
+}
+.row.ignored {
+  opacity: 0.5;
+}
+.icon-btn.on {
+  color: var(--accent);
 }
 </style>

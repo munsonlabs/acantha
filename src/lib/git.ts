@@ -202,6 +202,10 @@ export const git = {
   listFiles: (repo: string, rev: string | null) => invoke<string[]>('list_files', { repo, rev }),
   /** New folders in the working tree, empty ones included. */
   listNewFolders: (repo: string) => invoke<string[]>('list_new_folders', { repo }),
+  /** What .gitignore leaves out; an ignored folder is one entry ending in a slash. */
+  listIgnored: (repo: string) => invoke<string[]>('list_ignored', { repo }),
+  /** One folder's names, folders ending in a slash. */
+  listDir: (repo: string, dir: string) => invoke<string[]>('list_dir', { repo, dir }),
   readFile: (repo: string, rev: string | null, path: string) => invoke<FileContent>('read_file', { repo, rev, path }),
   searchFiles: (repo: string, rev: string | null, query: string, regex: boolean, caseSensitive: boolean, paths: string[]) =>
     invoke<SearchResults>('search_files', { repo, rev, query, regex, caseSensitive, paths }),

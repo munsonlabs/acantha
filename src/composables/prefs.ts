@@ -20,6 +20,8 @@ export const prefs = {
   dimIdleGraph: usePersisted('dim-idle-graph', false),
   /** The graph folded away, its place showing Acantha's mark, for more room around the terminal and panels. */
   graphCollapsed: usePersisted('graph-collapsed', false),
+  /** The file browser also lists what .gitignore leaves out (node_modules, build output), dimmed. */
+  showIgnored: usePersisted('show-ignored', false),
   /** Slack channel IDs whose messages and canvases may be opened. Empty allows any the token can see. */
   slackChannels: usePersisted<string[]>('slack-channels', []),
   /** The panel under the terminal (Slack and to-do tabs), and its share of that column's height when both show. */

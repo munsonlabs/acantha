@@ -120,6 +120,37 @@ pub async fn list_new_folders(repo: String) -> Result<Vec<String>, String> {
         .collect())
 }
 
+/// What `.gitignore` keeps out of the listing, for showing it on request: an ignored folder comes back as one entry
+/// with a trailing slash (`node_modules/`), however much is in it.
+#[tauri::command]
+pub async fn list_ignored(repo: String) -> Result<Vec<String>, String> {
+    let out = git(&repo, ["ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory"])?;
+    Ok(out.split('\0').filter(|p| !p.is_empty()).map(String::from).collect())
+}
+
+/// The names in one folder of the working tree, folders with a trailing slash, for opening an ignored folder a level
+/// at a time. At most 5000, so a huge folder can't stall the app.
+#[tauri::command]
+pub async fn list_dir(repo: String, dir: String) -> Result<Vec<String>, String> {
+    let path = worktree_path(&repo, &dir)?;
+    let mut names: Vec<String> = std::fs::read_dir(&path)
+        .map_err(|e| format!("{dir}: {e}"))?
+        .filter_map(Result::ok)
+        .take(5000)
+        .map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            // Symlinked folders (pnpm's node_modules) open like real ones.
+            if e.path().is_dir() {
+                format!("{name}/")
+            } else {
+                name
+            }
+        })
+        .collect();
+    names.sort();
+    Ok(names)
+}
+
 #[tauri::command]
 pub async fn read_file(repo: String, rev: Option<String>, path: String) -> Result<FileContent, String> {
     let bytes = match rev {
@@ -447,6 +478,24 @@ pub async fn blame_file(repo: String, rev: Option<String>, path: String) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lists_ignored_files_and_their_folders() {
+        let dir = std::env::temp_dir().join(format!("acantha-ignored-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("node_modules/pkg/lib")).unwrap();
+        let repo = dir.to_string_lossy().into_owned();
+        git(&repo, ["init", "-q"]).unwrap();
+        std::fs::write(dir.join(".gitignore"), "node_modules/\n*.log\n").unwrap();
+        std::fs::write(dir.join("node_modules/pkg/index.js"), "").unwrap();
+        std::fs::write(dir.join("debug.log"), "").unwrap();
+        let ignored = tauri::async_runtime::block_on(list_ignored(repo.clone())).unwrap();
+        assert_eq!(ignored, vec!["debug.log", "node_modules/"]);
+        let inside = tauri::async_runtime::block_on(list_dir(repo.clone(), "node_modules/pkg".into())).unwrap();
+        assert_eq!(inside, vec!["index.js", "lib/"]);
+        assert!(tauri::async_runtime::block_on(list_dir(repo, "../..".into())).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn parses_porcelain_blame() {
