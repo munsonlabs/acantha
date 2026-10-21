@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
 /** Pull requests, checks and Actions runs, through the GitHub CLI (`gh`); see `src-tauri/src/github.rs`. */
@@ -67,6 +68,9 @@ export function overall(checks: Check[]): CheckState | null {
   if (counted.some((c) => c.state === 'pending')) return 'pending'
   return 'pass'
 }
+
+/** How many Actions runs are going, by repository, for the GitHub tab's label. */
+export const runningRuns = ref<Record<string, number>>({})
 
 const PR_FIELDS = 'number,title,url,author,isDraft,state,headRefName,baseRefName,reviewDecision,statusCheckRollup'
 

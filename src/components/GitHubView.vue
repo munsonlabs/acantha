@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { openUrl } from '@tauri-apps/plugin-opener'
-import { github, overall, type CheckState, type PullRequest, type Run } from '@/lib/github'
+import { github, overall, runningRuns, type CheckState, type PullRequest, type Run } from '@/lib/github'
 import { showToast } from '@/composables/useToast'
 import { useWorkspace } from '@/composables/workspace'
 import Icon from './Icon.vue'
@@ -11,8 +11,11 @@ import Skeleton from './Skeleton.vue'
  * GitHub for this repository, through the GitHub CLI: the checked-out branch's pull request and its checks, recent
  * Actions runs, and the open pull requests. Everything opens on GitHub. Refreshes every minute while it's showing.
  */
+const props = defineProps<{ tabId: string }>()
 const ws = useWorkspace()
 const { repo, log } = ws.repo
+/** Kept alive after its tab closes, it has to notice and stop. */
+const closed = () => !ws.panel.tabs.value.some((t) => t.id === props.tabId)
 
 const pr = shallowRef<PullRequest | null>(null)
 const prs = shallowRef<PullRequest[]>([])
@@ -41,6 +44,7 @@ async function load() {
     pr.value = mine
     prs.value = open.filter((p) => p.number !== mine?.number)
     runs.value = recent
+    runningRuns.value = { ...runningRuns.value, [root]: recent.filter((r) => r.state === 'pending').length }
     error.value = null
   } catch (e) {
     if (id === seq) error.value = String(e)
@@ -52,12 +56,32 @@ async function load() {
   }
 }
 
-let timer: ReturnType<typeof setInterval> | undefined
-onMounted(() => {
-  void load()
-  timer = setInterval(() => document.visibilityState === 'visible' && void load(), 60_000)
+const running = computed(() => runs.value.filter((r) => r.state === 'pending').length)
+
+/**
+ * Checks again every minute, or every 15 seconds while a run is going so its end shows soon after. It carries on while
+ * another panel tab is showing (the panel keeps this tab alive), so the tab's running count stays true.
+ */
+let timer: ReturnType<typeof setTimeout> | undefined
+function schedule() {
+  clearTimeout(timer)
+  timer = setTimeout(
+    async () => {
+      if (closed()) return void (repo.value && (runningRuns.value = { ...runningRuns.value, [repo.value]: 0 }))
+      if (document.visibilityState === 'visible') await load()
+      schedule()
+    },
+    running.value ? 15_000 : 60_000,
+  )
+}
+onMounted(async () => {
+  await load()
+  schedule()
 })
-onBeforeUnmount(() => clearInterval(timer))
+onBeforeUnmount(() => {
+  clearTimeout(timer)
+  if (repo.value) runningRuns.value = { ...runningRuns.value, [repo.value]: 0 }
+})
 // A checkout or a push changes what's relevant.
 watch([branch, branchOnly, () => log.value?.head], () => void load())
 
@@ -127,7 +151,9 @@ const prState = (p: PullRequest) => overall(p.checks)
         <button class="ghost" @click="createPr"><Icon name="external" :size="12" /> Create one on GitHub</button>
       </div>
 
-      <h3>Actions</h3>
+      <h3>
+        Actions<span v-if="running" class="running"> · {{ running }} running</span>
+      </h3>
       <p v-if="!runs.length" class="none">No workflow runs{{ branchOnly && branch ? ` on ${branch}` : '' }}.</p>
       <ul>
         <li v-for="r in runs" :key="r.id" :title="`${r.workflow}: ${r.title}\n${r.event} on ${r.branch}`" @click="openUrl(r.url)">
@@ -310,6 +336,9 @@ li:hover {
 }
 .pill.good {
   color: var(--add);
+}
+.running {
+  color: var(--modify);
 }
 .none,
 .note {

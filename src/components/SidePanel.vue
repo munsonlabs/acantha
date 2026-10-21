@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { readText } from '@tauri-apps/plugin-clipboard-manager'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { git } from '@/lib/git'
+import { runningRuns } from '@/lib/github'
 import type { IconName } from '@/lib/icons'
 import { parseLines } from '@/lib/todos'
 import type { PanelTab } from '@/composables/panel'
@@ -32,6 +33,10 @@ const slackView = ref<InstanceType<typeof SlackView>>()
 
 const label = (t: PanelTab) => {
   if (t.kind === 'slack') return t.title ?? 'Slack'
+  if (t.kind === 'github') {
+    const n = runningRuns.value[ws.repo.repo.value ?? ''] ?? 0
+    return n ? `${t.title} (${n})` : t.title
+  }
   if (t.kind !== 'todos') return t.title
   const left = t.items.filter((i) => !i.done).length
   return left ? `${t.title} (${left})` : t.title
@@ -197,28 +202,31 @@ const hide = () => (prefs.panelOpen.value = false)
           Or press <span class="plus"><Icon name="plus" :size="11" /></span> above for any other kind of tab.
         </p>
       </div>
-      <SlackView
-        v-else-if="current.kind === 'slack'"
-        :key="current.id"
-        ref="slackView"
-        :tab-id="current.id"
-        :url="current.url"
-        :docked="props.docked"
-      />
-      <NotesView v-else-if="current.kind === 'notes'" :key="current.id" :tab-id="current.id" :text="current.text" />
-      <ScriptsView v-else-if="current.kind === 'scripts'" :key="current.id" />
-      <CompareView
-        v-else-if="current.kind === 'compare'"
-        :key="current.id"
-        :tab-id="current.id"
-        :base="current.base"
-        :head="current.head"
-        :uncommitted="current.uncommitted"
-      />
-      <GitHubView v-else-if="current.kind === 'github'" :key="current.id" />
-      <MarkdownPanel v-else-if="current.kind === 'markdown'" :key="current.id" :path="current.path" />
-      <MarkdownPanel v-else-if="current.kind === 'readme'" :key="current.id" :pkg="current.pkg" />
-      <TodoList v-else :key="current.id" :tab-id="current.id" :items="current.items" />
+      <!-- The GitHub tab stays alive behind the others, so it keeps checking on running Actions for its label. -->
+      <KeepAlive include="GitHubView">
+        <SlackView
+          v-if="current?.kind === 'slack'"
+          :key="current.id"
+          ref="slackView"
+          :tab-id="current.id"
+          :url="current.url"
+          :docked="props.docked"
+        />
+        <NotesView v-else-if="current?.kind === 'notes'" :key="current.id" :tab-id="current.id" :text="current.text" />
+        <ScriptsView v-else-if="current?.kind === 'scripts'" :key="current.id" />
+        <CompareView
+          v-else-if="current?.kind === 'compare'"
+          :key="current.id"
+          :tab-id="current.id"
+          :base="current.base"
+          :head="current.head"
+          :uncommitted="current.uncommitted"
+        />
+        <GitHubView v-else-if="current?.kind === 'github'" :key="current.id" :tab-id="current.id" />
+        <MarkdownPanel v-else-if="current?.kind === 'markdown'" :key="current.id" :path="current.path" />
+        <MarkdownPanel v-else-if="current?.kind === 'readme'" :key="current.id" :pkg="current.pkg" />
+        <TodoList v-else-if="current?.kind === 'todos'" :key="current.id" :tab-id="current.id" :items="current.items" />
+      </KeepAlive>
     </div>
   </section>
 </template>
