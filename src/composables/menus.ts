@@ -3,7 +3,7 @@ import { shortHash } from '@/lib/format'
 import { folderOpenItems } from './openers'
 import { ask, confirmAction, type DialogField } from './useDialog'
 import type { Repo } from './repo'
-import { showToast } from './useToast'
+import { hideToast, showToast } from './useToast'
 import type { MenuEntry, MenuItem } from './useContextMenu'
 
 async function copy(text: string, what: string) {
@@ -29,7 +29,7 @@ interface MenuActions {
 }
 
 export function createMenus(
-  { repo, log, rows, run, lastFetch, refsByHash, branches, setBranches }: Repo,
+  { repo, log, rows, run, reload, lastFetch, refsByHash, branches, setBranches }: Repo,
   { browse, rebaseFrom, openWorktree, closeWorktree }: MenuActions,
 ) {
   const currentBranch = () => log.value?.headBranch ?? null
@@ -98,7 +98,16 @@ export function createMenus(
       showToast(`${name} is checked out in ${folderName(elsewhere.path)}`)
       return openWorktree(elsewhere.path)
     }
-    const t = await git.tracking(repo.value!, name, against).catch(() => null)
+    const root = repo.value!
+    let t = await git.tracking(root, name, against).catch(() => null)
+    // Fetch the branch it tracks first, so "behind" means behind what's on the remote now.
+    const from = t && remotes().find((r) => t!.upstream.startsWith(`${r}/`))
+    if (t && from) {
+      showToast(`Checking ${t.upstream}…`, 'busy')
+      await git.action(root, ['fetch', from, t.upstream.slice(from.length + 1)]).catch(() => {})
+      t = await git.tracking(root, name, against).catch(() => null)
+      hideToast()
+    }
     let pull = false
     if (t?.behind) {
       const v = await ask({
@@ -109,7 +118,7 @@ export function createMenus(
         fields: t.ahead ? [] : [{ name: 'pull', label: `Bring it up to date with ${t.upstream} (fast-forward)`, type: 'checkbox', value: true }],
         confirm: 'Checkout',
       })
-      if (!v) return
+      if (!v) return void (from && reload())
       pull = !!v.pull
     }
     await run(
@@ -126,27 +135,81 @@ export function createMenus(
     )
   }
 
+  /**
+   * Checks out a remote branch. With no local branch of that name, it makes one tracking it. With one, there's no need
+   * for another: it's checked out, and the dialog says how it stands against the remote (fetched first, so that's
+   * current) and offers to pull it up to date there and then, as a fast-forward only.
+   */
   async function checkoutRemoteBranch(remote: string, name: string) {
-    const v = await ask({
-      title: 'Checkout Remote Branch',
-      message: hasLocalBranch(name)
-        ? `There's already a local \`${name}\`: it's checked out, and brought up to date with \`${remote}/${name}\` if it's behind. Or name a new branch.`
-        : `Create a local branch tracking \`${remote}/${name}\`.`,
-      fields: [{ name: 'name', label: 'Local branch name', value: name, required: true }],
-      confirm: 'Checkout',
-    })
-    if (!v) return
-    if (hasLocalBranch(v.name)) await checkoutBranch(v.name, `${remote}/${name}`)
-    else
-      await run(['checkout', '-b', v.name, '--track', `${remote}/${name}`], {
-        done: `Checked out ${v.name}`,
-        undo: { label: `checking out ${v.name}`, checkout: true },
+    const full = `${remote}/${name}`
+    const root = repo.value!
+    let local = name
+    if (hasLocalBranch(name)) {
+      showToast(`Checking ${full}…`, 'busy')
+      // What's on the remote now, so "behind" is true; offline, it goes on with what it last saw.
+      await git.action(root, ['fetch', remote, name]).catch(() => {})
+      const t = await git.tracking(root, name, full).catch(() => null)
+      hideToast()
+      const isCurrent = name === currentBranch()
+      const canPull = !!t?.behind && !t.ahead
+      const where = !t
+        ? ''
+        : t.behind && t.ahead
+          ? `It's ${commits(t.behind)} behind \`${full}\` and ${commits(t.ahead)} ahead, so it can't simply catch up: pull it from the Git panel to merge or rebase.`
+          : t.behind
+            ? `It's ${commits(t.behind)} behind \`${full}\`.`
+            : t.ahead
+              ? `It's ${commits(t.ahead)} ahead of \`${full}\`, with nothing new to pull.`
+              : `It's up to date with \`${full}\`.`
+      const v = await ask({
+        title: 'Checkout Remote Branch',
+        message: `You already have a local \`${name}\`${isCurrent ? ', checked out' : ''}. ${where}`,
+        fields: [
+          ...(canPull
+            ? [{ name: 'pull', label: `Pull: bring ${name} up to date with ${full} (fast-forward)`, type: 'checkbox' as const, value: true }]
+            : []),
+          { name: 'other', label: 'Or check it out as a new branch', placeholder: 'New branch name (optional)' },
+        ],
+        confirm: isCurrent ? (canPull ? 'Pull' : 'OK') : 'Checkout',
       })
+      if (!v) return void reload()
+      const other = String(v.other ?? '').trim()
+      if (other) local = other
+      else {
+        const commands = [...(isCurrent ? [] : [['checkout', name]]), ...(v.pull ? [['merge', '--ff-only', full]] : [])]
+        if (!commands.length) return void reload()
+        await run(commands, {
+          busy: v.pull ? 'Pulling…' : undefined,
+          done: v.pull ? `${isCurrent ? 'Pulled' : 'Checked out'} ${name}, up to date with ${full}` : `Checked out ${name}`,
+          undo: {
+            label: v.pull && isCurrent ? `pulling ${name}` : `checking out ${name}`,
+            ...(isCurrent ? { head: 'keep' as const } : { checkout: true as const }),
+          },
+        })
+      }
+    } else {
+      const v = await ask({
+        title: 'Checkout Remote Branch',
+        message: `Create a local branch tracking \`${full}\`.`,
+        fields: [{ name: 'name', label: 'Local branch name', value: name, required: true }],
+        confirm: 'Checkout',
+      })
+      if (!v) return
+      local = String(v.name).trim()
+    }
+    if (local !== name || !hasLocalBranch(name)) {
+      if (hasLocalBranch(local)) await checkoutBranch(local, full)
+      else
+        await run(['checkout', '-b', local, '--track', full], {
+          done: `Checked out ${local}`,
+          undo: { label: `checking out ${local}`, checkout: true },
+        })
+    }
     // Filtering on the remote branch: show the local one too, so what you just checked out stays in view.
-    const remoteRef = `refs/remotes/${remote}/${name}`
-    const localRef = `refs/heads/${v.name}`
+    const remoteRef = `refs/remotes/${full}`
+    const localRef = `refs/heads/${local}`
     const picked = branches.value
-    if (picked.includes(remoteRef) && !picked.includes(localRef) && hasLocalBranch(v.name)) await setBranches([...picked, localRef])
+    if (picked.includes(remoteRef) && !picked.includes(localRef) && hasLocalBranch(local)) await setBranches([...picked, localRef])
   }
 
   function commitMenu(c: Commit): MenuEntry[] {
