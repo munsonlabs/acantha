@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { basename } from '@/lib/format'
-import { useWorkspaces, type Workspace } from '@/composables/workspace'
+import { pathOf, useWorkspaces, type Workspace } from '@/composables/workspace'
+import { overlays } from '@/composables/commands'
 import { openMenu, type MenuEntry } from '@/composables/useContextMenu'
 import { folderOpenItems } from '@/composables/openers'
 import { ask } from '@/composables/useDialog'
@@ -11,7 +12,18 @@ import { freshTabColor, TAB_COLORS, tabColor } from '@/lib/tabColors'
 import { useSlidingPill, useTabDrag, useTabScroll } from '@/composables/tabs'
 import Icon from './Icon.vue'
 
-const { workspaces, activeId, active, activate, addWorkspace, closeWorkspace, closeOtherWorkspaces, moveWorkspace } = useWorkspaces()
+const {
+  workspaces,
+  activeId,
+  active,
+  activate,
+  addWorkspace,
+  closeWorkspace,
+  closeOtherWorkspaces,
+  moveWorkspace,
+  sleepWorkspace,
+  sleepOtherWorkspaces,
+} = useWorkspaces()
 const input = ref<HTMLInputElement>()
 const strip = ref<HTMLElement>()
 
@@ -24,13 +36,13 @@ const query = computed({
 })
 
 const label = (ws: Workspace) => {
-  const path = ws.repo.repo.value
+  const path = pathOf(ws)
   return path ? (prefs.tabNames.value[path] ?? basename(path)) : 'New Tab'
 }
 
 /** Names a repository's tab (kept for next time); left empty, it goes back to the folder's name. */
 async function renameTab(ws: Workspace) {
-  const path = ws.repo.repo.value
+  const path = pathOf(ws)
   if (!path) return
   const v = await ask({
     title: 'Rename Tab',
@@ -48,6 +60,24 @@ async function renameTab(ws: Workspace) {
 
 const pill = useSlidingPill(strip, () => [activeId.value, workspaces.value.map((w) => `${w.id}:${label(w)}:${w.repo.log.value?.headBranch ?? ''}`)])
 const { dragging, onPointerDown } = useTabDrag(strip, moveWorkspace)
+
+/** Too many tabs to see at once: the ▾ after them lists them all. */
+const overflowing = ref(false)
+const fits = new ResizeObserver(() => {
+  const el = strip.value
+  if (el) overflowing.value = el.scrollWidth > el.clientWidth + 1
+})
+watch(strip, (el) => el && fits.observe(el), { immediate: true })
+watch(
+  () => workspaces.value.length,
+  async () => {
+    await nextTick()
+    const el = strip.value
+    if (el) overflowing.value = el.scrollWidth > el.clientWidth + 1
+  },
+)
+onBeforeUnmount(() => fits.disconnect())
+const crowded = computed(() => overflowing.value || workspaces.value.length > 6)
 useTabScroll(strip, () => activeId.value)
 
 function onTabDown(e: PointerEvent, ws: Workspace, index: number) {
@@ -56,7 +86,7 @@ function onTabDown(e: PointerEvent, ws: Workspace, index: number) {
   onPointerDown(e, index)
 }
 
-const colorOf = (ws: Workspace) => tabColor(ws.repo.repo.value, prefs.tabColors.value)
+const colorOf = (ws: Workspace) => tabColor(pathOf(ws), prefs.tabColors.value)
 const activeColor = computed(() => {
   const ws = workspaces.value.find((w) => w.id === activeId.value)
   return ws ? colorOf(ws) : null
@@ -64,7 +94,7 @@ const activeColor = computed(() => {
 
 // A repository opened for the first time gets a colour no other open tab has, saved so it keeps it.
 watch(
-  () => workspaces.value.map((w) => w.repo.repo.value),
+  () => workspaces.value.map((w) => pathOf(w)),
   (paths) => {
     const picked = { ...prefs.tabColors.value }
     let changed = false
@@ -84,7 +114,7 @@ function pickColor(path: string, color: string | null) {
 }
 
 function tabMenu(e: MouseEvent, ws: Workspace) {
-  const path = ws.repo.repo.value
+  const path = pathOf(ws)
   const items: MenuEntry[] = []
   if (path) {
     items.push(
@@ -101,6 +131,14 @@ function tabMenu(e: MouseEvent, ws: Workspace) {
   items.push({ label: 'New Tab', icon: 'plus', shortcut: '⌘T', run: () => addWorkspace() })
   if (path) items.push('separator', ...folderOpenItems(path, () => ws.terminals.add()))
   items.push(
+    'separator',
+    {
+      label: 'Put to Sleep',
+      icon: 'moon',
+      disabled: !ws.repo.repo.value || ws.id === activeId.value,
+      run: () => sleepWorkspace(ws.id),
+    },
+    { label: 'Put Other Tabs to Sleep', icon: 'moon', disabled: workspaces.value.length < 2, run: () => sleepOtherWorkspaces(ws.id) },
     'separator',
     { label: 'Close Tab', icon: 'x', shortcut: '⌘W', run: () => closeWorkspace(ws.id) },
     { label: 'Close Other Tabs', icon: 'x', disabled: workspaces.value.length < 2, run: () => closeOtherWorkspaces(ws.id) },
@@ -143,16 +181,17 @@ defineExpose({ focusSearch: () => input.value?.select() })
         v-for="(ws, i) in workspaces"
         :key="ws.id"
         class="tab"
-        :class="{ active: ws.id === activeId, dragging: dragging === i }"
-        :title="ws.repo.repo.value ?? undefined"
+        :class="{ active: ws.id === activeId, dragging: dragging === i, asleep: !!ws.sleeping.value }"
+        :title="ws.sleeping.value ? `${ws.sleeping.value} (asleep: click to open)` : (ws.repo.repo.value ?? undefined)"
         @pointerdown="onTabDown($event, ws, i)"
         @auxclick.middle="closeWorkspace(ws.id)"
         @contextmenu.prevent="tabMenu($event, ws)"
         @dblclick="renameTab(ws)"
       >
         <span v-if="colorOf(ws)" class="dot" :style="{ background: colorOf(ws)! }" />
-        <Icon v-else :name="ws.repo.repo.value ? 'history' : 'folder'" :size="13" />
+        <Icon v-else :name="pathOf(ws) ? 'history' : 'folder'" :size="13" />
         <span class="name">{{ label(ws) }}</span>
+        <Icon v-if="ws.sleeping.value" name="moon" :size="10" class="zz" />
         <span v-if="ws.repo.log.value?.headBranch" class="branch">· {{ ws.repo.log.value.headBranch }}</span>
         <span
           v-if="ws.status.status.value?.behind"
@@ -164,6 +203,9 @@ defineExpose({ focusSearch: () => input.value?.select() })
       </div>
       <button class="ghost icon-btn" title="New Tab (⌘T)" @click="addWorkspace()"><Icon name="plus" /></button>
     </div>
+    <button v-if="crowded" class="ghost icon-btn all-tabs" :title="`All ${workspaces.length} tabs`" @click="overlays.tabList.value = true">
+      <Icon name="chevron" :size="12" class="down" />
+    </button>
     <label v-if="active?.repo.repo.value" class="search">
       <Icon name="search" :size="13" />
       <input ref="input" v-model="query" type="text" placeholder="Search commits (⌘F)" spellcheck="false" autocomplete="off" @keydown="onSearchKey" />
@@ -253,5 +295,20 @@ defineExpose({ focusSearch: () => input.value?.select() })
 }
 .count {
   font: 11px var(--mono);
+}
+.tab.asleep .name,
+.tab.asleep .dot {
+  opacity: 0.5;
+}
+.zz {
+  flex: none;
+  color: var(--fg-faint);
+}
+.all-tabs {
+  flex: none;
+  margin-left: -8px;
+}
+.all-tabs .down {
+  transform: rotate(90deg);
 }
 </style>

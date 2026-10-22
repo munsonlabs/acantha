@@ -12,6 +12,8 @@ export const overlays = {
   palette: ref(false),
   /** The open-files switcher (⌘E). */
   openFiles: ref(false),
+  /** Every tab, to search, for when there are too many to see. */
+  tabList: ref(false),
 }
 
 export interface Command {
@@ -28,7 +30,7 @@ export interface Command {
 /** The commands whose features are on, for the palette and the shortcuts sheet. */
 export const enabledCommands = () => commands.filter((c) => !c.feature || isOn(c.feature))
 
-const { workspaces, active, activate, addWorkspace, closeWorkspace, stepWorkspace, pickRepo } = useWorkspaces()
+const { workspaces, active, activate, addWorkspace, closeWorkspace, stepWorkspace, pickRepo, sleepOtherWorkspaces } = useWorkspaces()
 
 const inTerminal = () => !!document.activeElement?.closest('.terminal-pane')
 const withRepo = (fn: (ws: NonNullable<typeof active.value>) => unknown) => () => {
@@ -51,6 +53,8 @@ export const commands: Command[] = [
     // In a terminal, ⌘W closes that terminal rather than the whole repository tab.
     run: () => (inTerminal() ? active.value?.terminals.closeActive() : active.value && closeWorkspace(active.value.id)),
   },
+  { id: 'all-tabs', label: 'Show All Tabs', group: 'Tabs', run: () => (overlays.tabList.value = true) },
+  { id: 'sleep-other-tabs', label: 'Put Other Tabs to Sleep', group: 'Tabs', run: () => active.value && sleepOtherWorkspaces(active.value.id) },
   { id: 'next-tab', label: 'Next Tab', group: 'Tabs', keys: '⇧⌘]', run: () => stepWorkspace(1) },
   { id: 'prev-tab', label: 'Previous Tab', group: 'Tabs', keys: '⇧⌘[', run: () => stepWorkspace(-1) },
 

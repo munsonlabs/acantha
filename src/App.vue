@@ -8,7 +8,7 @@ import { git } from '@/lib/git'
 import { basename } from '@/lib/format'
 import { activateTabNumber, overlays, runCommand } from '@/composables/commands'
 import { prefs } from '@/composables/prefs'
-import { useWorkspaces } from '@/composables/workspace'
+import { lastUsed, pathOf, useWorkspaces } from '@/composables/workspace'
 import { closeDialog, confirmAction, useDialog } from '@/composables/useDialog'
 import { onMakeTodos, useContextMenu } from '@/composables/useContextMenu'
 import { pasteIntoPanel } from '@/composables/slackLinks'
@@ -23,8 +23,9 @@ import StatusBar from '@/components/StatusBar.vue'
 import TitleBar from '@/components/TitleBar.vue'
 import ToastMessage from '@/components/ToastMessage.vue'
 import WorkspaceView from '@/components/WorkspaceView.vue'
+import TabList from '@/components/TabList.vue'
 
-const { workspaces, activeId, active, activate, addWorkspace, closeWorkspace, openInWorkspace } = useWorkspaces()
+const { workspaces, activeId, active, activate, addWorkspace, closeWorkspace, openInWorkspace, sleepWorkspace } = useWorkspaces()
 const { current: dialog } = useDialog()
 const { menu, closeMenu } = useContextMenu()
 const appWindow = getCurrentWindow()
@@ -179,6 +180,20 @@ const autoFetch = setInterval(() => {
   }
 }, 30_000)
 
+// Tabs unused for a while go to sleep, when Settings says so. One running a script (a dev server, a build) is left
+// alone, since sleeping would stop it.
+const autoSleep = setInterval(() => {
+  const minutes = prefs.autoSleepMinutes.value
+  if (!minutes) return
+  const before = Date.now() - minutes * 60_000
+  for (const ws of workspaces.value) {
+    if (ws.id === activeId.value || ws.sleeping.value || !ws.repo.repo.value) continue
+    if (!lastUsed.has(ws.id)) lastUsed.set(ws.id, Date.now())
+    if (lastUsed.get(ws.id)! > before || ws.terminals.sessions.value.some((s) => s.command)) continue
+    void sleepWorkspace(ws.id, { ask: false })
+  }
+}, 60_000)
+
 // A safety net: the file watcher reports changes instantly, but if it can't run (some network drives), this still catches them.
 const poll = setInterval(() => {
   if (document.hasFocus() && !document.hidden) void active.value?.status.refresh()
@@ -206,20 +221,22 @@ onMounted(async () => {
     }),
   )
 
-  // Bring back the tabs from last time, then the repo passed on the command line.
+  // Bring back the tabs from last time, then the repo passed on the command line. Only the tab that was showing opens
+  // its repository; the others sleep until they're clicked, so many tabs start as fast as one.
   const saved = [...prefs.workspaces.value]
+  const showing = saved.includes(prefs.activeWorkspace.value ?? '') ? prefs.activeWorkspace.value : saved[0]
   for (const path of saved) {
-    const ws = await addWorkspace(path, { quiet: true })
-    if (!ws.repo.repo.value) void closeWorkspace(ws.id)
+    const ws = await addWorkspace(path, { quiet: true, activate: false, asleep: path !== showing })
+    if (path === showing && !ws.repo.repo.value) void closeWorkspace(ws.id)
   }
   const initial = await git.initialRepo()
   if (initial) {
     const root = await git.resolveRepo(initial).catch(() => initial)
-    const existing = workspaces.value.find((w) => w.repo.repo.value === root)
+    const existing = workspaces.value.find((w) => pathOf(w) === root)
     if (existing) activate(existing.id)
     else await addWorkspace(initial)
   } else if (workspaces.value.length) {
-    activate(workspaces.value[0].id)
+    activate((workspaces.value.find((w) => pathOf(w) === showing) ?? workspaces.value[0]).id)
   }
   if (!workspaces.value.length) await addWorkspace()
 })
@@ -227,6 +244,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   clearInterval(poll)
   clearInterval(autoFetch)
+  clearInterval(autoSleep)
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('paste', onPaste)
   unlisten.forEach((fn) => fn())
@@ -235,11 +253,15 @@ onBeforeUnmount(() => {
 
 <template>
   <TitleBar />
-  <WorkspaceView v-for="ws in workspaces" :key="ws.id" :ws="ws" :visible="ws.id === activeId" />
+  <!-- A sleeping tab has no view at all: nothing of it is kept until it's woken. -->
+  <template v-for="ws in workspaces" :key="`${ws.id}:${ws.gen}`">
+    <WorkspaceView v-if="!ws.sleeping.value" :ws="ws" :visible="ws.id === activeId" />
+  </template>
   <StatusBar />
   <ContextMenu />
   <CommandPalette />
   <OpenFiles />
+  <TabList />
   <SettingsModal />
   <ShortcutsModal />
   <PromptDialog />

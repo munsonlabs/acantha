@@ -11,6 +11,10 @@ export const prefs = {
   sidebarWidth: usePersisted('sidebar-width', 300),
   sidebarOpen: usePersisted('sidebar-open', true),
   workspaces: usePersisted<string[]>('workspaces', []),
+  /** The tab that was showing, the only one woken at launch; the others sleep until clicked. */
+  activeWorkspace: usePersisted<string | null>('active-workspace', null),
+  /** Put tabs to sleep after this many minutes unused; 0 never. */
+  autoSleepMinutes: usePersisted('auto-sleep-minutes', 0),
   editorVim: usePersisted('editor-vim', false),
   /** Opening a working-tree file goes straight to the editor (text files; others still preview). */
   editByDefault: usePersisted('edit-by-default', true),

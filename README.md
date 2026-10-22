@@ -24,7 +24,7 @@ A Git client and simple editor for macOS: a commit graph, a Git panel, terminals
 
 Built with Tauri 2, Rust and Vue 3.
 
-- Tabs in the titlebar, one per repository, restored on the next launch. Double-click a tab (or a terminal tab) to rename it
+- Tabs in the titlebar, one per repository, restored on the next launch with only the last one open and the rest asleep until clicked. Double-click a tab (or a terminal tab) to rename it; right-click to put it to sleep, freeing its memory while keeping its open files and unsaved edits; ▾ lists them all when there are too many to see
 - A Git panel: write a commit message, stage, unstage and discard files, view staged or unstaged diffs, amend, push and pull. In a diff, stage, unstage or discard a hunk at a time, or pick single lines by their line numbers
 - A terminal pane next to each graph, with its own tabs, starting in the repository (`portable-pty` + xterm.js). ⌘D splits a tab in two, ⌘F finds in the scrollback, and a repository's terminal tabs come back when it's opened again. ⌘-click a file path in the output (`src/x.ts:42:7`) to open it in the editor at that line
 - A file browser for the working tree or any commit, with highlighted code, rendered Markdown, images, blame and file history. The eye button also shows what .gitignore leaves out (node_modules, build output), dimmed, each folder read only when opened
