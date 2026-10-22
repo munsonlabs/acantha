@@ -16,6 +16,8 @@ const props = defineProps<{ ws: Workspace; visible: boolean }>()
 provideWorkspace(props.ws)
 
 const { repo } = props.ws.repo
+/** The graph folds away only with a repository open: an empty tab always shows its start screen, where the graph goes. */
+const graphHidden = computed(() => prefs.graphCollapsed.value && !!repo.value)
 const { open, sessions } = props.ws.terminals
 const { tabs: panelTabs, expanded: panelExpanded } = props.ws.panel
 const el = ref<HTMLElement>()
@@ -263,10 +265,10 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
     -->
     <div class="center">
       <Transition name="center">
-        <GraphPane v-show="!prefs.graphCollapsed.value" class="graph" />
+        <GraphPane v-show="!graphHidden" class="graph" />
       </Transition>
       <Transition name="center">
-        <GraphStamp v-if="prefs.graphCollapsed.value" class="graph-stamp" />
+        <GraphStamp v-if="graphHidden" class="graph-stamp" />
       </Transition>
     </div>
     <!-- Terminals stay mounted while hidden so their shells keep running. -->
