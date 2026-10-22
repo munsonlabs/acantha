@@ -45,6 +45,19 @@ export interface Log {
   worktrees: Worktree[]
 }
 
+export interface RepoSummary {
+  path: string
+  missing: boolean
+  branch: string | null
+  changed: number
+  ahead: number
+  behind: number
+  upstream: string | null
+  operation: string | null
+  lastSubject: string | null
+  lastDate: number | null
+}
+
 export interface ReflogEntry {
   hash: string
   selector: string
@@ -195,6 +208,8 @@ export const git = {
   /** How far a local branch is ahead of and behind its upstream (or `against`); null with no upstream. */
   tracking: (repo: string, branch: string, against?: string) =>
     invoke<{ upstream: string; ahead: number; behind: number } | null>('branch_tracking', { repo, branch, against: against ?? null }),
+  /** Where each repository stands (branch, changes, ahead and behind, last commit), checked side by side. */
+  summaries: (paths: string[]) => invoke<RepoSummary[]>('repo_summaries', { paths }),
   /** Where HEAD has been, newest first; `lost` marks commits only the reflog still reaches. */
   reflog: (repo: string, limit = 200) => invoke<ReflogEntry[]>('get_reflog', { repo, limit }),
   /** The repository's main branch (`origin/HEAD`, else `main` or `master`). */

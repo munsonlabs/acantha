@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { defineAsyncComponent, ref } from 'vue'
+import { defineAsyncComponent, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import logo from '@/assets/logo.svg'
-import { basename } from '@/lib/format'
+import { basename, compactDate } from '@/lib/format'
+import { git, type RepoSummary } from '@/lib/git'
 import { prefs } from '@/composables/prefs'
 import { isOn } from '@/features'
 import { showToast } from '@/composables/useToast'
@@ -15,6 +16,23 @@ const recents = prefs.recents
 /** Commit Snake, for a break; its code loads only when it's first played. */
 const MiniGame = defineAsyncComponent(() => import('./MiniGame.vue'))
 const playing = ref(false)
+
+/**
+ * The dashboard: where each recent repository stands, its branch, uncommitted changes, ahead and behind, and last
+ * commit, checked when the screen shows and when the window comes back to the front.
+ */
+const summaries = shallowRef(new Map<string, RepoSummary>())
+async function loadSummaries() {
+  if (!isOn('dashboard') || !recents.value.length) return
+  const list = await git.summaries(recents.value).catch(() => [])
+  summaries.value = new Map(list.map((s) => [s.path, s]))
+}
+onMounted(() => {
+  void loadSummaries()
+  window.addEventListener('focus', loadSummaries)
+})
+onBeforeUnmount(() => window.removeEventListener('focus', loadSummaries))
+watch([recents, () => isOn('dashboard')], () => void loadSummaries())
 
 const home = (path: string) => path.replace(/^\/Users\/[^/]+/, '~')
 
@@ -48,7 +66,38 @@ function forget(path?: string) {
           <button class="ghost clear" title="Forget all recent repositories" @click="forget()">Clear</button>
         </li>
         <li v-for="r in recents" :key="r" class="recent">
-          <a href="#" :title="r" @click.prevent="ws.repo.repo.value ? openInWorkspace(r) : ws.repo.openRepo(r)">
+          <a
+            v-if="isOn('dashboard') && summaries.get(r)"
+            href="#"
+            class="status"
+            :class="{ missing: summaries.get(r)!.missing }"
+            :title="r"
+            @click.prevent="ws.repo.repo.value ? openInWorkspace(r) : ws.repo.openRepo(r)"
+          >
+            <span class="top">
+              <strong>{{ basename(r) }}</strong>
+              <template v-if="summaries.get(r)!.missing"><span class="pill warn">folder missing</span></template>
+              <template v-else>
+                <span v-if="summaries.get(r)!.branch" class="pill branch"><Icon name="branch" :size="10" /> {{ summaries.get(r)!.branch }}</span>
+                <span v-if="summaries.get(r)!.operation" class="pill warn">{{ summaries.get(r)!.operation }} in progress</span>
+                <span class="spacer" />
+                <span v-if="summaries.get(r)!.changed" class="changed" :title="`${summaries.get(r)!.changed} uncommitted changes`">
+                  ● {{ summaries.get(r)!.changed }}
+                </span>
+                <span v-if="summaries.get(r)!.ahead" class="sync" :title="`${summaries.get(r)!.ahead} to push`">↑{{ summaries.get(r)!.ahead }}</span>
+                <span v-if="summaries.get(r)!.behind" class="sync behind" :title="`${summaries.get(r)!.behind} to pull`"
+                  >↓{{ summaries.get(r)!.behind }}</span
+                >
+              </template>
+            </span>
+            <span class="bottom">
+              <span>{{ home(r) }}</span>
+              <template v-if="summaries.get(r)!.lastSubject">
+                · <span class="last">{{ summaries.get(r)!.lastSubject }}</span> · {{ compactDate(summaries.get(r)!.lastDate!) }}
+              </template>
+            </span>
+          </a>
+          <a v-else href="#" :title="r" @click.prevent="ws.repo.repo.value ? openInWorkspace(r) : ws.repo.openRepo(r)">
             <Icon name="history" :size="13" />
             <strong>{{ basename(r) }}</strong>
             <span>{{ home(r) }}</span>
@@ -72,7 +121,7 @@ function forget(path?: string) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: min(440px, 100%);
+  width: min(520px, 100%);
   text-align: center;
 }
 .logo {
@@ -181,5 +230,61 @@ a span {
   font-size: 11.5px;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+/* The dashboard's rows: name, branch and state on top; folder and last commit below. */
+a.status {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+a.status.missing {
+  opacity: 0.6;
+}
+.top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.bottom {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-faint);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.bottom .last {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.spacer {
+  flex: 1;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--pill);
+  color: var(--fg-muted);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+.pill.warn {
+  color: var(--modify);
+}
+.changed {
+  color: var(--modify);
+  font-size: 11px;
+}
+.sync {
+  color: var(--fg-muted);
+  font: 11px var(--mono);
+}
+.sync.behind {
+  color: var(--accent);
 }
 </style>

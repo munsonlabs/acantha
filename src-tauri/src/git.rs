@@ -305,6 +305,72 @@ pub async fn get_reflog(repo: String, limit: usize) -> Result<Vec<ReflogEntry>, 
         .collect())
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepoSummary {
+    path: String,
+    /// The folder is gone, or isn't a repository any more.
+    missing: bool,
+    branch: Option<String>,
+    /// Files with changes, staged or not, untracked included.
+    changed: usize,
+    ahead: u32,
+    behind: u32,
+    upstream: Option<String>,
+    operation: Option<&'static str>,
+    last_subject: Option<String>,
+    last_date: Option<i64>,
+}
+
+fn summarise(path: &str) -> RepoSummary {
+    let missing = RepoSummary {
+        path: path.into(),
+        missing: true,
+        branch: None,
+        changed: 0,
+        ahead: 0,
+        behind: 0,
+        upstream: None,
+        operation: None,
+        last_subject: None,
+        last_date: None,
+    };
+    if !Path::new(path).is_dir() {
+        return missing;
+    }
+    let Ok(out) = git(path, ["status", "--porcelain=v2", "--branch", "-z", "--untracked-files=normal"]) else {
+        return missing;
+    };
+    let status = parse_status(&out);
+    let last = trimmed(git(path, ["log", "-1", "--format=%s%x1f%ct"]));
+    let (last_subject, last_date) = match last.as_deref().and_then(|l| l.split_once('\x1f')) {
+        Some((s, d)) => (Some(s.to_string()), d.parse().ok()),
+        None => (None, None),
+    };
+    RepoSummary {
+        path: path.into(),
+        missing: false,
+        branch: status.branch,
+        changed: status.files.len(),
+        ahead: status.ahead,
+        behind: status.behind,
+        upstream: status.upstream,
+        operation: operation(path),
+        last_subject,
+        last_date,
+    }
+}
+
+/// Where each of several repositories stands, for the start screen: checked side by side, so a dozen take as long as
+/// the slowest.
+#[tauri::command]
+pub async fn repo_summaries(paths: Vec<String>) -> Vec<RepoSummary> {
+    std::thread::scope(|s| {
+        let handles: Vec<_> = paths.iter().map(|p| s.spawn(move || summarise(p))).collect();
+        handles.into_iter().map(|h| h.join().expect("summary thread")).collect()
+    })
+}
+
 /// Which multi-step operation, if any, is waiting to be continued or aborted.
 fn operation(repo: &str) -> Option<&'static str> {
     const MARKERS: [(&str, &str); 5] = [
@@ -976,6 +1042,26 @@ mod tests {
         assert_eq!((log[0].selector.as_str(), log[0].lost), ("HEAD@{0}", false));
         assert_eq!((log[1].subject.as_str(), log[1].lost), ("second", true));
         assert!(log[1].date > 1_600_000_000);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn summarises_several_repositories() {
+        let dir = std::env::temp_dir().join(format!("acantha-summary-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let repo = dir.to_string_lossy().into_owned();
+        git(&repo, ["init", "-q", "-b", "main"]).unwrap();
+        git(
+            &repo,
+            ["-c", "user.name=T", "-c", "user.email=t@t", "commit", "-qm", "hello", "--allow-empty"],
+        )
+        .unwrap();
+        std::fs::write(dir.join("new.txt"), "x").unwrap();
+        let list = block_on(repo_summaries(vec![repo.clone(), "/nowhere/at/all".into()]));
+        assert_eq!((list[0].missing, list[0].branch.as_deref(), list[0].changed), (false, Some("main"), 1));
+        assert_eq!(list[0].last_subject.as_deref(), Some("hello"));
+        assert!(list[1].missing);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -67,6 +67,7 @@ fn main() {
             git::default_branch,
             git::branch_tracking,
             git::get_reflog,
+            git::repo_summaries,
             git::compare_refs,
             github::run_gh,
             packages::package_readme,

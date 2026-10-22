@@ -22,6 +22,7 @@ export type FeatureId =
   | 'snake'
   | 'reflog'
   | 'changeMarkers'
+  | 'dashboard'
 
 export interface Feature {
   id: FeatureId
@@ -30,6 +31,11 @@ export interface Feature {
 }
 
 export const FEATURES: Feature[] = [
+  {
+    id: 'dashboard',
+    name: 'Repository dashboard',
+    description: 'On the new tab screen: each recent repository’s branch, changes, ahead and behind, and last commit.',
+  },
   { id: 'changeMarkers', name: 'Change markers', description: 'Bars in the editor’s margin beside lines changed since the version git has.' },
   { id: 'worktrees', name: 'Worktrees', description: 'The Worktrees list in the Git panel, and checking branches out into new ones.' },
   { id: 'reflog', name: 'Reflog', description: 'A panel tab of everywhere HEAD has been, to get back commits a reset or rebase left behind.' },
