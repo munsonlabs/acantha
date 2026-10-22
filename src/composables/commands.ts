@@ -1,4 +1,5 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
 import { isOn, type FeatureId } from '@/features'
 import { prefs } from './prefs'
 import { promptSlackLink, togglePanel } from './slackLinks'
@@ -168,3 +169,19 @@ export function activateTabNumber(n: number) {
   const target = n === 9 ? workspaces.value.at(-1) : workspaces.value[n - 1]
   if (target) activate(target.id)
 }
+
+/**
+ * The menu bar is built natively, so it's told which commands to leave out: those of features switched off. At launch
+ * it starts with everything, so it's only rebuilt when something is off.
+ */
+let menuHidden = ''
+watch(
+  () => commands.filter((c) => c.feature && !isOn(c.feature)).map((c) => c.id),
+  (ids) => {
+    const key = ids.join(',')
+    if (key === menuHidden) return
+    menuHidden = key
+    void invoke('set_hidden_menu_items', { ids }).catch(() => {})
+  },
+  { immediate: true },
+)

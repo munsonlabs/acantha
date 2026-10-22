@@ -49,7 +49,7 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .manage(pty::Ptys::default())
         .manage(watch::Watchers::default())
-        .menu(menu::build)
+        .menu(|app| menu::build(app, &[]))
         .on_menu_event(|app, event| menu::forward(app, event.id().as_ref()))
         .invoke_handler(tauri::generate_handler![
             quit_app,
@@ -63,6 +63,7 @@ fn main() {
             git::get_status,
             git::get_status_diff,
             git::apply_patch,
+            menu::set_hidden_menu_items,
             git::default_branch,
             git::branch_tracking,
             git::compare_refs,
