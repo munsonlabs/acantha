@@ -598,6 +598,38 @@ pub struct Comparison {
     head_hash: Option<String>,
 }
 
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Tracking {
+    upstream: String,
+    /// Commits the local branch has that the upstream doesn't, and the other way round.
+    ahead: usize,
+    behind: usize,
+}
+
+/// How a local branch stands against its upstream (or `against`, a remote branch named instead): none when it has
+/// no upstream.
+#[tauri::command]
+pub async fn branch_tracking(repo: String, branch: String, against: Option<String>) -> Option<Tracking> {
+    let upstream = against.or_else(|| {
+        trimmed(git(
+            &repo,
+            ["for-each-ref", "--format=%(upstream:short)", &format!("refs/heads/{branch}")],
+        ))
+    })?;
+
+    let counts = trimmed(git(
+        &repo,
+        ["rev-list", "--left-right", "--count", &format!("refs/heads/{branch}...{upstream}")],
+    ))?;
+    let (ahead, behind) = counts.split_once(char::is_whitespace)?;
+    Some(Tracking {
+        upstream,
+        ahead: ahead.trim().parse().ok()?,
+        behind: behind.trim().parse().ok()?,
+    })
+}
+
 /// The repository's main branch, as its remote names it (`origin/HEAD`), else a local `main` or `master`.
 #[tauri::command]
 pub async fn default_branch(repo: String) -> Option<String> {
@@ -854,6 +886,27 @@ mod tests {
         sh(&["merge", "-q", "--no-ff", "feature", "-m", "merge"]);
         std::fs::write(dir.join("new.txt"), "x\n").unwrap();
         path
+    }
+
+    #[test]
+    fn tells_how_far_a_branch_is_behind_its_upstream() {
+        let dir = std::env::temp_dir().join(format!("acantha-tracking-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let repo = dir.to_string_lossy().into_owned();
+        let commit = |m: &str| git(&repo, ["-c", "user.name=T", "-c", "user.email=t@t", "commit", "-qm", m, "--allow-empty"]).unwrap();
+        git(&repo, ["init", "-q", "-b", "main"]).unwrap();
+        commit("first");
+        git(&repo, ["branch", "stale"]).unwrap();
+        git(&repo, ["branch", "--set-upstream-to=main", "stale"]).unwrap();
+        commit("second");
+        commit("third");
+        let t = block_on(branch_tracking(repo.clone(), "stale".into(), None)).unwrap();
+        assert_eq!((t.upstream.as_str(), t.ahead, t.behind), ("main", 0, 2));
+        assert!(block_on(branch_tracking(repo.clone(), "main".into(), None)).is_none());
+        let t = block_on(branch_tracking(repo.clone(), "main".into(), Some("stale".into()))).unwrap();
+        assert_eq!((t.ahead, t.behind), (2, 0));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

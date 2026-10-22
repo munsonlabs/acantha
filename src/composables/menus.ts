@@ -83,25 +83,60 @@ export function createMenus(
       })
   }
 
-  async function checkoutBranch(name: string) {
+  const commits = (n: number) => `${n} commit${n === 1 ? '' : 's'}`
+
+  /**
+   * Checks out a local branch. When it's behind its upstream (or `against`, a remote branch), it offers to bring it up
+   * to date on the way, as Git Graph does: a fast-forward only, so nothing is merged and no commit of yours can be lost.
+   * A branch with commits of its own as well can't simply catch up, so it's checked out as it is, with a note. Git
+   * itself refuses a checkout that would overwrite uncommitted changes.
+   */
+  async function checkoutBranch(name: string, against?: string) {
     if (name === currentBranch()) return
     const elsewhere = worktreeOf(name)
     if (elsewhere) {
       showToast(`${name} is checked out in ${folderName(elsewhere.path)}`)
       return openWorktree(elsewhere.path)
     }
-    await run(['checkout', name], { done: `Checked out ${name}`, undo: { label: `checking out ${name}`, checkout: true } })
+    const t = await git.tracking(repo.value!, name, against).catch(() => null)
+    let pull = false
+    if (t?.behind) {
+      const v = await ask({
+        title: 'Checkout Branch',
+        message: t.ahead
+          ? `\`${name}\` is ${commits(t.behind)} behind \`${t.upstream}\` and ${commits(t.ahead)} ahead, so it can't simply catch up. It's checked out as it is; pull to merge or rebase it.`
+          : `\`${name}\` is ${commits(t.behind)} behind \`${t.upstream}\`.`,
+        fields: t.ahead ? [] : [{ name: 'pull', label: `Bring it up to date with ${t.upstream} (fast-forward)`, type: 'checkbox', value: true }],
+        confirm: 'Checkout',
+      })
+      if (!v) return
+      pull = !!v.pull
+    }
+    await run(
+      pull
+        ? [
+            ['checkout', name],
+            ['merge', '--ff-only', t!.upstream],
+          ]
+        : ['checkout', name],
+      {
+        done: pull ? `Checked out ${name}, up to date with ${t!.upstream}` : `Checked out ${name}`,
+        undo: { label: `checking out ${name}`, checkout: true },
+      },
+    )
   }
 
   async function checkoutRemoteBranch(remote: string, name: string) {
     const v = await ask({
       title: 'Checkout Remote Branch',
-      message: `Create a local branch tracking \`${remote}/${name}\`.`,
+      message: hasLocalBranch(name)
+        ? `There's already a local \`${name}\`: it's checked out, and brought up to date with \`${remote}/${name}\` if it's behind. Or name a new branch.`
+        : `Create a local branch tracking \`${remote}/${name}\`.`,
       fields: [{ name: 'name', label: 'Local branch name', value: name, required: true }],
       confirm: 'Checkout',
     })
     if (!v) return
-    if (hasLocalBranch(v.name)) await checkoutBranch(v.name)
+    if (hasLocalBranch(v.name)) await checkoutBranch(v.name, `${remote}/${name}`)
     else
       await run(['checkout', '-b', v.name, '--track', `${remote}/${name}`], {
         done: `Checked out ${v.name}`,

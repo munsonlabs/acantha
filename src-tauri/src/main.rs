@@ -64,6 +64,7 @@ fn main() {
             git::get_status_diff,
             git::apply_patch,
             git::default_branch,
+            git::branch_tracking,
             git::compare_refs,
             github::run_gh,
             packages::package_readme,

@@ -183,6 +183,9 @@ export const git = {
   revParse: (repo: string, rev: string) => invoke<string | null>('rev_parse', { repo, rev }),
   backupFiles: (repo: string, paths: string[]) => invoke<string>('backup_files', { repo, paths }),
   restoreFiles: (repo: string, backup: string) => invoke<void>('restore_files', { repo, backup }),
+  /** How far a local branch is ahead of and behind its upstream (or `against`); null with no upstream. */
+  tracking: (repo: string, branch: string, against?: string) =>
+    invoke<{ upstream: string; ahead: number; behind: number } | null>('branch_tracking', { repo, branch, against: against ?? null }),
   /** The repository's main branch (`origin/HEAD`, else `main` or `master`). */
   defaultBranch: (repo: string) => invoke<string | null>('default_branch', { repo }),
   /** How `head` differs from `base`: its own commits, how far behind it is, and where the two split. */
