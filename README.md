@@ -51,7 +51,7 @@ Built with Tauri 2, Rust and Vue 3.
 
 - Relative dates ("3h ago"), author pictures from GitHub or Gravatar, and a lines-changed column
 - Hover a commit for a card with its message, files and a link to the commit online; hovering also highlights its branch line
-- A command palette (⌘P) for commands, branches, files, commits and recent repositories
+- Go to File (⌘P): fuzzy, the file name first, recent files when empty, `name:42` for a line; the command palette (⇧⌘P, or `>` in Go to File) for commands and recent repositories; Check Out Branch… for a list of just branches
 - Settings (⌘,), a native menu bar, and a shortcuts sheet (⌘/)
 - Tabs with a sliding highlight, reordered by dragging
 
@@ -61,7 +61,8 @@ Built with Tauri 2, Rust and Vue 3.
 | ------------- | --------------------------------------------------- |
 | ⌘T / ⌘W       | New tab / close tab (or the terminal, when focused) |
 | ⌘1–9, ⌘⇧[ ⌘⇧] | Switch tabs                                         |
-| ⌘P            | Command palette                                     |
+| ⌘P            | Go to file                                          |
+| ⇧⌘P           | Command palette                                     |
 | ⌘,            | Settings                                            |
 | ⌘/            | Keyboard shortcuts                                  |
 | ⌘B            | Show or hide the sidebar (Files and Git)            |

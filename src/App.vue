@@ -55,7 +55,7 @@ const KEYS: Record<string, string> = {
   b: 'toggle-sidebar',
   j: 'toggle-terminal',
   r: 'refresh',
-  p: 'palette',
+  p: 'go-to-file',
   ',': 'settings',
   '/': 'shortcuts',
   f: 'find',
@@ -84,6 +84,9 @@ function onKeydown(e: KeyboardEvent) {
   } else if (e.metaKey && e.shiftKey && (e.key === '[' || e.key === '{' || e.key === ']' || e.key === '}')) {
     e.preventDefault()
     runCommand(e.key === '[' || e.key === '{' ? 'prev-tab' : 'next-tab')
+  } else if (mod && e.shiftKey && !e.altKey && key === 'p') {
+    e.preventDefault()
+    runCommand('palette')
   } else if (mod && e.shiftKey && !e.altKey && key === 'l') {
     e.preventDefault()
     runCommand('open-slack-link')

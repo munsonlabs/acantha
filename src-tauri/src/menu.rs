@@ -105,7 +105,8 @@ pub fn build<R: Runtime>(app: &AppHandle<R>, hidden: &[String]) -> tauri::Result
         app,
         "View",
         vec![
-            C(item("palette", "Command Palette…", Some("CmdOrCtrl+P"))?),
+            C(item("go-to-file", "Go to File…", Some("CmdOrCtrl+P"))?),
+            C(item("palette", "Command Palette…", Some("CmdOrCtrl+Shift+P"))?),
             Sep,
             C(item("toggle-sidebar", "Toggle Sidebar", Some("CmdOrCtrl+B"))?),
             C(item("toggle-terminal", "Toggle Terminal", Some("CmdOrCtrl+J"))?),

@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { UNCOMMITTED } from '@/lib/git'
-import { basename, shortHash } from '@/lib/format'
-import { fuzzyScore } from '@/lib/fuzzy'
+import { basename } from '@/lib/format'
+import { fileScore, fuzzyPositions, fuzzyScore } from '@/lib/fuzzy'
 import { enabledCommands, overlays, runCommand } from '@/composables/commands'
 import { prefs } from '@/composables/prefs'
 import { useWorkspaces } from '@/composables/workspace'
@@ -10,19 +9,26 @@ import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
 import type { IconName } from '@/lib/icons'
 
+/**
+ * One box, three jobs, one at a time: Go to File (⌘P), the Command Palette (⇧⌘P, or > in Go to File) and Check Out
+ * Branch. Each lists only its own kind, so the right result is usually the first; commits are searched from the title
+ * bar (⌘F).
+ */
 interface Item {
   key: string
   label: string
   detail?: string
-  group: 'Command' | 'Branch' | 'File' | 'Commit' | 'Repository'
   keys?: string
   icon?: IconName
   file?: string
+  /** Letters of the label to highlight, where the query matched. */
+  marks?: number[]
   run: () => unknown
 }
 
 const { active, openInWorkspace } = useWorkspaces()
 const open = overlays.palette
+const mode = overlays.paletteMode
 const query = ref('')
 const index = ref(0)
 const input = ref<HTMLInputElement>()
@@ -30,88 +36,134 @@ const list = ref<HTMLElement>()
 
 const LIMIT = 60
 
-const items = computed<Item[]>(() => {
+/** Typing > at the start of Go to File switches to commands, as in VS Code. */
+watch(query, (q) => {
+  if (mode.value === 'files' && q.startsWith('>')) {
+    mode.value = 'commands'
+    query.value = q.slice(1).trimStart()
+  }
+})
+
+/** The best matches for the query, by `score`, with the label's matched letters marked. */
+function rank<T extends Item>(all: T[], score: (item: T) => number, q: string) {
+  return all
+    .map((item) => ({ item, s: score(item) }))
+    .filter((r) => r.s > 0)
+    .sort((a, b) => b.s - a.s)
+    .slice(0, LIMIT)
+    .map((r) => ({ ...r.item, marks: fuzzyPositions(q, r.item.label) ?? undefined }))
+}
+
+function fileItem(path: string, line?: number): Item {
+  const ws = active.value!
+  const dir = path.slice(0, path.lastIndexOf('/') + 1)
+  return {
+    key: `f:${path}`,
+    label: basename(path),
+    detail: dir.replace(/\/$/, ''),
+    file: path,
+    run: () => {
+      ws.browse(ws.files.rev.value)
+      return ws.files.open(path, undefined, undefined, line)
+    },
+  }
+}
+
+/** Go to File: the files you've had open, most recent first, until you type; then every file, its name first. */
+const files = computed<Item[]>(() => {
   const ws = active.value
-  const out: Item[] = enabledCommands().map((c) => ({
+  if (!ws?.repo.repo.value) return []
+  // `name:42` opens it at line 42.
+  const m = query.value.trim().match(/^(.*?)(?::(\d+))?$/)!
+  const q = m[1]
+  const line = m[2] ? Number(m[2]) : undefined
+  if (!q) {
+    const recent = [...ws.files.openFiles.value].reverse().filter((f) => f.rev === null)
+    return [...new Set(recent.map((f) => f.path))].slice(0, LIMIT).map((p) => fileItem(p))
+  }
+  return rank(
+    ws.files.list.value.map((p) => fileItem(p, line)),
+    (item) => fileScore(q, item.file!),
+    q,
+  )
+})
+
+/** The commands that are on, and your other recent repositories. */
+const commands = computed<Item[]>(() => {
+  const ws = active.value
+  const all: Item[] = enabledCommands().map((c) => ({
     key: `cmd:${c.id}`,
     label: c.label,
-    group: 'Command',
     keys: c.keys,
     icon: 'chevron',
     run: () => runCommand(c.id),
   }))
-  if (ws?.repo.repo.value) {
-    const log = ws.repo.log.value
-    for (const r of log?.refs ?? []) {
-      if (r.kind === 'branch')
-        out.push({
-          key: `b:${r.name}`,
-          label: r.name,
-          detail: 'Check out branch',
-          group: 'Branch',
-          icon: 'branch',
-          run: () => ws.menus.checkoutBranch(r.name),
-        })
-      if (r.kind === 'remote' && ws.repo.showRemotes.value)
-        out.push({
-          key: `r:${r.remote}/${r.name}`,
-          label: `${r.remote}/${r.name}`,
-          detail: 'Check out remote branch',
-          group: 'Branch',
-          icon: 'cloud',
-          run: () => ws.menus.checkoutRemoteBranch(r.remote!, r.name),
-        })
-    }
-    for (const path of ws.files.list.value)
-      out.push({
-        key: `f:${path}`,
-        label: basename(path),
-        detail: path,
-        group: 'File',
-        file: path,
-        run: () => {
-          ws.browse(ws.files.rev.value)
-          return ws.files.open(path)
-        },
-      })
-    for (const c of ws.repo.rows.value)
-      if (c.hash !== UNCOMMITTED && !c.stash)
-        out.push({
-          key: `c:${c.hash}`,
-          label: c.subject,
-          detail: `${shortHash(c.hash)} · ${c.author}`,
-          group: 'Commit',
-          icon: 'history',
-          run: () => {
-            void ws.files.closePreview()
-            return ws.details.select(c.hash)
-          },
-        })
-  }
   for (const path of prefs.recents.value)
     if (path !== ws?.repo.repo.value)
-      out.push({
+      all.push({
         key: `repo:${path}`,
         label: basename(path),
         detail: path.replace(/^\/Users\/[^/]+/, '~'),
-        group: 'Repository',
         icon: 'folder',
         run: () => openInWorkspace(path),
       })
-  return out
+  const q = query.value.trim()
+  if (!q) return all.slice(0, LIMIT)
+  return rank(all, (item) => Math.max(fuzzyScore(q, item.label), fuzzyScore(q, item.detail ?? '') - 4), q)
 })
 
-/** With no query: the commands and recent repositories. Otherwise everything, best matches first. */
-const results = computed(() => {
+/** Check Out Branch: local branches, then remote ones (when they're shown), the one checked out left out. */
+const branches = computed<Item[]>(() => {
+  const ws = active.value
+  const log = ws?.repo.log.value
+  if (!ws || !log) return []
+  const all: Item[] = []
+  for (const r of log.refs) {
+    if (r.kind === 'branch' && r.name !== log.headBranch)
+      all.push({ key: `b:${r.name}`, label: r.name, icon: 'branch', run: () => ws.menus.checkoutBranch(r.name) })
+    if (r.kind === 'remote' && r.name !== 'HEAD' && ws.repo.showRemotes.value)
+      all.push({
+        key: `r:${r.remote}/${r.name}`,
+        label: `${r.remote}/${r.name}`,
+        detail: 'remote',
+        icon: 'cloud',
+        run: () => ws.menus.checkoutRemoteBranch(r.remote!, r.name),
+      })
+  }
   const q = query.value.trim()
-  if (!q) return items.value.filter((i) => i.group === 'Command' || i.group === 'Repository').slice(0, LIMIT)
-  return items.value
-    .map((item) => ({ item, score: Math.max(fuzzyScore(q, item.label), fuzzyScore(q, item.detail ?? '') - 4) }))
-    .filter((r) => r.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, LIMIT)
-    .map((r) => r.item)
+  return q ? rank(all, (item) => fuzzyScore(q, item.label), q) : all.slice(0, LIMIT)
 })
+
+const results = computed(() => (mode.value === 'files' ? files.value : mode.value === 'branches' ? branches.value : commands.value))
+
+const PLACEHOLDER = {
+  files: 'Go to file (name, or name:line) · type > for commands',
+  commands: 'Run a command, or open a recent repository',
+  branches: 'Check out a branch',
+}
+const EMPTY = computed(() =>
+  mode.value === 'files'
+    ? query.value.trim()
+      ? 'No file matches'
+      : 'Type to find a file; files you open show here'
+    : mode.value === 'branches'
+      ? 'No other branches'
+      : 'No matches',
+)
+
+/** The label in pieces, the matched letters marked. */
+function pieces(item: Item) {
+  if (!item.marks?.length) return [{ text: item.label, hit: false }]
+  const hits = new Set(item.marks)
+  const out: { text: string; hit: boolean }[] = []
+  for (const [i, ch] of [...item.label].entries()) {
+    const hit = hits.has(i)
+    const last = out.at(-1)
+    if (last && last.hit === hit) last.text += ch
+    else out.push({ text: ch, hit })
+  }
+  return out
+}
 
 watch(open, async (isOpen) => {
   if (!isOpen) return
@@ -123,7 +175,7 @@ watch(open, async (isOpen) => {
   await nextTick()
   input.value?.focus()
 })
-watch(query, () => (index.value = 0))
+watch([query, mode], () => (index.value = 0))
 watch(index, async () => {
   await nextTick()
   list.value?.querySelector('.selected')?.scrollIntoView({ block: 'nearest' })
@@ -141,6 +193,8 @@ function onKey(e: KeyboardEvent) {
   else if (e.key === 'ArrowUp') index.value = (index.value - 1 + n) % Math.max(n, 1)
   else if (e.key === 'Enter') choose(results.value[index.value])
   else if (e.key === 'Escape') open.value = false
+  // Backspace on an empty box goes back from commands to Go to File, undoing the >.
+  else if (e.key === 'Backspace' && !query.value && mode.value === 'commands') mode.value = 'files'
   else return
   e.preventDefault()
   e.stopPropagation()
@@ -150,18 +204,11 @@ function onKey(e: KeyboardEvent) {
 <template>
   <Transition name="modal">
     <div v-if="open" class="overlay top" @mousedown.self="open = false">
-      <div class="modal palette" role="dialog" aria-modal="true" aria-label="Command palette">
+      <div class="modal palette" role="dialog" aria-modal="true" :aria-label="PLACEHOLDER[mode]">
         <div class="search">
-          <Icon name="search" :size="14" />
-          <input
-            ref="input"
-            v-model="query"
-            type="text"
-            placeholder="Search commands, branches, files and commits"
-            spellcheck="false"
-            autocomplete="off"
-            @keydown="onKey"
-          />
+          <Icon :name="mode === 'files' ? 'files' : mode === 'branches' ? 'branch' : 'chevron'" :size="14" />
+          <span v-if="mode === 'commands'" class="prefix">&gt;</span>
+          <input ref="input" v-model="query" type="text" :placeholder="PLACEHOLDER[mode]" spellcheck="false" autocomplete="off" @keydown="onKey" />
         </div>
         <div ref="list" class="results">
           <div
@@ -174,12 +221,13 @@ function onKey(e: KeyboardEvent) {
           >
             <FileIcon v-if="item.file" :path="item.file" />
             <Icon v-else :name="item.icon ?? 'chevron'" :size="14" class="kind" />
-            <span class="label">{{ item.label }}</span>
+            <span class="label"
+              ><span v-for="(p, j) in pieces(item)" :key="j" :class="{ hit: p.hit }">{{ p.text }}</span></span
+            >
             <span v-if="item.detail" class="detail">{{ item.detail }}</span>
             <kbd v-if="item.keys">{{ item.keys }}</kbd>
-            <span v-else class="group">{{ item.group }}</span>
           </div>
-          <p v-if="!results.length" class="none">No matches</p>
+          <p v-if="!results.length" class="none">{{ EMPTY }}</p>
         </div>
       </div>
     </div>
@@ -250,10 +298,14 @@ function onKey(e: KeyboardEvent) {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.group {
-  margin-left: auto;
-  color: var(--fg-faint);
-  font-size: 11px;
+.hit {
+  color: var(--accent);
+  font-weight: 600;
+}
+.prefix {
+  margin-right: -4px;
+  color: var(--accent);
+  font: 600 14px var(--mono);
 }
 kbd {
   margin-left: auto;

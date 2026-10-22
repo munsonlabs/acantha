@@ -10,6 +10,8 @@ export const overlays = {
   settings: ref(false),
   shortcuts: ref(false),
   palette: ref(false),
+  /** What the palette is for: finding a file, running a command, or checking out a branch. */
+  paletteMode: ref<'files' | 'commands' | 'branches'>('files'),
   /** The open-files switcher (⌘E). */
   openFiles: ref(false),
   /** Every tab, to search, for when there are too many to see. */
@@ -32,6 +34,11 @@ export const enabledCommands = () => commands.filter((c) => !c.feature || isOn(c
 
 const { workspaces, active, activate, addWorkspace, closeWorkspace, stepWorkspace, pickRepo, sleepOtherWorkspaces } = useWorkspaces()
 
+function openPalette(mode: 'files' | 'commands' | 'branches') {
+  overlays.paletteMode.value = mode
+  overlays.palette.value = true
+}
+
 const inTerminal = () => !!document.activeElement?.closest('.terminal-pane')
 const withRepo = (fn: (ws: NonNullable<typeof active.value>) => unknown) => () => {
   const ws = active.value
@@ -39,7 +46,9 @@ const withRepo = (fn: (ws: NonNullable<typeof active.value>) => unknown) => () =
 }
 
 export const commands: Command[] = [
-  { id: 'palette', label: 'Command Palette', group: 'General', keys: '⌘P', run: () => (overlays.palette.value = true) },
+  { id: 'go-to-file', label: 'Go to File', group: 'General', keys: '⌘P', run: () => openPalette('files') },
+  { id: 'palette', label: 'Command Palette', group: 'General', keys: '⇧⌘P', run: () => openPalette('commands') },
+  { id: 'checkout-branch', label: 'Check Out Branch…', group: 'Repository', run: withRepo(() => openPalette('branches')) },
   { id: 'settings', label: 'Settings', group: 'General', keys: '⌘,', run: () => (overlays.settings.value = true) },
   { id: 'shortcuts', label: 'Keyboard Shortcuts', group: 'General', keys: '⌘/', run: () => (overlays.shortcuts.value = true) },
 
