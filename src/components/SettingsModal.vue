@@ -1,3 +1,11 @@
+<script lang="ts">
+import { ref } from 'vue'
+
+type Tab = 'appearance' | 'features' | 'git' | 'graph' | 'editor' | 'terminal' | 'slack'
+/** The page last open, so Settings opens where you left it. */
+const lastTab = ref<Tab>('appearance')
+</script>
+
 <script setup lang="ts">
 import { computed } from 'vue'
 import { overlays, ZOOM_MAX, ZOOM_MIN } from '@/composables/commands'
@@ -18,6 +26,25 @@ const slackChannels = computed({
   set: (v: string) => (prefs.slackChannels.value = v.split(/[\s,]+/).filter((id) => /^[A-Z0-9]+$/.test(id))),
 })
 
+/** Settings by topic, one page each; Slack's only while it's switched on. */
+const TABS = computed(() =>
+  (
+    [
+      { id: 'appearance', label: 'Appearance', icon: 'moon' },
+      { id: 'features', label: 'Features', icon: 'app' },
+      { id: 'git', label: 'Git', icon: 'scm' },
+      { id: 'graph', label: 'Graph', icon: 'history' },
+      { id: 'editor', label: 'Editor', icon: 'pencil' },
+      { id: 'terminal', label: 'Terminal', icon: 'terminal' },
+      { id: 'slack', label: 'Slack', icon: 'message' },
+    ] as const
+  ).filter((t) => t.id !== 'slack' || isOn('slack')),
+)
+const tab = computed({
+  get: () => (TABS.value.some((t) => t.id === lastTab.value) ? lastTab.value : 'appearance'),
+  set: (t: Tab) => (lastTab.value = t),
+})
+
 const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRemotes(on) : (prefs.showRemotes.value = on))
 </script>
 
@@ -29,157 +56,165 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
           <h2>Settings</h2>
           <button class="ghost icon-btn" title="Close (Esc)" @click="open = false"><Icon name="x" /></button>
         </header>
-        <div class="body">
-          <section>
-            <h3>Appearance</h3>
-            <div class="row">
-              <div>
-                <span class="label">Interface size</span>
-                <span class="hint">Scales all text and controls. ⌘+ and ⌘− work too.</span>
+        <div class="main">
+          <nav class="tabs-nav" aria-label="Settings pages">
+            <button v-for="t in TABS" :key="t.id" class="ghost" :class="{ on: tab === t.id }" @click="tab = t.id">
+              <Icon :name="t.icon" :size="13" /> {{ t.label }}
+            </button>
+          </nav>
+          <div class="body">
+            <section v-show="tab === 'appearance'">
+              <h3>Appearance</h3>
+              <div class="row">
+                <div>
+                  <span class="label">Interface size</span>
+                  <span class="hint">Scales all text and controls. ⌘+ and ⌘− work too.</span>
+                </div>
+                <span class="number">
+                  <input v-model.number="prefs.uiZoom.value" type="range" :min="ZOOM_MIN" :max="ZOOM_MAX" step="0.05" />
+                  <span class="value">{{ Math.round(prefs.uiZoom.value * 100) }}%</span>
+                  <button class="ghost reset" :disabled="prefs.uiZoom.value === 1" title="Actual size (⌘0)" @click="prefs.uiZoom.value = 1">
+                    Reset
+                  </button>
+                </span>
               </div>
-              <span class="number">
-                <input v-model.number="prefs.uiZoom.value" type="range" :min="ZOOM_MIN" :max="ZOOM_MAX" step="0.05" />
-                <span class="value">{{ Math.round(prefs.uiZoom.value * 100) }}%</span>
-                <button class="ghost reset" :disabled="prefs.uiZoom.value === 1" title="Actual size (⌘0)" @click="prefs.uiZoom.value = 1">
-                  Reset
-                </button>
-              </span>
-            </div>
-            <div class="row">
-              <div>
-                <span class="label">Dates</span>
-                <span class="hint">Recent commits as “2h ago”, or always the full date.</span>
+              <div class="row">
+                <div>
+                  <span class="label">Dates</span>
+                  <span class="hint">Recent commits as “2h ago”, or always the full date.</span>
+                </div>
+                <div class="segmented">
+                  <button :class="{ on: prefs.dateStyle.value === 'relative' }" @click="prefs.dateStyle.value = 'relative'">Relative</button>
+                  <button :class="{ on: prefs.dateStyle.value === 'absolute' }" @click="prefs.dateStyle.value = 'absolute'">Absolute</button>
+                </div>
               </div>
-              <div class="segmented">
-                <button :class="{ on: prefs.dateStyle.value === 'relative' }" @click="prefs.dateStyle.value = 'relative'">Relative</button>
-                <button :class="{ on: prefs.dateStyle.value === 'absolute' }" @click="prefs.dateStyle.value = 'absolute'">Absolute</button>
-              </div>
-            </div>
-            <label class="row">
-              <div>
-                <span class="label">Author pictures</span>
-                <span class="hint">From GitHub, or Gravatar (sent a hash of the email, not the address).</span>
-              </div>
-              <input v-model="prefs.avatars.value" type="checkbox" class="switch" />
-            </label>
-          </section>
+              <label class="row">
+                <div>
+                  <span class="label">Author pictures</span>
+                  <span class="hint">From GitHub, or Gravatar (sent a hash of the email, not the address).</span>
+                </div>
+                <input v-model="prefs.avatars.value" type="checkbox" class="switch" />
+              </label>
+            </section>
 
-          <section>
-            <h3>Features</h3>
-            <p class="hint">
-              Everything beyond the graph, Git panel, files, search, editor and terminals. A feature switched off isn't loaded and leaves the menus;
-              its panel tabs are kept for when it's back on.
-            </p>
-            <label v-for="f in FEATURES" :key="f.id" class="row">
-              <div>
-                <span class="label">{{ f.name }}</span>
-                <span class="hint">{{ f.description }}</span>
-              </div>
-              <input type="checkbox" class="switch" :checked="isOn(f.id)" @change="setFeature(f.id, ($event.target as HTMLInputElement).checked)" />
-            </label>
-          </section>
+            <section v-show="tab === 'features'">
+              <h3>Features</h3>
+              <p class="hint">
+                Everything beyond the graph, Git panel, files, search, editor and terminals. A feature switched off isn't loaded and leaves the menus;
+                its panel tabs are kept for when it's back on.
+              </p>
+              <label v-for="f in FEATURES" :key="f.id" class="row">
+                <div>
+                  <span class="label">{{ f.name }}</span>
+                  <span class="hint">{{ f.description }}</span>
+                </div>
+                <input type="checkbox" class="switch" :checked="isOn(f.id)" @change="setFeature(f.id, ($event.target as HTMLInputElement).checked)" />
+              </label>
+            </section>
 
-          <section>
-            <h3>Git</h3>
-            <label class="row">
-              <div>
-                <span class="label">Fetch automatically</span>
-                <span class="hint">Keeps remote branches and the “behind” badges up to date.</span>
-              </div>
-              <input v-model="prefs.autoFetch.value" type="checkbox" class="switch" />
-            </label>
-            <label class="row" :class="{ off: !prefs.autoFetch.value }">
-              <span class="label">Every</span>
-              <select v-model.number="prefs.autoFetchMinutes.value" :disabled="!prefs.autoFetch.value">
-                <option v-for="m in [2, 5, 10, 15, 30]" :key="m" :value="m">{{ m }} minutes</option>
-              </select>
-            </label>
-          </section>
+            <section v-show="tab === 'git'">
+              <h3>Git</h3>
+              <label class="row">
+                <div>
+                  <span class="label">Fetch automatically</span>
+                  <span class="hint">Keeps remote branches and the “behind” badges up to date.</span>
+                </div>
+                <input v-model="prefs.autoFetch.value" type="checkbox" class="switch" />
+              </label>
+              <label class="row" :class="{ off: !prefs.autoFetch.value }">
+                <span class="label">Every</span>
+                <select v-model.number="prefs.autoFetchMinutes.value" :disabled="!prefs.autoFetch.value">
+                  <option v-for="m in [2, 5, 10, 15, 30]" :key="m" :value="m">{{ m }} minutes</option>
+                </select>
+              </label>
+            </section>
 
-          <section>
-            <h3>Graph</h3>
-            <label class="row">
-              <span class="label">Show remote branches</span>
-              <input
-                type="checkbox"
-                class="switch"
-                :checked="prefs.showRemotes.value"
-                @change="setRemotes(($event.target as HTMLInputElement).checked)"
-              />
-            </label>
-            <label class="row">
-              <span class="label">Show stashes</span>
-              <input v-model="prefs.showStashes.value" type="checkbox" class="switch" />
-            </label>
-          </section>
+            <section v-show="tab === 'graph'">
+              <h3>Graph</h3>
+              <label class="row">
+                <span class="label">Show remote branches</span>
+                <input
+                  type="checkbox"
+                  class="switch"
+                  :checked="prefs.showRemotes.value"
+                  @change="setRemotes(($event.target as HTMLInputElement).checked)"
+                />
+              </label>
+              <label class="row">
+                <span class="label">Show stashes</span>
+                <input v-model="prefs.showStashes.value" type="checkbox" class="switch" />
+              </label>
+            </section>
 
-          <section>
-            <h3>Editor</h3>
-            <label class="row">
-              <span class="label">Vim key bindings</span>
-              <input v-model="prefs.editorVim.value" type="checkbox" class="switch" />
-            </label>
-            <label class="row">
-              <div>
-                <span class="label">Open files for editing</span>
-                <span class="hint"
-                  >Opening a file from the working tree goes straight to the editor. Images, other binary files and past commits still preview.</span
-                >
-              </div>
-              <input v-model="prefs.editByDefault.value" type="checkbox" class="switch" />
-            </label>
-            <label class="row">
-              <span class="label">Open files with</span>
-              <select v-model="prefs.externalEditor.value">
-                <option v-for="app in EDITORS" :key="app" :value="app">{{ app || 'Default app' }}</option>
-              </select>
-            </label>
-          </section>
+            <section v-show="tab === 'editor'">
+              <h3>Editor</h3>
+              <label class="row">
+                <span class="label">Vim key bindings</span>
+                <input v-model="prefs.editorVim.value" type="checkbox" class="switch" />
+              </label>
+              <label class="row">
+                <div>
+                  <span class="label">Open files for editing</span>
+                  <span class="hint"
+                    >Opening a file from the working tree goes straight to the editor. Images, other binary files and past commits still
+                    preview.</span
+                  >
+                </div>
+                <input v-model="prefs.editByDefault.value" type="checkbox" class="switch" />
+              </label>
+              <label class="row">
+                <span class="label">Open files with</span>
+                <select v-model="prefs.externalEditor.value">
+                  <option v-for="app in EDITORS" :key="app" :value="app">{{ app || 'Default app' }}</option>
+                </select>
+              </label>
+            </section>
 
-          <section v-if="isOn('slack')">
-            <h3>Slack</h3>
-            <label class="row">
-              <div>
-                <span class="label">Allowed channels</span>
-                <span class="hint">Channel IDs (the C… part of a message link). Leave empty to allow any channel you're in.</span>
-              </div>
-              <input v-model.lazy="slackChannels" type="text" placeholder="C0123ABCD" spellcheck="false" autocomplete="off" />
-            </label>
-            <p class="hint">
-              Open a message or canvas by pasting its link anywhere (⇧⌘L to type one). Your token is read from the macOS Keychain
-              (<code>com.munsonlabs.acantha.slack</code>) and never stored by the app.
-            </p>
-          </section>
+            <section v-if="isOn('slack')" v-show="tab === 'slack'">
+              <h3>Slack</h3>
+              <label class="row">
+                <div>
+                  <span class="label">Allowed channels</span>
+                  <span class="hint">Channel IDs (the C… part of a message link). Leave empty to allow any channel you're in.</span>
+                </div>
+                <input v-model.lazy="slackChannels" type="text" placeholder="C0123ABCD" spellcheck="false" autocomplete="off" />
+              </label>
+              <p class="hint">
+                Open a message or canvas by pasting its link anywhere (⇧⌘L to type one). Your token is read from the macOS Keychain
+                (<code>com.munsonlabs.acantha.slack</code>) and never stored by the app.
+              </p>
+            </section>
 
-          <section>
-            <h3>Terminal</h3>
-            <label class="row">
-              <span class="label">Font size</span>
-              <span class="number">
-                <input v-model.number="prefs.terminalFontSize.value" type="range" min="10" max="20" step="0.5" />
-                <span>{{ prefs.terminalFontSize.value }}px</span>
-              </span>
-            </label>
-            <label class="row">
-              <div>
-                <span class="label">Scrollback</span>
-                <span class="hint">Lines each terminal keeps to scroll back through. More uses more memory per terminal.</span>
-              </div>
-              <select v-model.number="prefs.terminalScrollback.value">
-                <option :value="1000">1,000 lines</option>
-                <option :value="5000">5,000 lines</option>
-                <option :value="10000">10,000 lines</option>
-                <option :value="50000">50,000 lines</option>
-              </select>
-            </label>
-            <label class="row">
-              <div>
-                <span class="label">Shell</span>
-                <span class="hint">For new terminals. Leave empty for your login shell.</span>
-              </div>
-              <input v-model.trim="prefs.shell.value" type="text" placeholder="$SHELL" spellcheck="false" autocomplete="off" />
-            </label>
-          </section>
+            <section v-show="tab === 'terminal'">
+              <h3>Terminal</h3>
+              <label class="row">
+                <span class="label">Font size</span>
+                <span class="number">
+                  <input v-model.number="prefs.terminalFontSize.value" type="range" min="10" max="20" step="0.5" />
+                  <span>{{ prefs.terminalFontSize.value }}px</span>
+                </span>
+              </label>
+              <label class="row">
+                <div>
+                  <span class="label">Scrollback</span>
+                  <span class="hint">Lines each terminal keeps to scroll back through. More uses more memory per terminal.</span>
+                </div>
+                <select v-model.number="prefs.terminalScrollback.value">
+                  <option :value="1000">1,000 lines</option>
+                  <option :value="5000">5,000 lines</option>
+                  <option :value="10000">10,000 lines</option>
+                  <option :value="50000">50,000 lines</option>
+                </select>
+              </label>
+              <label class="row">
+                <div>
+                  <span class="label">Shell</span>
+                  <span class="hint">For new terminals. Leave empty for your login shell.</span>
+                </div>
+                <input v-model.trim="prefs.shell.value" type="text" placeholder="$SHELL" spellcheck="false" autocomplete="off" />
+              </label>
+            </section>
+          </div>
         </div>
       </div>
     </div>
@@ -190,8 +225,39 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
 .settings {
   display: flex;
   flex-direction: column;
-  width: min(560px, calc(100vw - 48px));
-  max-height: calc(100vh - 80px);
+  width: min(740px, calc(100vw - 48px));
+  /* A fixed height, so switching pages doesn't make the window jump. */
+  height: min(580px, calc(100vh - 80px));
+}
+.main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.tabs-nav {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px;
+  width: 170px;
+  padding: 10px 8px;
+  border-right: 1px solid var(--border);
+}
+.tabs-nav button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  color: var(--fg-muted);
+  font-size: 12.5px;
+  text-align: left;
+}
+.tabs-nav button.on {
+  background: var(--selected);
+  color: var(--fg);
 }
 header {
   display: flex;
@@ -206,17 +272,20 @@ h2 {
   font-weight: 600;
 }
 .body {
+  flex: 1;
+  min-width: 0;
   overflow: auto;
   padding: 6px 20px 20px;
 }
 section + section {
   margin-top: 6px;
 }
+/* Each page's title. */
 h3 {
-  margin: 16px 0 4px;
-  color: var(--fg-faint);
-  font-size: 11.5px;
-  font-weight: 550;
+  margin: 12px 0 6px;
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 600;
 }
 .row {
   display: flex;
