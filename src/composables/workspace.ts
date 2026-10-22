@@ -86,7 +86,7 @@ async function addWorkspace(path: string | null = null, { quiet = false, activat
   const ws = createWorkspace(nextId++)
   workspaces.value = [...workspaces.value, ws]
   if (focus) activeId.value = ws.id
-  if (path && (await ws.repo.openRepo(path, { quiet })) && prefs.terminalOpen.value) ws.terminals.add()
+  if (path && (await ws.repo.openRepo(path, { quiet })) && prefs.terminalOpen.value) ws.terminals.restoreOrAdd()
   return ws
 }
 
@@ -142,7 +142,7 @@ async function closeRepo(path: string) {
 async function openInWorkspace(path: string) {
   const current = active.value
   if (current && !current.repo.repo.value) {
-    if ((await current.repo.openRepo(path)) && prefs.terminalOpen.value && !current.terminals.sessions.value.length) current.terminals.add()
+    if ((await current.repo.openRepo(path)) && prefs.terminalOpen.value && !current.terminals.sessions.value.length) current.terminals.restoreOrAdd()
   } else {
     await addWorkspace(path)
   }

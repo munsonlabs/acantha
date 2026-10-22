@@ -15,8 +15,9 @@ import { showToast } from '@/composables/useToast'
 import { useWorkspace } from '@/composables/workspace'
 import Icon from './Icon.vue'
 
-const props = defineProps<{ session: TerminalSession; active: boolean }>()
-const emit = defineEmits<{ exit: []; title: [title: string] }>()
+/** focus: take the keyboard when shown; the terminal split beside a tab's own leaves it to that one. */
+const props = withDefaults(defineProps<{ session: TerminalSession; active: boolean; focus?: boolean }>(), { focus: true })
+const emit = defineEmits<{ exit: []; title: [title: string]; split: [] }>()
 
 /** App shortcuts that should reach the window instead of the shell. */
 const APP_KEYS = new Set(['t', 'w', 'j', 'b', 'f', 'r', 'o', '[', ']', '{', '}', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
@@ -211,6 +212,12 @@ onMounted(async () => {
       term!.clear()
       return false
     }
+    // ⌘D splits the tab, as in iTerm.
+    if (e.key === 'd' && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+      emit('split')
+      return false
+    }
     // ⌘F finds in this terminal rather than the graph; ⇧⌘F still searches the files.
     if (e.key === 'f' && !e.shiftKey && !e.altKey) {
       e.preventDefault()
@@ -250,7 +257,7 @@ onMounted(async () => {
   document.addEventListener('visibilitychange', onVisible)
   window.addEventListener('focus', redraw)
   watchScale()
-  if (props.active) term.focus()
+  if (props.active && props.focus) term.focus()
 })
 
 watch(prefs.terminalScrollback, (lines) => term && (term.options.scrollback = lines))
@@ -269,7 +276,7 @@ watch(
     await nextTick()
     fitNow()
     redraw()
-    term?.focus()
+    if (props.focus) term?.focus()
   },
 )
 
