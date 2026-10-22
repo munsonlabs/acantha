@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { isOn, type FeatureId } from '@/features'
 import { prefs } from './prefs'
 import { promptSlackLink, togglePanel } from './slackLinks'
 import { useWorkspaces } from './workspace'
@@ -19,7 +20,12 @@ export interface Command {
   /** Shown in menus, the palette and the shortcuts sheet. */
   keys?: string
   run: () => unknown
+  /** The optional feature it belongs to: while that's switched off, it's left out and does nothing. */
+  feature?: FeatureId
 }
+
+/** The commands whose features are on, for the palette and the shortcuts sheet. */
+export const enabledCommands = () => commands.filter((c) => !c.feature || isOn(c.feature))
 
 const { workspaces, active, activate, addWorkspace, closeWorkspace, stepWorkspace, pickRepo } = useWorkspaces()
 
@@ -88,14 +94,17 @@ export const commands: Command[] = [
     label: 'Open Slack Link…',
     group: 'View',
     keys: '⇧⌘L',
+    feature: 'slack',
     run: () => active.value && promptSlackLink(active.value),
   },
   { id: 'open-files', label: 'Open Files', group: 'View', keys: '⌘E', run: withRepo(() => (overlays.openFiles.value = !overlays.openFiles.value)) },
   { id: 'toggle-graph', label: 'Toggle Graph', group: 'View', run: () => (prefs.graphCollapsed.value = !prefs.graphCollapsed.value) },
-  { id: 'toggle-panel', label: 'Toggle Panel (Slack and To-dos)', group: 'View', run: () => active.value && togglePanel(active.value) },
-  { id: 'new-todo-list', label: 'New To-do List', group: 'View', run: withRepo((ws) => ws.panel.addTodos('To-dos')) },
-  { id: 'new-notes', label: 'New Notes', group: 'View', run: withRepo((ws) => ws.panel.addNotes()) },
-  { id: 'scripts', label: 'Scripts', group: 'View', run: withRepo((ws) => ws.panel.addScripts()) },
+  { id: 'toggle-panel', label: 'Toggle Panel', group: 'View', run: () => active.value && togglePanel(active.value) },
+  { id: 'new-todo-list', label: 'New To-do List', group: 'View', feature: 'todos', run: withRepo((ws) => ws.panel.addTodos('To-dos')) },
+  { id: 'new-notes', label: 'New Notes', group: 'View', feature: 'notes', run: withRepo((ws) => ws.panel.addNotes()) },
+  { id: 'scripts', label: 'Scripts', group: 'View', feature: 'scripts', run: withRepo((ws) => ws.panel.addScripts()) },
+  { id: 'compare-branches', label: 'Compare Branches', group: 'View', feature: 'compare', run: withRepo((ws) => ws.panel.addCompare()) },
+  { id: 'github', label: 'GitHub: Pull Requests & Actions', group: 'View', feature: 'github', run: withRepo((ws) => ws.panel.addGithub()) },
   {
     id: 'toggle-remotes',
     label: 'Toggle Remote Branches',
@@ -147,7 +156,7 @@ const lastRun = new Map<string, number>()
  */
 export function runCommand(id: string) {
   const command = byId.get(id)
-  if (!command) return
+  if (!command || (command.feature && !isOn(command.feature))) return
   const now = Date.now()
   if (now - (lastRun.get(id) ?? 0) < 250) return
   lastRun.set(id, now)

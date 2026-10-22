@@ -1,4 +1,5 @@
 import { parseSlackLink } from '@/lib/slack'
+import { isOn } from '@/features'
 import { looksLikeList, parseLines } from '@/lib/todos'
 import { prefs } from './prefs'
 import { ask } from './useDialog'
@@ -17,8 +18,8 @@ export function openSlackLink(ws: Workspace, text: string) {
  * numbered lines) becomes a new to-do list of all its lines. Returns false for anything else.
  */
 export function pasteIntoPanel(ws: Workspace, text: string) {
-  if (openSlackLink(ws, text)) return true
-  if (!looksLikeList(text)) return false
+  if (isOn('slack') && openSlackLink(ws, text)) return true
+  if (!isOn('todos') || !looksLikeList(text)) return false
   const items = parseLines(text)
   ws.panel.addTodos('To-dos', items)
   showToast(`Made a to-do list of ${items.length} items`)

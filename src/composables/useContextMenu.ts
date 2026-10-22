@@ -2,6 +2,7 @@ import { readText } from '@tauri-apps/plugin-clipboard-manager'
 import { shallowRef } from 'vue'
 import type { IconName } from '@/lib/icons'
 import { parseLines } from '@/lib/todos'
+import { isOn } from '@/features'
 
 export interface MenuItem {
   label: string
@@ -53,7 +54,7 @@ export const onMakeTodos = (fn: typeof makeTodos) => (makeTodos = fn)
 /** "Make To-do List" for selected text, each line one to-do. */
 function todoItem(selection: string): MenuEntry[] {
   const items = parseLines(selection)
-  if (!makeTodos || !items.length) return []
+  if (!makeTodos || !items.length || !isOn('todos')) return []
   const make = makeTodos
   return [{ label: items.length === 1 ? 'Make To-do' : `Make To-do List (${items.length})`, icon: 'check', run: () => make(items) }]
 }

@@ -4,7 +4,6 @@ import { readText } from '@tauri-apps/plugin-clipboard-manager'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { git } from '@/lib/git'
 import { runningRuns } from '@/lib/github'
-import type { IconName } from '@/lib/icons'
 import { parseLines } from '@/lib/todos'
 import type { PanelTab } from '@/composables/panel'
 import { prefs } from '@/composables/prefs'
@@ -14,22 +13,22 @@ import { openMenu } from '@/composables/useContextMenu'
 import { ask } from '@/composables/useDialog'
 import { showToast } from '@/composables/useToast'
 import { useWorkspace } from '@/composables/workspace'
+import { isOn, type FeatureId } from '@/features'
+import { tabView } from '@/features/panelTabs'
+import type { MenuEntry, MenuItem } from '@/composables/useContextMenu'
 import Icon from './Icon.vue'
-import SlackView from './SlackView.vue'
-import NotesView from './NotesView.vue'
-import ScriptsView from './ScriptsView.vue'
-import TodoList from './TodoList.vue'
-import CompareView from './CompareView.vue'
-import GitHubView from './GitHubView.vue'
-import MarkdownPanel from './MarkdownPanel.vue'
 
-/** The panel's tabs: Slack messages and canvases, and to-do lists. docked: under the terminal; otherwise over the graph. */
+/**
+ * The panel's tabs, each kind from a feature that can be switched off (see `src/features/panelTabs.ts`), its view loaded
+ * the first time one shows. docked: under the terminal; otherwise over the graph.
+ */
 const props = defineProps<{ docked?: boolean }>()
 const ws = useWorkspace()
 const { tabs, active, expanded, activate, addTodos, addNotes, addScripts, addCompare, addGithub, addMarkdown, addReadme, close, move, rename } =
   ws.panel
 const strip = ref<HTMLElement>()
-const slackView = ref<InstanceType<typeof SlackView>>()
+/** The view showing, for the header's buttons that act on it (a Slack tab's refresh). */
+const view = ref<{ refresh?: () => void; loading?: boolean } | null>(null)
 
 const label = (t: PanelTab) => {
   if (t.kind === 'slack') return t.title ?? 'Slack'
@@ -56,17 +55,6 @@ async function newListFromClipboard() {
   const items = parseLines((await readText().catch(() => '')) ?? '')
   if (!items.length) return showToast('Nothing on the clipboard to make a list from', 'error')
   addTodos('To-dos', items)
-}
-
-const ICONS: Record<PanelTab['kind'], IconName> = {
-  slack: 'message',
-  todos: 'check',
-  notes: 'pencil',
-  scripts: 'play',
-  compare: 'merge',
-  github: 'cloud',
-  markdown: 'eye',
-  readme: 'archive',
 }
 
 /** Picks a Markdown file in the repository to preview. */
@@ -116,21 +104,33 @@ async function pickPackage() {
   if (pkg) addReadme(pkg)
 }
 
+/** What the + button offers, in groups, from the features that are on. */
+const NEW_TABS: [FeatureId, MenuItem][][] = [
+  [['slack', { label: 'Slack Message or Canvas…', icon: 'message', shortcut: '⇧⌘L', run: () => promptSlackLink(ws) }]],
+  [
+    ['todos', { label: 'To-do List', icon: 'check', run: () => addTodos('To-dos') }],
+    ['notes', { label: 'Notes', icon: 'pencil', run: () => addNotes() }],
+    ['scripts', { label: 'Scripts', icon: 'play', run: () => addScripts() }],
+    ['todos', { label: 'To-do List from Clipboard', icon: 'copy', run: newListFromClipboard }],
+  ],
+  [
+    ['compare', { label: 'Compare Branches', icon: 'merge', run: () => addCompare() }],
+    ['github', { label: 'GitHub: Pull Requests & Actions', icon: 'cloud', run: () => addGithub() }],
+  ],
+  [
+    ['markdown', { label: 'Markdown Preview…', icon: 'eye', run: pickMarkdown }],
+    ['readme', { label: 'Package README…', icon: 'archive', run: pickPackage }],
+  ],
+]
+const newTabGroups = computed(() => NEW_TABS.map((g) => g.filter(([f]) => isOn(f)).map(([, item]) => item)).filter((g) => g.length))
+
 function newTab(e: MouseEvent) {
-  openMenu(e, [
-    { label: 'Slack Message or Canvas…', icon: 'message', shortcut: '⇧⌘L', run: () => promptSlackLink(ws) },
-    'separator',
-    { label: 'To-do List', icon: 'check', run: () => addTodos('To-dos') },
-    { label: 'Notes', icon: 'pencil', run: () => addNotes() },
-    { label: 'Scripts', icon: 'play', run: () => addScripts() },
-    { label: 'To-do List from Clipboard', icon: 'copy', run: newListFromClipboard },
-    'separator',
-    { label: 'Compare Branches', icon: 'merge', run: () => addCompare() },
-    { label: 'GitHub: Pull Requests & Actions', icon: 'cloud', run: () => addGithub() },
-    'separator',
-    { label: 'Markdown Preview…', icon: 'eye', run: pickMarkdown },
-    { label: 'Package README…', icon: 'archive', run: pickPackage },
-  ])
+  const groups = newTabGroups.value
+  if (!groups.length) return showToast('Every panel feature is switched off. Turn some on in Settings → Features.')
+  openMenu(
+    e,
+    groups.flatMap((g, i): MenuEntry[] => (i ? ['separator', ...g] : g)),
+  )
 }
 
 async function renameTab(t: PanelTab) {
@@ -176,7 +176,7 @@ const hide = () => (prefs.panelOpen.value = false)
           @auxclick.middle="close(t.id)"
           @contextmenu.prevent="tabMenu($event, t)"
         >
-          <Icon :name="ICONS[t.kind]" :size="13" />
+          <Icon :name="tabView(t, false).icon" :size="13" />
           <span class="label">{{ label(t) }}</span>
           <button class="tab-close" title="Close Tab" @mousedown.stop @click.stop="close(t.id)"><Icon name="x" :size="12" /></button>
         </div>
@@ -184,7 +184,7 @@ const hide = () => (prefs.panelOpen.value = false)
       <button class="ghost icon-btn" title="New tab" @click="newTab"><Icon name="plus" /></button>
       <div class="spacer" />
       <template v-if="current?.kind === 'slack'">
-        <button class="ghost icon-btn" title="Refresh" :disabled="slackView?.loading" @click="slackView?.refresh()"><Icon name="refresh" /></button>
+        <button class="ghost icon-btn" title="Refresh" :disabled="view?.loading" @click="view?.refresh?.()"><Icon name="refresh" /></button>
         <button class="ghost icon-btn" title="Open in Slack" @click="openUrl(current.url)"><Icon name="external" /></button>
       </template>
       <button v-if="props.docked && tabs.length" class="ghost icon-btn" title="Expand over the graph" @click="expand">
@@ -197,35 +197,27 @@ const hide = () => (prefs.panelOpen.value = false)
     <div class="body">
       <div v-if="!current" class="empty">
         <Icon name="message" :size="22" />
-        <p>Copy a Slack message or canvas link, or a bulleted list, then press <kbd>⌘V</kbd> anywhere outside a text box. A list becomes to-dos.</p>
-        <p>
-          Or press <span class="plus"><Icon name="plus" :size="11" /></span> above for any other kind of tab.
+        <p v-if="isOn('slack') || isOn('todos')">
+          Copy {{ isOn('slack') ? 'a Slack message or canvas link' : '' }}{{ isOn('slack') && isOn('todos') ? ', or ' : ''
+          }}{{ isOn('todos') ? 'a bulleted list' : '' }}, then press <kbd>⌘V</kbd> anywhere outside a text box.{{
+            isOn('todos') ? ' A list becomes to-dos.' : ''
+          }}
         </p>
+        <p v-if="newTabGroups.length">
+          {{ isOn('slack') || isOn('todos') ? 'Or press' : 'Press' }} <span class="plus"><Icon name="plus" :size="11" /></span> above for
+          {{ isOn('slack') || isOn('todos') ? 'any other kind of tab' : 'a new tab' }}.
+        </p>
+        <p v-else>Every panel feature is switched off. Turn some on in Settings → Features.</p>
       </div>
       <!-- The GitHub tab stays alive behind the others, so it keeps checking on running Actions for its label. -->
       <KeepAlive include="GitHubView">
-        <SlackView
-          v-if="current?.kind === 'slack'"
+        <component
+          :is="tabView(current, !!props.docked).component"
+          v-if="current"
           :key="current.id"
-          ref="slackView"
-          :tab-id="current.id"
-          :url="current.url"
-          :docked="props.docked"
+          ref="view"
+          v-bind="tabView(current, !!props.docked).props"
         />
-        <NotesView v-else-if="current?.kind === 'notes'" :key="current.id" :tab-id="current.id" :text="current.text" />
-        <ScriptsView v-else-if="current?.kind === 'scripts'" :key="current.id" />
-        <CompareView
-          v-else-if="current?.kind === 'compare'"
-          :key="current.id"
-          :tab-id="current.id"
-          :base="current.base"
-          :head="current.head"
-          :uncommitted="current.uncommitted"
-        />
-        <GitHubView v-else-if="current?.kind === 'github'" :key="current.id" :tab-id="current.id" />
-        <MarkdownPanel v-else-if="current?.kind === 'markdown'" :key="current.id" :path="current.path" />
-        <MarkdownPanel v-else-if="current?.kind === 'readme'" :key="current.id" :pkg="current.pkg" />
-        <TodoList v-else-if="current?.kind === 'todos'" :key="current.id" :tab-id="current.id" :items="current.items" />
       </KeepAlive>
     </div>
   </section>

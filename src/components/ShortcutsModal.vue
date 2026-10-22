@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { commands, overlays } from '@/composables/commands'
+import { enabledCommands, overlays } from '@/composables/commands'
 import Icon from './Icon.vue'
 
 const open = overlays.shortcuts
@@ -20,7 +20,12 @@ const CONTEXT: { group: string; label: string; keys: string }[] = [
 ]
 
 const groups = computed(() => {
-  const all = [...commands.filter((c) => c.keys).map((c) => ({ group: c.group, label: c.label, keys: c.keys! })), ...CONTEXT]
+  const all = [
+    ...enabledCommands()
+      .filter((c) => c.keys)
+      .map((c) => ({ group: c.group, label: c.label, keys: c.keys! })),
+    ...CONTEXT,
+  ]
   const map = new Map<string, typeof all>()
   for (const item of all) map.set(item.group, [...(map.get(item.group) ?? []), item])
   return [...map]

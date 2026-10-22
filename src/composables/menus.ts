@@ -1,3 +1,4 @@
+import { isOn } from '@/features'
 import { git, type Commit, type Stash, type Worktree } from '@/lib/git'
 import { shortHash } from '@/lib/format'
 import { folderOpenItems } from './openers'
@@ -286,7 +287,9 @@ export function createMenus(
         },
       },
       'separator',
-      { label: 'New Worktree from Here…', icon: 'folder', run: () => addWorktree({ from: c.hash, label: `\`${s}\`` }) },
+      ...(isOn('worktrees')
+        ? [{ label: 'New Worktree from Here…', icon: 'folder', run: () => addWorktree({ from: c.hash, label: `\`${s}\`` }) } satisfies MenuItem]
+        : []),
       { label: 'Browse Files at this Commit', icon: 'files', run: () => browse(c.hash) },
       'separator',
       {
@@ -480,7 +483,16 @@ export function createMenus(
       elsewhere
         ? { label: 'Open its Worktree', icon: 'external', run: () => openWorktree(elsewhere.path) }
         : { label: 'Checkout Branch', icon: 'checkout', disabled: isCurrent, run: () => checkoutBranch(name) },
-      { label: 'Check Out in New Worktree…', icon: 'folder', disabled: isCurrent || !!elsewhere, run: () => addWorktree({ branch: name }) },
+      ...(isOn('worktrees')
+        ? [
+            {
+              label: 'Check Out in New Worktree…',
+              icon: 'folder',
+              disabled: isCurrent || !!elsewhere,
+              run: () => addWorktree({ branch: name }),
+            } satisfies MenuItem,
+          ]
+        : []),
       {
         label: 'Rename Branch…',
         icon: 'pencil',

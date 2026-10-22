@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { overlays, ZOOM_MAX, ZOOM_MIN } from '@/composables/commands'
 import { prefs } from '@/composables/prefs'
 import { useWorkspaces } from '@/composables/workspace'
+import { FEATURES, isOn, setFeature } from '@/features'
 import Icon from './Icon.vue'
 
 const { active } = useWorkspaces()
@@ -64,6 +65,21 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
           </section>
 
           <section>
+            <h3>Features</h3>
+            <p class="hint">
+              Everything beyond the graph, Git panel, files, search, editor and terminals. A feature switched off isn't loaded and leaves the menus;
+              its panel tabs are kept for when it's back on.
+            </p>
+            <label v-for="f in FEATURES" :key="f.id" class="row">
+              <div>
+                <span class="label">{{ f.name }}</span>
+                <span class="hint">{{ f.description }}</span>
+              </div>
+              <input type="checkbox" class="switch" :checked="isOn(f.id)" @change="setFeature(f.id, ($event.target as HTMLInputElement).checked)" />
+            </label>
+          </section>
+
+          <section>
             <h3>Git</h3>
             <label class="row">
               <div>
@@ -120,7 +136,7 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
             </label>
           </section>
 
-          <section>
+          <section v-if="isOn('slack')">
             <h3>Slack</h3>
             <label class="row">
               <div>

@@ -3,7 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { UNCOMMITTED } from '@/lib/git'
 import { basename, shortHash } from '@/lib/format'
 import { fuzzyScore } from '@/lib/fuzzy'
-import { commands, overlays, runCommand } from '@/composables/commands'
+import { enabledCommands, overlays, runCommand } from '@/composables/commands'
 import { prefs } from '@/composables/prefs'
 import { useWorkspaces } from '@/composables/workspace'
 import FileIcon from './FileIcon.vue'
@@ -32,7 +32,7 @@ const LIMIT = 60
 
 const items = computed<Item[]>(() => {
   const ws = active.value
-  const out: Item[] = commands.map((c) => ({
+  const out: Item[] = enabledCommands().map((c) => ({
     key: `cmd:${c.id}`,
     label: c.label,
     group: 'Command',

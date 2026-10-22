@@ -20,6 +20,8 @@ export const prefs = {
   dimIdleGraph: usePersisted('dim-idle-graph', false),
   /** The graph folded away, its place showing Acantha's mark, for more room around the terminal and panels. */
   graphCollapsed: usePersisted('graph-collapsed', false),
+  /** Optional features switched off in Settings (see src/features); everything else is on. */
+  disabledFeatures: usePersisted<string[]>('disabled-features', []),
   /** The file browser also lists what .gitignore leaves out (node_modules, build output), dimmed. */
   showIgnored: usePersisted('show-ignored', false),
   /** Slack channel IDs whose messages and canvases may be opened. Empty allows any the token can see. */

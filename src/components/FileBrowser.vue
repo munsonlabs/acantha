@@ -4,6 +4,7 @@ import { git } from '@/lib/git'
 import { resolveName } from '@/lib/paths'
 import { shortHash } from '@/lib/format'
 import { prefs } from '@/composables/prefs'
+import { isOn } from '@/features'
 import { useWorkspace } from '@/composables/workspace'
 import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
@@ -285,7 +286,7 @@ function rowMenu(e: MouseEvent, r: Row) {
       ? [
           { label: 'Edit', icon: 'pencil' as const, run: () => open(r.path, 'edit') },
           { label: 'Preview', icon: 'eye' as const, run: () => open(r.path, 'preview') },
-          ...(/\.(md|markdown|mdx)$/i.test(r.path)
+          ...(isOn('markdown') && /\.(md|markdown|mdx)$/i.test(r.path)
             ? [{ label: 'Preview in Panel', icon: 'eye' as const, run: () => ws.panel.addMarkdown(r.path) }]
             : []),
           'separator' as const,

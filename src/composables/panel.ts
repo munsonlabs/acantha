@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue'
+import { tabShown } from '@/features/panelTabs'
 import type { TodoDraft } from '@/lib/todos'
 import { prefs } from './prefs'
 import type { Repo } from './repo'
@@ -37,7 +38,8 @@ const todo = (d: TodoDraft): Todo => ({ id: newId(), text: d.text, done: d.done 
 
 export function createPanel({ repo }: Repo) {
   const state = computed<PanelState>(() => (repo.value && store.value[repo.value]) || { tabs: [], active: null })
-  const tabs = computed(() => state.value.tabs)
+  /** The tabs whose features are on; the others are kept for when theirs is switched back on. */
+  const tabs = computed(() => state.value.tabs.filter(tabShown))
   const active = computed(() => tabs.value.find((t) => t.id === state.value.active) ?? tabs.value[0] ?? null)
   /** Shown in place of the graph rather than under the terminal. */
   const expanded = ref(false)
@@ -158,8 +160,15 @@ export function createPanel({ repo }: Repo) {
     if (!tabs.value.length) expanded.value = false
   }
 
+  /** Moves a tab, by its place among the tabs showing. */
   function move(from: number, to: number) {
-    update((s) => s.tabs.splice(to, 0, ...s.tabs.splice(from, 1)))
+    const fromId = tabs.value[from]?.id
+    const toId = tabs.value[to]?.id
+    update((s) => {
+      const i = s.tabs.findIndex((t) => t.id === fromId)
+      const j = s.tabs.findIndex((t) => t.id === toId)
+      if (i !== -1 && j !== -1) s.tabs.splice(j, 0, ...s.tabs.splice(i, 1))
+    })
   }
 
   function rename(id: string, title: string) {

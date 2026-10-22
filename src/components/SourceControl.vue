@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, defineAsyncComponent } from 'vue'
+import { isOn } from '@/features'
 import { useWorkspace } from '@/composables/workspace'
 import Icon from './Icon.vue'
 import StatusSection from './StatusSection.vue'
-import WorktreeList from './WorktreeList.vue'
+
+/** Its own chunk, loaded only while the Worktrees feature is on. */
+const WorktreeList = defineAsyncComponent(() => import('./WorktreeList.vue'))
 
 const ws = useWorkspace()
 const { log } = ws.repo
@@ -94,7 +97,7 @@ function onKeydown(e: KeyboardEvent) {
         <StatusSection title="Staged changes" :files="staged" mode="staged" />
         <StatusSection title="Changes" :files="unstaged" mode="unstaged" />
         <p v-if="clean" class="clean"><Icon name="check" :size="13" /> Working tree clean</p>
-        <WorktreeList />
+        <WorktreeList v-if="isOn('worktrees')" />
       </div>
     </div>
   </div>

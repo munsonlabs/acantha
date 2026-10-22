@@ -1,0 +1,37 @@
+import { prefs } from '@/composables/prefs'
+
+/**
+ * The optional features: everything beyond the graph, the Git panel, files, search, the editor, terminals and the
+ * conflict resolver. Each can be switched off in Settings; then its code isn't loaded (each is its own lazily loaded
+ * chunk), it drops out of menus, the palette and the panel's + menu, and nothing of it runs in the background. All are
+ * on unless switched off, so a new one appears for everyone.
+ *
+ * A feature hooks in through the registries that take one (panel tabs in `panelTabs.ts`, commands' `feature`), and
+ * otherwise by checking `isOn` where it adds to a core view.
+ */
+export type FeatureId = 'slack' | 'todos' | 'notes' | 'scripts' | 'compare' | 'github' | 'markdown' | 'readme' | 'worktrees'
+
+export interface Feature {
+  id: FeatureId
+  name: string
+  description: string
+}
+
+export const FEATURES: Feature[] = [
+  { id: 'worktrees', name: 'Worktrees', description: 'The Worktrees list in the Git panel, and checking branches out into new ones.' },
+  { id: 'compare', name: 'Compare branches', description: 'A panel tab comparing two branches: their commits and changed files.' },
+  { id: 'github', name: 'GitHub', description: 'A panel tab for the branch’s pull request, its checks and Actions runs, through the gh CLI.' },
+  { id: 'scripts', name: 'Scripts', description: 'A panel tab of the repository’s npm scripts and Vite+ tasks, to run in a terminal.' },
+  { id: 'todos', name: 'To-do lists', description: 'Panel tabs of to-dos; pasting a bulleted list makes one.' },
+  { id: 'notes', name: 'Notes', description: 'Markdown notepads in the panel.' },
+  { id: 'markdown', name: 'Markdown preview', description: 'A repository Markdown file rendered in the panel, following your edits.' },
+  { id: 'readme', name: 'Package READMEs', description: 'A package’s README in the panel, from node_modules or npm.' },
+  { id: 'slack', name: 'Slack', description: 'Slack messages and canvases in the panel, from a pasted link.' },
+]
+
+export const isOn = (id: FeatureId) => !prefs.disabledFeatures.value.includes(id)
+
+export function setFeature(id: FeatureId, on: boolean) {
+  const rest = prefs.disabledFeatures.value.filter((f) => f !== id)
+  prefs.disabledFeatures.value = on ? rest : [...rest, id]
+}
