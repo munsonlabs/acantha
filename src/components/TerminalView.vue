@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Terminal, type ILink, type ITheme } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { SearchAddon } from '@xterm/addon-search'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { openUrl } from '@tauri-apps/plugin-opener'
@@ -12,6 +13,7 @@ import { prefs } from '@/composables/prefs'
 import type { TerminalSession } from '@/composables/terminals'
 import { showToast } from '@/composables/useToast'
 import { useWorkspace } from '@/composables/workspace'
+import Icon from './Icon.vue'
 
 const props = defineProps<{ session: TerminalSession; active: boolean }>()
 const emit = defineEmits<{ exit: []; title: [title: string] }>()
@@ -28,6 +30,61 @@ let disposed = false
 const scheme = window.matchMedia('(prefers-color-scheme: dark)')
 
 const ws = useWorkspace()
+
+/**
+ * Find in the terminal (⌘F while it has focus): matches highlighted through the scrollback, Enter and ⇧Enter or the
+ * arrows to step through them, Esc to close and go back to the shell.
+ */
+let search: SearchAddon | null = null
+const finding = ref(false)
+const query = ref('')
+const caseSensitive = ref(false)
+const results = ref<{ index: number; count: number } | null>(null)
+const findInput = ref<HTMLInputElement>()
+
+/** Highlight colours as the addon wants them: #RRGGBB, picked for the light or dark theme. */
+const highlights = () =>
+  scheme.matches
+    ? { matchBackground: '#5c4a1c', activeMatchBackground: '#c9952e', matchOverviewRuler: '#e0b34d', activeMatchColorOverviewRuler: '#ffffff' }
+    : { matchBackground: '#f5e2b0', activeMatchBackground: '#e0a930', matchOverviewRuler: '#a37413', activeMatchColorOverviewRuler: '#000000' }
+
+function find(backwards = false) {
+  if (!search) return
+  if (!query.value) {
+    search.clearDecorations()
+    results.value = null
+    return
+  }
+  const options = { caseSensitive: caseSensitive.value, decorations: highlights() }
+  if (backwards) search.findPrevious(query.value, options)
+  else search.findNext(query.value, options)
+}
+
+async function openFind() {
+  finding.value = true
+  // Start from what's selected in the terminal, as a find box usually does.
+  const selected = term?.getSelection().trim()
+  if (selected && !selected.includes('\n')) query.value = selected
+  await nextTick()
+  findInput.value?.select()
+  find()
+}
+
+function closeFind() {
+  finding.value = false
+  search?.clearDecorations()
+  results.value = null
+  term?.focus()
+}
+
+function onFindKey(e: KeyboardEvent) {
+  if (e.key === 'Enter') find(e.shiftKey)
+  else if (e.key === 'Escape') closeFind()
+  else if (e.key === 'f' && e.metaKey) findInput.value?.select()
+  else return
+  e.preventDefault()
+  e.stopPropagation()
+}
 const known = computed(() => new Set(ws.files.list.value))
 
 /**
@@ -130,6 +187,9 @@ onMounted(async () => {
   })
   fit = new FitAddon()
   term.loadAddon(fit)
+  search = new SearchAddon()
+  term.loadAddon(search)
+  search.onDidChangeResults((r) => (results.value = r.resultCount ? { index: r.resultIndex, count: r.resultCount } : { index: -1, count: 0 }))
   term.loadAddon(new WebLinksAddon((e, uri) => e.metaKey && void openUrl(uri)))
   term.registerLinkProvider({ provideLinks: fileLinks })
   // Links are checked against the repository's files, which the sidebar may not have loaded yet.
@@ -149,6 +209,13 @@ onMounted(async () => {
     if (!e.metaKey || e.type !== 'keydown') return true
     if (e.key === 'k') {
       term!.clear()
+      return false
+    }
+    // ⌘F finds in this terminal rather than the graph; ⇧⌘F still searches the files.
+    if (e.key === 'f' && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+      e.stopPropagation()
+      void openFind()
       return false
     }
     return !APP_KEYS.has(e.key.toLowerCase())
@@ -225,10 +292,26 @@ defineExpose({ focus: () => term?.focus() })
 </script>
 
 <template>
-  <div ref="el" class="terminal-view" />
+  <div class="terminal-host">
+    <div ref="el" class="terminal-view" />
+    <div v-if="finding" class="find" @keydown="onFindKey">
+      <input ref="findInput" v-model="query" type="text" placeholder="Find" spellcheck="false" autocomplete="off" @input="find()" />
+      <span class="count">{{ !query ? '' : results?.count ? `${results.index + 1} of ${results.count}` : 'No results' }}</span>
+      <button class="ghost" :class="{ on: caseSensitive }" title="Match case" @click="((caseSensitive = !caseSensitive), find())">Aa</button>
+      <button class="ghost" title="Previous (⇧↵)" :disabled="!results?.count" @click="find(true)">
+        <Icon name="chevron" :size="11" class="up" />
+      </button>
+      <button class="ghost" title="Next (↵)" :disabled="!results?.count" @click="find()"><Icon name="chevron" :size="11" class="down" /></button>
+      <button class="ghost" title="Close (Esc)" @click="closeFind"><Icon name="x" :size="12" /></button>
+    </div>
+  </div>
 </template>
 
 <style scoped>
+.terminal-host {
+  position: absolute;
+  inset: 0;
+}
 .terminal-view {
   position: absolute;
   inset: 8px 4px 4px 12px;
@@ -236,5 +319,53 @@ defineExpose({ focus: () => term?.focus() })
 .terminal-view :deep(.xterm-viewport) {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar) transparent;
+}
+.find {
+  position: absolute;
+  z-index: 5;
+  top: 10px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 4px 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--popover);
+  box-shadow: var(--shadow);
+}
+.find input {
+  width: 180px;
+  height: 24px;
+  border: none;
+  background: none;
+  font-size: 12.5px;
+  outline: none;
+}
+.find .count {
+  min-width: 64px;
+  color: var(--fg-faint);
+  font-size: 11px;
+  text-align: right;
+}
+.find button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  place-items: center;
+  border: none;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+.find button.on {
+  background: var(--selected);
+  color: var(--fg);
+}
+.find .up {
+  transform: rotate(-90deg);
+}
+.find .down {
+  transform: rotate(90deg);
 }
 </style>
