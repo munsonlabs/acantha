@@ -208,6 +208,13 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
               </label>
               <label class="row">
                 <div>
+                  <span class="label">Reopen terminals</span>
+                  <span class="hint">Opening a repository brings back its terminal tabs: fresh shells in the same folders, names and splits.</span>
+                </div>
+                <input v-model="prefs.restoreTerminals.value" type="checkbox" class="switch" />
+              </label>
+              <label class="row">
+                <div>
                   <span class="label">Shell</span>
                   <span class="hint">For new terminals. Leave empty for your login shell.</span>
                 </div>
