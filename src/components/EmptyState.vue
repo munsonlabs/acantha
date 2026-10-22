@@ -3,6 +3,7 @@ import { defineAsyncComponent, ref } from 'vue'
 import logo from '@/assets/logo.svg'
 import { basename } from '@/lib/format'
 import { prefs } from '@/composables/prefs'
+import { isOn } from '@/features'
 import { showToast } from '@/composables/useToast'
 import { useWorkspace, useWorkspaces } from '@/composables/workspace'
 import Icon from './Icon.vue'
@@ -29,7 +30,7 @@ function forget(path?: string) {
 </script>
 
 <template>
-  <div v-if="playing" class="game">
+  <div v-if="playing && isOn('snake')" class="game">
     <MiniGame @close="playing = false" />
   </div>
   <div v-else class="empty">
@@ -38,7 +39,9 @@ function forget(path?: string) {
       <h1>Open a repository</h1>
       <p>Pick a folder, drop one onto the window, or choose a recent repository.</p>
       <button class="primary" @click="pickRepo"><Icon name="folder" /> Open Folder… <kbd>⌘O</kbd></button>
-      <button class="ghost play" title="Play Commit Snake" @click="playing = true"><Icon name="play" :size="12" /> Play Commit Snake</button>
+      <button v-if="isOn('snake')" class="ghost play" title="Play Commit Snake" @click="playing = true">
+        <Icon name="play" :size="12" /> Play Commit Snake
+      </button>
       <ul v-if="recents.length">
         <li class="label">
           Recent

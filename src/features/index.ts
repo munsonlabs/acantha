@@ -9,7 +9,7 @@ import { prefs } from '@/composables/prefs'
  * A feature hooks in through the registries that take one (panel tabs in `panelTabs.ts`, commands' `feature`), and
  * otherwise by checking `isOn` where it adds to a core view.
  */
-export type FeatureId = 'slack' | 'todos' | 'notes' | 'scripts' | 'compare' | 'github' | 'markdown' | 'readme' | 'worktrees'
+export type FeatureId = 'slack' | 'todos' | 'notes' | 'scripts' | 'compare' | 'github' | 'markdown' | 'readme' | 'worktrees' | 'snake'
 
 export interface Feature {
   id: FeatureId
@@ -27,6 +27,7 @@ export const FEATURES: Feature[] = [
   { id: 'markdown', name: 'Markdown preview', description: 'A repository Markdown file rendered in the panel, following your edits.' },
   { id: 'readme', name: 'Package READMEs', description: 'A package’s README in the panel, from node_modules or npm.' },
   { id: 'slack', name: 'Slack', description: 'Slack messages and canvases in the panel, from a pasted link.' },
+  { id: 'snake', name: 'Commit Snake', description: 'A little game, from the collapsed graph and the new tab screen.' },
 ]
 
 export const isOn = (id: FeatureId) => !prefs.disabledFeatures.value.includes(id)

@@ -2,6 +2,7 @@
 import { defineAsyncComponent, ref } from 'vue'
 import logo from '../../icon.svg?url'
 import { prefs } from '@/composables/prefs'
+import { isOn } from '@/features'
 import Icon from './Icon.vue'
 
 /**
@@ -14,14 +15,16 @@ const playing = ref(false)
 
 <template>
   <div class="stamp-area">
-    <MiniGame v-if="playing" @close="playing = false" />
+    <MiniGame v-if="playing && isOn('snake')" @close="playing = false" />
     <template v-else>
       <img class="stamp" :src="logo" alt="" draggable="false" />
       <div class="actions">
         <button class="ghost" title="Show the graph again" @click="prefs.graphCollapsed.value = false">
           <Icon name="history" :size="13" /> Show graph
         </button>
-        <button class="ghost" title="Play Commit Snake while you wait" @click="playing = true"><Icon name="play" :size="13" /> Play</button>
+        <button v-if="isOn('snake')" class="ghost" title="Play Commit Snake while you wait" @click="playing = true">
+          <Icon name="play" :size="13" /> Play
+        </button>
       </div>
     </template>
   </div>
