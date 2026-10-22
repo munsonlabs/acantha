@@ -1,9 +1,6 @@
 use tauri::menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Emitter, Runtime};
 
-/// The macOS menu bar. Items send their id to the frontend as a "menu" event, which runs the matching command.
-/// Only shortcuts that mean the same thing everywhere are bound here: ⌘F, ⌘S, ⌘K and ⌘W stay with the page,
-/// because the editor and terminal use them too.
 /// One entry in a submenu: an item that runs a command (by id), one of macOS's own, or a separator.
 enum Entry<R: Runtime> {
     Command(MenuItem<R>),
@@ -45,8 +42,10 @@ fn submenu<R: Runtime>(app: &AppHandle<R>, title: &str, entries: Vec<Entry<R>>, 
     Submenu::with_items(app, title, true, &items)
 }
 
-/// The menu bar, without the commands in `hidden`: those of features switched off in Settings. The frontend rebuilds
-/// it (`set_hidden_menu_items`) whenever that list changes.
+/// The macOS menu bar, without the commands in `hidden` (those of features switched off in Settings; the frontend
+/// rebuilds it with `set_hidden_menu_items` whenever that list changes). Items send their id to the frontend as a
+/// "menu" event, which runs the matching command. Only shortcuts that mean the same thing everywhere are bound here:
+/// ⌘F, ⌘S, ⌘K, ⌘W and ⌘/ stay with the page, because the editor and terminal use them too.
 pub fn build<R: Runtime>(app: &AppHandle<R>, hidden: &[String]) -> tauri::Result<Menu<R>> {
     use Entry::{Builtin as B, Command as C, Separator as Sep};
     let item = |id: &str, label: &str, accel: Option<&str>| MenuItem::with_id(app, id, label, true, accel);
@@ -149,12 +148,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>, hidden: &[String]) -> tauri::Result
         ],
         hidden,
     )?;
-    let help = submenu(
-        app,
-        "Help",
-        vec![C(item("shortcuts", "Keyboard Shortcuts", Some("CmdOrCtrl+/"))?)],
-        hidden,
-    )?;
+    let help = submenu(app, "Help", vec![C(item("shortcuts", "Keyboard Shortcuts", None)?)], hidden)?;
 
     Menu::with_items(app, &[&app_menu, &file, &edit, &view, &repository, &window, &help])
 }

@@ -94,7 +94,7 @@ function onKeydown(e: KeyboardEvent) {
     // ⌥ changes e.key on macOS (ƒ), so this one goes by the physical key.
     e.preventDefault()
     runCommand('search-file-names')
-  } else if (mod && !e.shiftKey && !e.altKey && KEYS[key] && !(key === 'f' && inEditor)) {
+  } else if (mod && !e.shiftKey && !e.altKey && KEYS[key] && !((key === 'f' || key === '/') && inEditor)) {
     e.preventDefault()
     runCommand(KEYS[key])
   } else if (e.key === 'Escape') {
