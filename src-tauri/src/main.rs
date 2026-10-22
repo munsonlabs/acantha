@@ -66,6 +66,7 @@ fn main() {
             menu::set_hidden_menu_items,
             git::default_branch,
             git::branch_tracking,
+            git::get_reflog,
             git::compare_refs,
             github::run_gh,
             packages::package_readme,

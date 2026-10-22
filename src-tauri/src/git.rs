@@ -255,6 +255,56 @@ fn parse_stashes(out: &str) -> Vec<Stash> {
         .collect()
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReflogEntry {
+    hash: String,
+    /// `HEAD@{n}`, which git accepts anywhere a commit goes.
+    selector: String,
+    /// What moved HEAD there: "checkout: moving from main to fix", "reset: moving to HEAD~1", "commit: …".
+    action: String,
+    /// When HEAD moved, not when the commit was made.
+    date: i64,
+    subject: String,
+    /// On no branch, tag or remote any more: only the reflog still knows it, so it's what you'd want to recover.
+    lost: bool,
+}
+
+/// Where HEAD has been, newest first: a way back to commits a reset, rebase or deleted branch left behind.
+#[tauri::command]
+pub async fn get_reflog(repo: String, limit: usize) -> Result<Vec<ReflogEntry>, String> {
+    let Ok(out) = git(
+        &repo,
+        [
+            "log",
+            "-g",
+            "--date=unix",
+            &format!("-n{limit}"),
+            "--format=%H%x1f%gd%x1f%gs%x1f%s",
+            "HEAD",
+        ],
+    ) else {
+        return Ok(Vec::new()); // no commits yet
+    };
+    let reachable: std::collections::HashSet<String> = git(&repo, ["rev-list", "--all"]).unwrap_or_default().lines().map(String::from).collect();
+    Ok(out
+        .lines()
+        .enumerate()
+        .filter_map(|(i, line)| {
+            let f: Vec<&str> = line.splitn(4, '\x1f').collect();
+            (f.len() == 4).then(|| ReflogEntry {
+                hash: f[0].into(),
+                selector: format!("HEAD@{{{i}}}"),
+                // With --date=unix the selector reads HEAD@{1700000000}.
+                date: f[1].rsplit('{').next().and_then(|t| t.trim_end_matches('}').parse().ok()).unwrap_or(0),
+                action: f[2].into(),
+                subject: f[3].into(),
+                lost: !reachable.contains(f[0]),
+            })
+        })
+        .collect())
+}
+
 /// Which multi-step operation, if any, is waiting to be continued or aborted.
 fn operation(repo: &str) -> Option<&'static str> {
     const MARKERS: [(&str, &str); 5] = [
@@ -906,6 +956,26 @@ mod tests {
         assert!(block_on(branch_tracking(repo.clone(), "main".into(), None)).is_none());
         let t = block_on(branch_tracking(repo.clone(), "main".into(), Some("stale".into()))).unwrap();
         assert_eq!((t.ahead, t.behind), (2, 0));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn lists_the_reflog_and_what_it_alone_remembers() {
+        let dir = std::env::temp_dir().join(format!("acantha-reflog-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let repo = dir.to_string_lossy().into_owned();
+        let commit = |m: &str| git(&repo, ["-c", "user.name=T", "-c", "user.email=t@t", "commit", "-qm", m, "--allow-empty"]).unwrap();
+        git(&repo, ["init", "-q", "-b", "main"]).unwrap();
+        commit("first");
+        commit("second");
+        git(&repo, ["reset", "-q", "--hard", "HEAD~1"]).unwrap();
+        let log = block_on(get_reflog(repo.clone(), 50)).unwrap();
+        assert_eq!(log.len(), 3);
+        assert!(log[0].action.starts_with("reset: moving to HEAD~1"));
+        assert_eq!((log[0].selector.as_str(), log[0].lost), ("HEAD@{0}", false));
+        assert_eq!((log[1].subject.as_str(), log[1].lost), ("second", true));
+        assert!(log[1].date > 1_600_000_000);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

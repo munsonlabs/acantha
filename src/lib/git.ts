@@ -45,6 +45,15 @@ export interface Log {
   worktrees: Worktree[]
 }
 
+export interface ReflogEntry {
+  hash: string
+  selector: string
+  action: string
+  date: number
+  subject: string
+  lost: boolean
+}
+
 export interface Comparison {
   mergeBase: string | null
   /** Commits only the head has, newest first (up to 200). */
@@ -186,6 +195,8 @@ export const git = {
   /** How far a local branch is ahead of and behind its upstream (or `against`); null with no upstream. */
   tracking: (repo: string, branch: string, against?: string) =>
     invoke<{ upstream: string; ahead: number; behind: number } | null>('branch_tracking', { repo, branch, against: against ?? null }),
+  /** Where HEAD has been, newest first; `lost` marks commits only the reflog still reaches. */
+  reflog: (repo: string, limit = 200) => invoke<ReflogEntry[]>('get_reflog', { repo, limit }),
   /** The repository's main branch (`origin/HEAD`, else `main` or `master`). */
   defaultBranch: (repo: string) => invoke<string | null>('default_branch', { repo }),
   /** How `head` differs from `base`: its own commits, how far behind it is, and where the two split. */

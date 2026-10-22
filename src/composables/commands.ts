@@ -105,6 +105,7 @@ export const commands: Command[] = [
   { id: 'new-notes', label: 'New Notes', group: 'View', feature: 'notes', run: withRepo((ws) => ws.panel.addNotes()) },
   { id: 'scripts', label: 'Scripts', group: 'View', feature: 'scripts', run: withRepo((ws) => ws.panel.addScripts()) },
   { id: 'compare-branches', label: 'Compare Branches', group: 'View', feature: 'compare', run: withRepo((ws) => ws.panel.addCompare()) },
+  { id: 'reflog', label: 'Reflog: Recover Lost Commits', group: 'Repository', feature: 'reflog', run: withRepo((ws) => ws.panel.addReflog()) },
   { id: 'github', label: 'GitHub: Pull Requests & Actions', group: 'View', feature: 'github', run: withRepo((ws) => ws.panel.addGithub()) },
   {
     id: 'toggle-remotes',

@@ -115,6 +115,7 @@ const NEW_TABS: [FeatureId, MenuItem][][] = [
   ],
   [
     ['compare', { label: 'Compare Branches', icon: 'merge', run: () => addCompare() }],
+    ['reflog', { label: 'Reflog: Recover Lost Commits', icon: 'undo', run: () => ws.panel.addReflog() }],
     ['github', { label: 'GitHub: Pull Requests & Actions', icon: 'cloud', run: () => addGithub() }],
   ],
   [

@@ -20,6 +20,7 @@ export type PanelTab =
   /** Two branches side by side. null base: the repository's main branch; null head: the one checked out. */
   | { id: string; kind: 'compare'; title: string; base: string | null; head: string | null; uncommitted: boolean }
   | { id: string; kind: 'github'; title: string }
+  | { id: string; kind: 'reflog'; title: string }
   /** A Markdown file from the repository, rendered, following its edits. */
   | { id: string; kind: 'markdown'; title: string; path: string }
   /** A package's README, from node_modules or npm. */
@@ -108,6 +109,11 @@ export function createPanel({ repo }: Repo) {
     showOrAdd(
       () => false,
       (id) => ({ id, kind: 'compare', title: 'Compare', base: null, head: null, uncommitted: false }),
+    )
+  const addReflog = () =>
+    showOrAdd(
+      (t) => t.kind === 'reflog',
+      (id) => ({ id, kind: 'reflog', title: 'Reflog' }),
     )
   const addGithub = () =>
     showOrAdd(
@@ -218,6 +224,7 @@ export function createPanel({ repo }: Repo) {
     addCompare,
     setCompare,
     addGithub,
+    addReflog,
     addMarkdown,
     addReadme,
     close,

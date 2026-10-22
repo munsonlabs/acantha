@@ -9,7 +9,7 @@ import { prefs } from '@/composables/prefs'
  * A feature hooks in through the registries that take one (panel tabs in `panelTabs.ts`, commands' `feature`), and
  * otherwise by checking `isOn` where it adds to a core view.
  */
-export type FeatureId = 'slack' | 'todos' | 'notes' | 'scripts' | 'compare' | 'github' | 'markdown' | 'readme' | 'worktrees' | 'snake'
+export type FeatureId = 'slack' | 'todos' | 'notes' | 'scripts' | 'compare' | 'github' | 'markdown' | 'readme' | 'worktrees' | 'snake' | 'reflog'
 
 export interface Feature {
   id: FeatureId
@@ -19,6 +19,7 @@ export interface Feature {
 
 export const FEATURES: Feature[] = [
   { id: 'worktrees', name: 'Worktrees', description: 'The Worktrees list in the Git panel, and checking branches out into new ones.' },
+  { id: 'reflog', name: 'Reflog', description: 'A panel tab of everywhere HEAD has been, to get back commits a reset or rebase left behind.' },
   { id: 'compare', name: 'Compare branches', description: 'A panel tab comparing two branches: their commits and changed files.' },
   { id: 'github', name: 'GitHub', description: 'A panel tab for the branch’s pull request, its checks and Actions runs, through the gh CLI.' },
   { id: 'scripts', name: 'Scripts', description: 'A panel tab of the repository’s npm scripts and Vite+ tasks, to run in a terminal.' },
