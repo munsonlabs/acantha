@@ -24,6 +24,7 @@ import TitleBar from '@/components/TitleBar.vue'
 import ToastMessage from '@/components/ToastMessage.vue'
 import WorkspaceView from '@/components/WorkspaceView.vue'
 import TabList from '@/components/TabList.vue'
+import { isOn } from '@/features'
 
 const { workspaces, activeId, active, activate, addWorkspace, closeWorkspace, openInWorkspace, sleepWorkspace } = useWorkspaces()
 const { current: dialog } = useDialog()
@@ -184,7 +185,7 @@ const autoFetch = setInterval(() => {
 // server, a build) is left alone, since sleeping would stop it.
 const autoSleep = setInterval(async () => {
   const minutes = prefs.autoSleepMinutes.value
-  if (!minutes) return
+  if (!minutes || !isOn('tabSleep')) return
   const before = Date.now() - minutes * 60_000
   for (const ws of workspaces.value) {
     if (ws.id === activeId.value || ws.sleeping.value || !ws.repo.repo.value) continue

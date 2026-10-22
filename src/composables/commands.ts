@@ -54,7 +54,13 @@ export const commands: Command[] = [
     run: () => (inTerminal() ? active.value?.terminals.closeActive() : active.value && closeWorkspace(active.value.id)),
   },
   { id: 'all-tabs', label: 'Show All Tabs', group: 'Tabs', run: () => (overlays.tabList.value = true) },
-  { id: 'sleep-other-tabs', label: 'Put Other Tabs to Sleep', group: 'Tabs', run: () => active.value && sleepOtherWorkspaces(active.value.id) },
+  {
+    id: 'sleep-other-tabs',
+    label: 'Put Other Tabs to Sleep',
+    group: 'Tabs',
+    feature: 'tabSleep',
+    run: () => active.value && sleepOtherWorkspaces(active.value.id),
+  },
   { id: 'next-tab', label: 'Next Tab', group: 'Tabs', keys: '⇧⌘]', run: () => stepWorkspace(1) },
   { id: 'prev-tab', label: 'Previous Tab', group: 'Tabs', keys: '⇧⌘[', run: () => stepWorkspace(-1) },
 

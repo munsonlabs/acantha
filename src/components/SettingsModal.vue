@@ -78,7 +78,7 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
                   </button>
                 </span>
               </div>
-              <label class="row">
+              <label v-if="isOn('tabSleep')" class="row">
                 <div>
                   <span class="label">Sleep unused tabs</span>
                   <span class="hint"

@@ -4,7 +4,8 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { basename } from '@/lib/format'
 import { pathOf, useWorkspaces, type Workspace } from '@/composables/workspace'
 import { overlays } from '@/composables/commands'
-import { openMenu, type MenuEntry } from '@/composables/useContextMenu'
+import { openMenu, type MenuEntry, type MenuItem } from '@/composables/useContextMenu'
+import { isOn } from '@/features'
 import { folderOpenItems } from '@/composables/openers'
 import { ask } from '@/composables/useDialog'
 import { prefs } from '@/composables/prefs'
@@ -132,14 +133,23 @@ function tabMenu(e: MouseEvent, ws: Workspace) {
   if (path) items.push('separator', ...folderOpenItems(path, () => ws.terminals.add()))
   items.push(
     'separator',
-    {
-      label: 'Put to Sleep',
-      icon: 'moon',
-      disabled: !ws.repo.repo.value || ws.id === activeId.value,
-      run: () => sleepWorkspace(ws.id),
-    },
-    { label: 'Put Other Tabs to Sleep', icon: 'moon', disabled: workspaces.value.length < 2, run: () => sleepOtherWorkspaces(ws.id) },
-    'separator',
+    ...(isOn('tabSleep')
+      ? [
+          {
+            label: 'Put to Sleep',
+            icon: 'moon',
+            disabled: !ws.repo.repo.value || ws.id === activeId.value,
+            run: () => sleepWorkspace(ws.id),
+          } satisfies MenuItem,
+          {
+            label: 'Put Other Tabs to Sleep',
+            icon: 'moon',
+            disabled: workspaces.value.length < 2,
+            run: () => sleepOtherWorkspaces(ws.id),
+          } satisfies MenuItem,
+          'separator' as const,
+        ]
+      : []),
     { label: 'Close Tab', icon: 'x', shortcut: '⌘W', run: () => closeWorkspace(ws.id) },
     { label: 'Close Other Tabs', icon: 'x', disabled: workspaces.value.length < 2, run: () => closeOtherWorkspaces(ws.id) },
   )

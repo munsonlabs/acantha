@@ -23,6 +23,7 @@ export type FeatureId =
   | 'reflog'
   | 'changeMarkers'
   | 'dashboard'
+  | 'tabSleep'
 
 export interface Feature {
   id: FeatureId
@@ -31,6 +32,11 @@ export interface Feature {
 }
 
 export const FEATURES: Feature[] = [
+  {
+    id: 'tabSleep',
+    name: 'Tab sleep',
+    description: 'Put tabs to sleep (by hand, or after a while unused) to free their memory; they open again when clicked.',
+  },
   {
     id: 'dashboard',
     name: 'Repository dashboard',
