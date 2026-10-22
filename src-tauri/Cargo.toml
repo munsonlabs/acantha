@@ -1,6 +1,6 @@
 [package]
 name = "acantha"
-version = "0.2.7"
+version = "0.2.8"
 description = "A Git client with a commit graph, terminals and an editor"
 edition = "2021"
 license-file = "../LICENSE"
