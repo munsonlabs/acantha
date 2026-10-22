@@ -5,8 +5,9 @@ import Icon from './Icon.vue'
 
 /**
  * Commit Snake, for where the graph was while it's collapsed: steer a branch round the space and pick up commits, each
- * one a new node on it. Arrow keys or WASD, Space to pause, Esc to stop. The edges wrap round, or in classic mode
- * they're walls. Loaded only when someone presses Play.
+ * one a new node on it. Arrow keys or WASD, Space to pause, Esc to stop, Shift to boost (twice as fast, double points).
+ * The edges wrap round, or in classic mode they're walls; with conflicts on, blocks appear as you go. Now and then a
+ * gold hotfix commit shows up for a few seconds, worth five. Loaded only when someone presses Play.
  */
 const emit = defineEmits<{ close: [] }>()
 
@@ -19,21 +20,31 @@ const score = ref(0)
 const state = ref<'ready' | 'playing' | 'paused' | 'over'>('ready')
 /** Classic: the edges are walls. Otherwise they wrap round, and only running into the branch ends it. */
 const classic = prefs.gameClassic
+/** Merge conflicts: a block appears every few commits, and hitting one ends the game. */
+const obstacles = prefs.gameObstacles
+/** Each setup keeps its own best, since their scores don't compare. */
+const setup = computed(() => `${classic.value ? 'classic' : 'wrap'}${obstacles.value ? '+conflicts' : ''}`)
+const setupName = computed(() => `${classic.value ? 'classic' : 'wrap'}${obstacles.value ? ' + conflicts' : ''}`)
 const best = computed({
-  get: () => (classic.value ? prefs.gameBestClassic.value : prefs.gameBest.value),
-  set: (n: number) => void (classic.value ? (prefs.gameBestClassic.value = n) : (prefs.gameBest.value = n)),
+  get: () =>
+    prefs.gameBests.value[setup.value] ??
+    (setup.value === 'wrap' ? prefs.gameBest.value : setup.value === 'classic' ? prefs.gameBestClassic.value : 0),
+  set: (n: number) => void (prefs.gameBests.value = { ...prefs.gameBests.value, [setup.value]: n }),
 })
 /** What ended the last game, for the message. */
-const crash = ref<'self' | 'wall'>('self')
+const crash = ref<'self' | 'wall' | 'conflict'>('self')
 
-function setMode(on: boolean) {
+/** Changes a setting between games, starting afresh. */
+function setOption(change: () => void) {
   if (state.value === 'playing') return
-  classic.value = on
+  change()
   state.value = 'ready'
   reset()
   draw()
   box.value?.focus()
 }
+const setMode = (on: boolean) => setOption(() => (classic.value = on))
+const setObstacles = (on: boolean) => setOption(() => (obstacles.value = on))
 
 let cols = 0
 let rows = 0
@@ -42,6 +53,16 @@ let dir: Pt = { x: 1, y: 0 }
 /** Turns pressed since the last step, so two quick presses (up, then left) both count. */
 let turns: Pt[] = []
 let food: Pt = { x: 0, y: 0 }
+/** Merge conflicts on the board. */
+let blocks: Pt[] = []
+/** A gold hotfix commit, worth five, until `goldUntil`. */
+let gold: Pt | null = null
+let goldUntil = 0
+const GOLD_MS = 5000
+/** Commits picked up this game, which is what brings more conflicts (the score counts boosts and gold too). */
+let eaten = 0
+/** Shift held: twice as fast, and twice the points. */
+const boosting = ref(false)
 let timer: ReturnType<typeof setTimeout> | undefined
 let observer: ResizeObserver | null = null
 
@@ -62,14 +83,27 @@ function size() {
   // Anything now outside the board comes back in.
   snake = snake.map((p) => ({ x: Math.min(p.x, cols - 1), y: Math.min(p.y, rows - 1) }))
   if (food.x >= cols || food.y >= rows) placeFood()
+  blocks = blocks.filter((b) => b.x < cols && b.y < rows)
+  if (gold && (gold.x >= cols || gold.y >= rows)) gold = null
   draw()
 }
 
+const at = (list: Pt[], p: Pt) => list.some((q) => q.x === p.x && q.y === p.y)
+
+/** A free square: not the branch, a conflict, or a commit; and at least `clear` squares from the head. */
+function freeSpot(clear = 0): Pt | null {
+  const head = snake[0]
+  for (let tries = 0; tries < 500; tries++) {
+    const p = { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) }
+    if (at(snake, p) || at(blocks, p) || (food && at([food], p)) || (gold && at([gold], p))) continue
+    if (head && Math.abs(p.x - head.x) + Math.abs(p.y - head.y) < clear) continue
+    return p
+  }
+  return null
+}
+
 function placeFood() {
-  const taken = new Set(snake.map((p) => `${p.x},${p.y}`))
-  if (taken.size >= cols * rows) return
-  do food = { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) }
-  while (taken.has(`${food.x},${food.y}`))
+  food = freeSpot() ?? food
 }
 
 function reset() {
@@ -79,13 +113,19 @@ function reset() {
   dir = { x: 1, y: 0 }
   turns = []
   score.value = 0
+  eaten = 0
+  blocks = []
+  gold = null
   placeFood()
 }
 
 /** Starts slow and speeds up with each commit, down to a limit. */
 const SPEEDS = { slow: { start: 180, fastest: 70 }, normal: { start: 130, fastest: 55 }, fast: { start: 90, fastest: 45 } } as const
 const speed = prefs.gameSpeed
-const delay = () => Math.max(SPEEDS[speed.value].fastest, SPEEDS[speed.value].start - score.value * 3)
+const delay = () => {
+  const d = Math.max(SPEEDS[speed.value].fastest, SPEEDS[speed.value].start - eaten * 3)
+  return boosting.value ? Math.max(25, Math.round(d / 2)) : d
+}
 
 function setSpeed(s: keyof typeof SPEEDS) {
   speed.value = s
@@ -102,27 +142,49 @@ function step() {
     head.x = (head.x + cols) % cols
     head.y = (head.y + rows) % rows
   }
+  if (at(blocks, head)) return over('conflict')
+  if (gold && Date.now() > goldUntil) gold = null
   const eats = head.x === food.x && head.y === food.y
-  const body = eats ? snake : snake.slice(0, -1)
-  if (body.some((p) => p.x === head.x && p.y === head.y)) return over('self')
+  const golden = !!gold && head.x === gold.x && head.y === gold.y
+  const body = eats || golden ? snake : snake.slice(0, -1)
+  if (at(body, head)) return over('self')
   snake = [head, ...body]
+  const points = (n: number) => n * (boosting.value ? 2 : 1)
+  if (golden) {
+    score.value += points(5)
+    gold = null
+  }
   if (eats) {
-    score.value++
+    score.value += points(1)
+    eaten++
     placeFood()
+    // Every five commits, another conflict; now and then, a hotfix to chase.
+    if (obstacles.value && eaten % 5 === 0) {
+      const b = freeSpot(5)
+      if (b) blocks = [...blocks, b]
+    }
+    if (!gold && Math.random() < 0.18) {
+      gold = freeSpot(4)
+      goldUntil = Date.now() + GOLD_MS
+    }
   }
   draw()
   timer = setTimeout(step, delay())
 }
 
-function over(why: 'self' | 'wall') {
+function over(why: 'self' | 'wall' | 'conflict') {
   state.value = 'over'
   crash.value = why
   if (score.value > best.value) best.value = score.value
   draw()
 }
 
+/** The gold hotfix's time left while paused, so a pause doesn't let it run out. */
+let goldLeft = 0
+
 function play() {
   if (state.value === 'over' || state.value === 'ready') reset()
+  else if (gold) goldUntil = Date.now() + goldLeft
   state.value = 'playing'
   clearTimeout(timer)
   timer = setTimeout(step, delay())
@@ -133,6 +195,7 @@ function pause() {
   if (state.value !== 'playing') return
   state.value = 'paused'
   clearTimeout(timer)
+  goldLeft = Math.max(0, goldUntil - Date.now())
 }
 
 function draw() {
@@ -184,6 +247,38 @@ function draw() {
   ctx.strokeStyle = css('--tag')
   ctx.lineWidth = 2.5
   ctx.stroke()
+  // Merge conflicts: red crosses in a square.
+  const red = css('--del')
+  for (const b of blocks) {
+    const x = b.x * CELL
+    const y = b.y * CELL
+    ctx.globalAlpha = 0.22
+    ctx.fillStyle = red
+    ctx.fillRect(x + 1, y + 1, CELL - 2, CELL - 2)
+    ctx.globalAlpha = 1
+    ctx.strokeStyle = red
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.moveTo(x + 4, y + 4)
+    ctx.lineTo(x + CELL - 4, y + CELL - 4)
+    ctx.moveTo(x + CELL - 4, y + 4)
+    ctx.lineTo(x + 4, y + CELL - 4)
+    ctx.stroke()
+  }
+  // The gold hotfix: a filled commit with a ring that runs down as its time does.
+  if (gold) {
+    const [gx, gy] = mid(gold)
+    const left = Math.max(0, (goldUntil - Date.now()) / GOLD_MS)
+    ctx.fillStyle = css('--tag')
+    ctx.beginPath()
+    ctx.arc(gx, gy, 5.5, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.strokeStyle = css('--tag')
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.arc(gx, gy, 8.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left)
+    ctx.stroke()
+  }
 }
 
 const KEYS: Record<string, Pt> = {
@@ -199,6 +294,7 @@ const KEYS: Record<string, Pt> = {
 
 function onKey(e: KeyboardEvent) {
   if (e.metaKey || e.ctrlKey || e.altKey) return
+  if (e.key === 'Shift') return void (boosting.value = true)
   const turn = KEYS[e.key] ?? KEYS[e.key.toLowerCase()]
   if (turn) {
     if (state.value !== 'playing') play()
@@ -219,7 +315,14 @@ function onKey(e: KeyboardEvent) {
   e.stopPropagation()
 }
 
-const onBlur = () => pause()
+function onKeyUp(e: KeyboardEvent) {
+  if (e.key === 'Shift') boosting.value = false
+}
+
+const onBlur = () => {
+  boosting.value = false
+  pause()
+}
 
 /**
  * The score card fades away while you play, since it can sit over the board, and comes back when you pause, when the
@@ -253,32 +356,38 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="box" class="game" tabindex="0" aria-label="Commit Snake" @keydown="onKey" @mousedown="box?.focus()" @mousemove="stir">
+  <div ref="box" class="game" tabindex="0" aria-label="Commit Snake" @keydown="onKey" @keyup="onKeyUp" @mousedown="box?.focus()" @mousemove="stir">
     <canvas ref="canvas" />
     <div class="hud" :class="{ hidden: !hudShown }">
       <div class="stat">
         <strong>{{ score }}</strong>
-        <span>{{ score === 1 ? 'commit' : 'commits' }}</span>
+        <span>{{ boosting && state === 'playing' ? 'boost ×2' : score === 1 ? 'point' : 'points' }}</span>
       </div>
       <div class="divider" />
-      <div class="stat" :title="`Best in ${classic ? 'classic' : 'wrap'} mode`">
+      <div class="stat" :title="`Best with ${setupName}`">
         <strong :class="{ record: score > 0 && score >= best }">{{ Math.max(best, score) }}</strong>
-        <span>best · {{ classic ? 'classic' : 'wrap' }}</span>
+        <span>best · {{ setupName }}</span>
       </div>
       <button class="close" title="Stop playing (Esc)" @click="emit('close')"><Icon name="x" :size="12" /></button>
     </div>
     <div v-if="state !== 'playing'" class="message" @click="play">
       <strong>{{
         state === 'over'
-          ? `${crash === 'wall' ? 'Hit the wall!' : 'Merge conflict!'} ${score} commits`
+          ? `${crash === 'wall' ? 'Hit the wall!' : crash === 'conflict' ? 'Merge conflict!' : 'Tangled in your own branch!'} ${score} points`
           : state === 'paused'
             ? 'Paused'
             : 'Commit Snake'
       }}</strong>
-      <span>{{ state === 'paused' ? 'Space to carry on' : 'Arrow keys or WASD to steer · Space to pause · Esc to stop' }}</span>
+      <span>{{ state === 'paused' ? 'Space to carry on' : 'Arrows or WASD to steer · hold Shift to boost (double points) · Space to pause' }}</span>
       <div v-if="state !== 'paused'" class="modes" @click.stop>
         <button :class="{ on: !classic }" title="Go off one edge, come back at the other" @click="setMode(false)">Wrap edges</button>
         <button :class="{ on: classic }" title="The edges are walls" @click="setMode(true)">Classic</button>
+      </div>
+      <div v-if="state !== 'paused'" class="modes" @click.stop>
+        <button :class="{ on: !obstacles }" @click="setObstacles(false)">No conflicts</button>
+        <button :class="{ on: obstacles }" title="A block appears every five commits; hit one and it's over" @click="setObstacles(true)">
+          Conflicts
+        </button>
       </div>
       <div v-if="state !== 'paused'" class="modes" @click.stop>
         <button v-for="s in ['slow', 'normal', 'fast'] as const" :key="s" :class="{ on: speed === s }" @click="setSpeed(s)">

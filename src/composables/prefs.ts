@@ -29,6 +29,10 @@ export const prefs = {
   /** Commit Snake's mode: edges that wrap round, or classic, where they end the game; each has its own best. */
   gameClassic: usePersisted('game-classic', false),
   gameBestClassic: usePersisted('game-best-classic', 0),
+  /** Merge conflicts: blocks that appear on the board as you go, ending the game if you hit one. */
+  gameObstacles: usePersisted('game-obstacles', false),
+  /** Best scores for each setup ("wrap", "classic+conflicts"…); gameBest and gameBestClassic are the older ones. */
+  gameBests: usePersisted<Record<string, number>>('game-bests', {}),
   /** How fast Commit Snake starts; it speeds up from there with each commit. */
   gameSpeed: usePersisted<'slow' | 'normal' | 'fast'>('game-speed', 'normal'),
   /** Slack channel IDs whose messages and canvases may be opened. Empty allows any the token can see. */
