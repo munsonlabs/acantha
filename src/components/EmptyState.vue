@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { defineAsyncComponent, ref } from 'vue'
 import logo from '@/assets/logo.svg'
 import { basename } from '@/lib/format'
 import { prefs } from '@/composables/prefs'
@@ -9,6 +10,10 @@ import Icon from './Icon.vue'
 const ws = useWorkspace()
 const { pickRepo, openInWorkspace } = useWorkspaces()
 const recents = prefs.recents
+
+/** Commit Snake, for a break; its code loads only when it's first played. */
+const MiniGame = defineAsyncComponent(() => import('./MiniGame.vue'))
+const playing = ref(false)
 
 const home = (path: string) => path.replace(/^\/Users\/[^/]+/, '~')
 
@@ -24,12 +29,16 @@ function forget(path?: string) {
 </script>
 
 <template>
-  <div class="empty">
+  <div v-if="playing" class="game">
+    <MiniGame @close="playing = false" />
+  </div>
+  <div v-else class="empty">
     <div class="card">
       <img class="logo" :src="logo" alt="" />
       <h1>Open a repository</h1>
       <p>Pick a folder, drop one onto the window, or choose a recent repository.</p>
       <button class="primary" @click="pickRepo"><Icon name="folder" /> Open Folder… <kbd>⌘O</kbd></button>
+      <button class="ghost play" title="Play Commit Snake" @click="playing = true"><Icon name="play" :size="12" /> Play Commit Snake</button>
       <ul v-if="recents.length">
         <li class="label">
           Recent
@@ -82,6 +91,22 @@ p {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+.game {
+  height: 100%;
+}
+.play {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  margin-top: 8px;
+  padding: 0 10px;
+  color: var(--fg-faint);
+  font-size: 12px;
+}
+.play:hover {
+  color: var(--fg);
 }
 .primary kbd {
   font: 11px var(--font);

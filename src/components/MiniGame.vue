@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { prefs } from '@/composables/prefs'
 
 /**
  * Commit Snake, for where the graph was while it's collapsed: steer a branch round the space and pick up commits, each
- * one a new node on it. Arrow keys or WASD, Space to pause, Esc to stop. Loaded only when someone presses Play.
+ * one a new node on it. Arrow keys or WASD, Space to pause, Esc to stop. The edges wrap round, or in classic mode
+ * they're walls. Loaded only when someone presses Play.
  */
 const emit = defineEmits<{ close: [] }>()
 
@@ -15,6 +16,23 @@ const box = ref<HTMLElement>()
 const canvas = ref<HTMLCanvasElement>()
 const score = ref(0)
 const state = ref<'ready' | 'playing' | 'paused' | 'over'>('ready')
+/** Classic: the edges are walls. Otherwise they wrap round, and only running into the branch ends it. */
+const classic = prefs.gameClassic
+const best = computed({
+  get: () => (classic.value ? prefs.gameBestClassic.value : prefs.gameBest.value),
+  set: (n: number) => void (classic.value ? (prefs.gameBestClassic.value = n) : (prefs.gameBest.value = n)),
+})
+/** What ended the last game, for the message. */
+const crash = ref<'self' | 'wall'>('self')
+
+function setMode(on: boolean) {
+  if (state.value === 'playing') return
+  classic.value = on
+  state.value = 'ready'
+  reset()
+  draw()
+  box.value?.focus()
+}
 
 let cols = 0
 let rows = 0
@@ -70,12 +88,15 @@ function step() {
   const turn = turns.shift()
   if (turn) dir = turn
   const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y }
-  // The edges wrap round, so only running into the branch itself ends it.
-  head.x = (head.x + cols) % cols
-  head.y = (head.y + rows) % rows
+  if (classic.value) {
+    if (head.x < 0 || head.y < 0 || head.x >= cols || head.y >= rows) return over('wall')
+  } else {
+    head.x = (head.x + cols) % cols
+    head.y = (head.y + rows) % rows
+  }
   const eats = head.x === food.x && head.y === food.y
   const body = eats ? snake : snake.slice(0, -1)
-  if (body.some((p) => p.x === head.x && p.y === head.y)) return over()
+  if (body.some((p) => p.x === head.x && p.y === head.y)) return over('self')
   snake = [head, ...body]
   if (eats) {
     score.value++
@@ -85,9 +106,10 @@ function step() {
   timer = setTimeout(step, delay())
 }
 
-function over() {
+function over(why: 'self' | 'wall') {
   state.value = 'over'
-  if (score.value > prefs.gameBest.value) prefs.gameBest.value = score.value
+  crash.value = why
+  if (score.value > best.value) best.value = score.value
   draw()
 }
 
@@ -111,6 +133,12 @@ function draw() {
   const w = cols * CELL
   const h = rows * CELL
   ctx.clearRect(0, 0, w, h)
+  // In classic mode the edges are walls, so they're drawn.
+  if (classic.value) {
+    ctx.strokeStyle = css('--border-strong')
+    ctx.lineWidth = 2
+    ctx.strokeRect(1, 1, w - 2, h - 2)
+  }
   // A faint dot grid, like graph paper.
   ctx.fillStyle = css('--border')
   for (let x = 0; x < cols; x++) for (let y = 0; y < rows; y++) ctx.fillRect(x * CELL + CELL / 2 - 0.5, y * CELL + CELL / 2 - 0.5, 1, 1)
@@ -207,12 +235,22 @@ onBeforeUnmount(() => {
     <canvas ref="canvas" />
     <div class="hud">
       <span>{{ score }} {{ score === 1 ? 'commit' : 'commits' }}</span>
-      <span class="best">best {{ Math.max(prefs.gameBest.value, score) }}</span>
+      <span class="best">{{ classic ? 'classic' : 'wrap' }} best {{ Math.max(best, score) }}</span>
       <button class="ghost" title="Stop playing (Esc)" @click="emit('close')">Done</button>
     </div>
     <div v-if="state !== 'playing'" class="message" @click="play">
-      <strong>{{ state === 'over' ? `Merge conflict! ${score} commits` : state === 'paused' ? 'Paused' : 'Commit Snake' }}</strong>
+      <strong>{{
+        state === 'over'
+          ? `${crash === 'wall' ? 'Hit the wall!' : 'Merge conflict!'} ${score} commits`
+          : state === 'paused'
+            ? 'Paused'
+            : 'Commit Snake'
+      }}</strong>
       <span>{{ state === 'paused' ? 'Space to carry on' : 'Arrow keys or WASD to steer · Space to pause · Esc to stop' }}</span>
+      <div v-if="state !== 'paused'" class="modes" @click.stop>
+        <button :class="{ on: !classic }" title="Go off one edge, come back at the other" @click="setMode(false)">Wrap edges</button>
+        <button :class="{ on: classic }" title="The edges are walls" @click="setMode(true)">Classic</button>
+      </div>
       <button class="primary">{{ state === 'over' ? 'Again' : state === 'paused' ? 'Carry on' : 'Play' }}</button>
     </div>
   </div>
@@ -269,7 +307,28 @@ canvas {
   color: var(--fg-muted);
   font-size: 12px;
 }
-.message button {
+.message > button {
   margin-top: 6px;
+}
+.modes {
+  display: flex;
+  margin-top: 4px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--pill);
+}
+.modes button {
+  height: 24px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--fg-muted);
+  font-size: 11.5px;
+}
+.modes button.on {
+  background: var(--popover);
+  color: var(--fg);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 20%);
 }
 </style>
