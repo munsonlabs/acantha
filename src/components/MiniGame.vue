@@ -221,6 +221,19 @@ function onKey(e: KeyboardEvent) {
 
 const onBlur = () => pause()
 
+/**
+ * The score card fades away while you play, since it can sit over the board, and comes back when you pause, when the
+ * game ends, or for a couple of seconds after the mouse moves.
+ */
+const stirred = ref(false)
+let stirTimer: ReturnType<typeof setTimeout> | undefined
+function stir() {
+  stirred.value = true
+  clearTimeout(stirTimer)
+  stirTimer = setTimeout(() => (stirred.value = false), 2000)
+}
+const hudShown = computed(() => state.value !== 'playing' || stirred.value)
+
 onMounted(() => {
   size()
   reset()
@@ -233,15 +246,16 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearTimeout(timer)
+  clearTimeout(stirTimer)
   observer?.disconnect()
   window.removeEventListener('blur', onBlur)
 })
 </script>
 
 <template>
-  <div ref="box" class="game" tabindex="0" aria-label="Commit Snake" @keydown="onKey" @mousedown="box?.focus()">
+  <div ref="box" class="game" tabindex="0" aria-label="Commit Snake" @keydown="onKey" @mousedown="box?.focus()" @mousemove="stir">
     <canvas ref="canvas" />
-    <div class="hud">
+    <div class="hud" :class="{ hidden: !hudShown }">
       <div class="stat">
         <strong>{{ score }}</strong>
         <span>{{ score === 1 ? 'commit' : 'commits' }}</span>
@@ -291,6 +305,7 @@ canvas {
 }
 /* The score card in the corner: the count, the best for this mode, and a close button. */
 .hud {
+  transition: opacity 0.3s;
   position: absolute;
   top: 12px;
   right: 12px;
@@ -387,5 +402,9 @@ canvas {
   background: var(--popover);
   color: var(--fg);
   box-shadow: 0 1px 2px rgb(0 0 0 / 20%);
+}
+.hud.hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 </style>
