@@ -5,6 +5,7 @@
 import { basicSetup } from 'codemirror'
 import { completeAnyWord, startCompletion, type Completion, type CompletionContext } from '@codemirror/autocomplete'
 import { importCandidates } from './importPaths'
+import { changeGutter, setChangeBase } from './changeGutter'
 import { EditorView, keymap } from '@codemirror/view'
 import { Compartment, EditorState } from '@codemirror/state'
 import { indentWithTab } from '@codemirror/commands'
@@ -74,6 +75,8 @@ export interface EditorOptions {
   files?: () => string[]
   /** Words from the other open files, suggested alongside the ones in this file. */
   words?: () => readonly string[]
+  /** Show change markers in the margin, against the text given with `setBase`. */
+  changeMarkers?: boolean
   onChange: (doc: string) => void
   onSave: () => void
 }
@@ -121,7 +124,7 @@ function otherWords(words: () => readonly string[]) {
   }
 }
 
-export function createEditor(parent: HTMLElement, { doc, path, vim: vimMode, files, words, onChange, onSave }: EditorOptions) {
+export function createEditor(parent: HTMLElement, { doc, path, vim: vimMode, files, words, changeMarkers, onChange, onSave }: EditorOptions) {
   const language = new Compartment()
   const keys = new Compartment()
 
@@ -151,6 +154,7 @@ export function createEditor(parent: HTMLElement, { doc, path, vim: vimMode, fil
         ...(files && SCRIPT.test(path) ? [EditorState.languageData.of(() => [{ autocomplete: importPaths(path, files) }])] : []),
         theme,
         syntaxHighlighting(highlight),
+        ...(changeMarkers ? [changeGutter()] : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged) onChange(u.state.doc.toString())
         }),
@@ -182,6 +186,8 @@ export function createEditor(parent: HTMLElement, { doc, path, vim: vimMode, fil
       while (end < old.length - start && end < text.length - start && old[old.length - 1 - end] === text[text.length - 1 - end]) end++
       view.dispatch({ changes: { from: start, to: old.length - end, insert: text.slice(start, text.length - end) } })
     },
+    /** The file as git has it, for the change markers; null clears them. */
+    setBase: (text: string | null) => changeMarkers && setChangeBase(view, text),
     setVim: (on: boolean) => view.dispatch({ effects: keys.reconfigure(on ? vim() : []) }),
     /** Puts the cursor at the start of a line (1-based, and a column if given) and scrolls it to the middle. */
     goTo: (line: number, col = 1) => {

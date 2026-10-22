@@ -5,6 +5,7 @@ import { git } from '@/lib/git'
 import { wordsIn } from '@/lib/words'
 import { prefs } from '@/composables/prefs'
 import { useWorkspace } from '@/composables/workspace'
+import { isOn } from '@/features'
 
 const props = defineProps<{ path: string; text: string; line?: number }>()
 const emit = defineEmits<{ change: [doc: string]; save: [] }>()
@@ -48,10 +49,12 @@ onMounted(async () => {
     vim: prefs.editorVim.value,
     files: () => ws.files.list.value,
     words: () => words,
+    changeMarkers: isOn('changeMarkers'),
     onChange: (doc) => emit('change', doc),
     onSave: () => emit('save'),
   })
   loading.value = false
+  void loadBase()
   if (props.line) editor.goTo(props.line)
   editor.focus()
   void gatherWords()
@@ -61,6 +64,22 @@ onMounted(async () => {
 watch([ws.files.openFiles, ws.files.diskChanged], () => void gatherWords())
 
 watch(prefs.editorVim, (on) => editor?.setVim(on))
+
+/**
+ * What the change markers compare with: the file as it is in the index, so staging a change clears its markers, as in
+ * VS Code. A new file git doesn't have yet has nothing to compare with.
+ */
+async function loadBase() {
+  const root = ws.repo.repo.value
+  if (!editor || !root || !isOn('changeMarkers')) return
+  const file = await git.readFile(root, '', props.path).catch(() => null)
+  editor?.setBase(file?.kind === 'text' ? file.text : null)
+}
+// Staging, unstaging and commits change the index.
+watch(
+  () => ws.status.status.value,
+  () => void loadBase(),
+)
 // Opening the same file again at another line, from a search result or a path in the terminal.
 watch(
   () => props.line,
