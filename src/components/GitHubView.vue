@@ -35,16 +35,12 @@ async function load() {
   const id = ++seq
   loading.value = true
   try {
-    const [mine, open, recent] = await Promise.all([
-      branch.value ? github.currentPr(root) : null,
-      github.openPrs(root),
-      github.runs(root, branchOnly.value && branch.value ? branch.value : undefined),
-    ])
+    const [mine, open, recent] = await Promise.all([branch.value ? github.currentPr(root) : null, github.openPrs(root), github.runs(root)])
     if (id !== seq) return
     pr.value = mine
     prs.value = open.filter((p) => p.number !== mine?.number)
     runs.value = recent
-    runningRuns.value = { ...runningRuns.value, [root]: recent.filter((r) => r.state === 'pending').length }
+    runningRuns.value = { ...runningRuns.value, [root]: shown.value.filter((r) => r.state === 'pending').length }
     error.value = null
   } catch (e) {
     if (id === seq) error.value = String(e)
@@ -56,7 +52,14 @@ async function load() {
   }
 }
 
-const running = computed(() => runs.value.filter((r) => r.state === 'pending').length)
+/**
+ * The runs to list: with "this branch only", the ones on the branch or on the commit checked out, so a release started
+ * by pushing a tag shows too (GitHub files those under the tag).
+ */
+const shown = computed(() =>
+  branchOnly.value && branch.value ? runs.value.filter((r) => r.branch === branch.value || r.sha === log.value?.head) : runs.value,
+)
+const running = computed(() => shown.value.filter((r) => r.state === 'pending').length)
 
 /**
  * Checks again every minute, or every 15 seconds while a run is going so its end shows soon after. It carries on while
@@ -85,6 +88,25 @@ onBeforeUnmount(() => {
 // A checkout or a push changes what's relevant.
 watch([branch, branchOnly, () => log.value?.head], () => void load())
 
+/**
+ * After a push GitHub takes a moment to start its runs, so look again a few seconds later, and again after that. A push
+ * shows as the branch no longer being ahead of its remote, or a tag appearing.
+ */
+let soon: ReturnType<typeof setTimeout>[] = []
+function lookSoon() {
+  soon.forEach(clearTimeout)
+  soon = [3000, 15000].map((ms) => setTimeout(() => void load().then(schedule), ms))
+}
+watch(
+  () => ws.status.status.value?.ahead ?? 0,
+  (now, before) => now < before && lookSoon(),
+)
+watch(
+  () => log.value?.refs.filter((r) => r.kind === 'tag').length ?? 0,
+  (now, before) => now > before && lookSoon(),
+)
+onBeforeUnmount(() => soon.forEach(clearTimeout))
+
 const ICON: Record<CheckState, string> = { pass: '✓', fail: '✕', pending: '●', skipped: '–' }
 const REVIEW: Record<string, string> = { APPROVED: 'approved', CHANGES_REQUESTED: 'changes requested', REVIEW_REQUIRED: 'review needed' }
 
@@ -112,7 +134,7 @@ const prState = (p: PullRequest) => overall(p.checks)
     <div class="bar">
       <span class="title">{{ branch ?? 'Detached HEAD' }}</span>
       <div class="spacer" />
-      <label class="check"><input v-model="branchOnly" type="checkbox" /> runs for this branch only</label>
+      <label class="check"><input v-model="branchOnly" type="checkbox" /> this branch only</label>
       <button class="ghost icon-btn" title="Refresh" :disabled="loading" @click="load"><Icon name="refresh" :size="13" /></button>
     </div>
 
@@ -154,13 +176,13 @@ const prState = (p: PullRequest) => overall(p.checks)
       <h3>
         Actions<span v-if="running" class="running"> · {{ running }} running</span>
       </h3>
-      <p v-if="!runs.length" class="none">No workflow runs{{ branchOnly && branch ? ` on ${branch}` : '' }}.</p>
+      <p v-if="!shown.length" class="none">No workflow runs{{ branchOnly && branch ? ` on ${branch}` : '' }}.</p>
       <ul>
-        <li v-for="r in runs" :key="r.id" :title="`${r.workflow}: ${r.title}\n${r.event} on ${r.branch}`" @click="openUrl(r.url)">
+        <li v-for="r in shown" :key="r.id" :title="`${r.workflow}: ${r.title}\n${r.event} on ${r.branch}`" @click="openUrl(r.url)">
           <span class="state" :class="r.state">{{ ICON[r.state] }}</span>
           <span class="wf">{{ r.workflow }}</span>
           <span class="subject">{{ r.title }}</span>
-          <span class="meta-r">{{ branchOnly ? '' : `${r.branch} · ` }}{{ ago(r.createdAt) }}</span>
+          <span class="meta-r">{{ branchOnly && r.branch === branch ? '' : `${r.branch} · ` }}{{ ago(r.createdAt) }}</span>
         </li>
       </ul>
 

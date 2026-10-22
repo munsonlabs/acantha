@@ -30,6 +30,8 @@ export interface Run {
   title: string
   workflow: string
   branch: string
+  /** The commit it ran on; a run started by pushing a tag is filed under the tag, not the branch. */
+  sha: string
   event: string
   state: CheckState
   createdAt: string
@@ -105,15 +107,17 @@ export const github = {
   async openPrs(repo: string): Promise<PullRequest[]> {
     return JSON.parse(await gh(repo, ['pr', 'list', '--limit', '30', '--json', PR_FIELDS])).map(toPr)
   },
-  async runs(repo: string, branch?: string): Promise<Run[]> {
-    const fields = 'databaseId,displayTitle,status,conclusion,workflowName,headBranch,event,createdAt,url'
-    const list = JSON.parse(await gh(repo, ['run', 'list', '--limit', '20', ...(branch ? ['--branch', branch] : []), '--json', fields]))
+  /** The latest runs, every branch and tag; the panel narrows them down. */
+  async runs(repo: string): Promise<Run[]> {
+    const fields = 'databaseId,displayTitle,status,conclusion,workflowName,headBranch,headSha,event,createdAt,url'
+    const list = JSON.parse(await gh(repo, ['run', 'list', '--limit', '40', '--json', fields]))
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return list.map((r: any) => ({
       id: r.databaseId,
       title: r.displayTitle,
       workflow: r.workflowName,
       branch: r.headBranch,
+      sha: r.headSha,
       event: r.event,
       state: checkState(String(r.status).toUpperCase(), String(r.conclusion ?? '').toUpperCase()),
       createdAt: r.createdAt,
