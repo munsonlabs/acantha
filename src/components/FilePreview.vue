@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref, shallowRef, watch } from 'vue'
-import { openPath } from '@tauri-apps/plugin-opener'
 import { git, type Blame, type Commit, type FileContent } from '@/lib/git'
 import { tokenize, type Token } from '@/lib/highlight'
 import { compactDate, formatDate, nameHue, shortHash, splitPath } from '@/lib/format'
@@ -8,7 +7,8 @@ import { displayDate } from '@/composables/dates'
 import type { PreviewView } from '@/composables/files'
 import { prefs } from '@/composables/prefs'
 import { overlays } from '@/composables/commands'
-import { openMenu } from '@/composables/useContextMenu'
+import { openMenu, type MenuEntry } from '@/composables/useContextMenu'
+import { fileOpenItems } from '@/composables/openers'
 import { confirmAction } from '@/composables/useDialog'
 import { showToast } from '@/composables/useToast'
 import { useWorkspace } from '@/composables/workspace'
@@ -175,27 +175,44 @@ async function save(stageAfter = false) {
   }
 }
 
-const editorName = computed(() => prefs.externalEditor.value || 'Default App')
-
-async function openExternally() {
-  const p = preview.value
-  if (!p || !repo.value) return
-  try {
-    await openPath(`${repo.value}/${p.path}`, prefs.externalEditor.value || undefined)
-  } catch (e) {
-    showToast(`Couldn't open in ${editorName.value}: ${e}`, 'error')
-  }
-}
-
-function chooseEditor(e: MouseEvent) {
-  const anchor = (e.currentTarget as HTMLElement).getBoundingClientRect()
+/** Picks the app "Open in" uses, from where the menu that asked was. */
+function chooseEditor(at: { clientX: number; clientY: number }) {
   openMenu(
-    { clientX: anchor.left, clientY: anchor.bottom + 4 } as MouseEvent,
+    at as MouseEvent,
     EDITORS.map((app) => ({
-      label: `${app === prefs.externalEditor.value ? '✓ ' : '   '}${app || 'Default App'}`,
+      label: app || 'Default App',
+      icon: app === prefs.externalEditor.value ? ('check' as const) : undefined,
       run: () => (prefs.externalEditor.value = app),
     })),
   )
+}
+
+/** Editing a text file: Save shows, and the menu has the editor's own things. */
+const editingText = computed(() => preview.value?.view === 'edit' && content.value?.kind === 'text')
+
+/** Everything but the view switcher, Save and Close, kept out of the way: from ⋯, or right-clicking the toolbar. */
+function moreMenu(e: MouseEvent) {
+  const p = preview.value
+  if (!p) return
+  const at = { clientX: e.clientX, clientY: e.clientY }
+  const items: MenuEntry[] = [{ header: crumbs.value.name, detail: p.rev ? `${p.path} at ${shortHash(p.rev)}` : p.path }]
+  if (editingText.value)
+    items.push(
+      { label: 'Save', icon: 'check', shortcut: '⌘S', disabled: saving.value || !dirty.value, run: () => save() },
+      { label: 'Save & Stage', icon: 'plus', disabled: saving.value || !dirty.value, run: () => save(true) },
+      {
+        label: prefs.editorVim.value ? 'Vim Keys: On' : 'Vim Keys: Off',
+        icon: 'pencil',
+        run: () => (prefs.editorVim.value = !prefs.editorVim.value),
+      },
+      'separator',
+    )
+  if (isMarkdown.value && p.view === 'preview')
+    items.push({ label: rendered.value ? 'Show Source' : 'Show Rendered', icon: 'eye', run: () => (rendered.value = !rendered.value) }, 'separator')
+  if (p.rev === null && repo.value)
+    items.push(...fileOpenItems(repo.value, p.path), { label: 'Choose Editor…', icon: 'app', run: () => chooseEditor(at) }, 'separator')
+  items.push({ label: `Open Files (${openFiles.value.length})`, icon: 'files', shortcut: '⌘E', run: () => (overlays.openFiles.value = true) })
+  openMenu(e, items)
 }
 
 const ZERO = /^0+$/
@@ -233,55 +250,26 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
 
 <template>
   <div v-if="preview" class="preview">
-    <header class="pane-header" :class="{ editing: preview.view === 'edit' }">
-      <button class="ghost icon-btn" title="Back to history (Esc)" @click="closePreview"><Icon name="history" /></button>
+    <!-- Just the file, how to view it, Save and Close; everything else is in ⋯, also on right-click. -->
+    <header class="pane-header" :class="{ editing: editingText }" @contextmenu.prevent="moreMenu">
       <FileIcon :path="preview.path" />
       <span class="path" :title="preview.path">
         <span class="dir">{{ crumbs.dir }}</span
         ><span class="name">{{ crumbs.name }}</span>
         <span v-if="dirty" class="dirty" title="Unsaved changes">●</span>
       </span>
-      <span class="rev">{{ preview.rev ? shortHash(preview.rev) : 'Working tree' }}</span>
-      <div class="spacer" />
+      <span v-if="preview.rev" class="rev" title="At this commit">{{ shortHash(preview.rev) }}</span>
       <div class="segmented">
-        <button :class="{ on: preview.view === 'preview' }" @click="setView('preview')">
-          <Icon name="eye" :size="12" /> <span class="label">Preview</span>
-        </button>
-        <button :class="{ on: preview.view === 'blame' }" @click="setView('blame')">
-          <Icon name="user" :size="12" /> <span class="label">Blame</span>
-        </button>
-        <button :class="{ on: preview.view === 'history' }" @click="setView('history')">
-          <Icon name="history" :size="12" /> <span class="label">History</span>
-        </button>
-        <button v-if="preview.rev === null" :class="{ on: preview.view === 'edit' }" @click="setView('edit')">
-          <Icon name="pencil" :size="12" /> <span class="label">Edit</span>
+        <button :class="{ on: preview.view === 'preview' }" title="Preview" @click="setView('preview')"><Icon name="eye" :size="13" /></button>
+        <button :class="{ on: preview.view === 'blame' }" title="Blame" @click="setView('blame')"><Icon name="user" :size="13" /></button>
+        <button :class="{ on: preview.view === 'history' }" title="History" @click="setView('history')"><Icon name="history" :size="13" /></button>
+        <button v-if="preview.rev === null" :class="{ on: preview.view === 'edit' }" title="Edit" @click="setView('edit')">
+          <Icon name="pencil" :size="13" />
         </button>
       </div>
-      <template v-if="preview.view === 'edit' && content?.kind === 'text'">
-        <button
-          class="ghost toggle"
-          :class="{ on: prefs.editorVim.value }"
-          title="Vim key bindings"
-          @click="prefs.editorVim.value = !prefs.editorVim.value"
-        >
-          Vim
-        </button>
-        <button class="ghost toggle" :disabled="saving || !dirty" @click="save(true)">Save &amp; Stage</button>
-        <button class="primary save" :disabled="saving || !dirty" title="Save (⌘S)" @click="save()">Save</button>
-      </template>
-      <div v-if="preview.rev === null" class="split">
-        <button class="ghost toggle" :title="`Open in ${editorName}`" @click="openExternally">
-          <Icon name="external" :size="12" /> <span class="label">Open</span>
-        </button>
-        <button class="ghost chooser" title="Choose the editor" @click="chooseEditor"><Icon name="chevron" :size="10" class="down" /></button>
-      </div>
-      <button v-if="isMarkdown && preview.view === 'preview'" class="ghost toggle" @click="rendered = !rendered">
-        {{ rendered ? 'Source' : 'Rendered' }}
-      </button>
-      <button class="ghost open-files-btn" title="Open files (⌘E)" @click="overlays.openFiles.value = true">
-        <Icon name="files" :size="13" /> {{ openFiles.length }}
-      </button>
-      <button class="ghost icon-btn" title="Close" @click="closePreview"><Icon name="x" /></button>
+      <button v-if="editingText" class="primary save" :disabled="saving || !dirty" title="Save (⌘S)" @click="save()">Save</button>
+      <button class="ghost icon-btn" title="More" @click="moreMenu"><Icon name="ellipsis" /></button>
+      <button class="ghost icon-btn" title="Close (Esc)" @click="closePreview"><Icon name="x" /></button>
     </header>
 
     <div class="body">
@@ -354,20 +342,6 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
   flex: none;
   white-space: nowrap;
 }
-/* In a narrow pane the view switcher and Open button drop their labels, keeping the file name readable. */
-@container (max-width: 720px) {
-  .segmented .label,
-  .split .label {
-    display: none;
-  }
-}
-/* Editing adds Vim, Save & Stage and Save, so labels go sooner. */
-@container (max-width: 980px) {
-  .editing .segmented .label,
-  .editing .split .label {
-    display: none;
-  }
-}
 .path {
   flex: 1 1 auto;
   min-width: 60px;
@@ -398,11 +372,11 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
   background: var(--input-bg);
 }
 .segmented button {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+  display: grid;
+  place-items: center;
+  width: 30px;
   height: 24px;
-  padding: 0 9px;
+  padding: 0;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -414,18 +388,6 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
   box-shadow: inset 0 0 0 1px var(--hover);
   color: var(--fg);
 }
-.toggle {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  height: 26px;
-  padding: 0 8px;
-  font-size: 12px;
-}
-.toggle.on {
-  background: var(--pill);
-  color: var(--fg);
-}
 .save {
   height: 26px;
   padding: 0 12px;
@@ -435,36 +397,12 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
   margin-left: 6px;
   color: var(--modify);
 }
-.split {
-  display: flex;
-  flex: none;
-}
-.split .toggle {
-  padding-right: 4px;
-}
-.chooser {
-  width: 18px;
-  height: 26px;
-  padding: 0;
-}
-.down {
-  transform: rotate(90deg);
-}
 .body {
   flex: 1;
   min-height: 0;
   overflow: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar) transparent;
-}
-.open-files-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 24px;
-  padding: 0 7px;
-  color: var(--fg-muted);
-  font-size: 11.5px;
 }
 .disk-bar {
   position: sticky;
