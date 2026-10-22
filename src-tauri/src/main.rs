@@ -100,6 +100,7 @@ fn main() {
             pty::pty_write,
             pty::pty_resize,
             pty::pty_kill,
+            pty::pty_running,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Acantha")

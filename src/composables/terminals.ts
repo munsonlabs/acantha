@@ -2,6 +2,7 @@ import { computed, ref, watch } from 'vue'
 import type { Repo } from './repo'
 import { prefs } from './prefs'
 import { usePersisted } from './usePersisted'
+import { pty } from '@/lib/pty'
 
 export interface TerminalSession {
   key: number
@@ -18,6 +19,10 @@ export interface TerminalSession {
   pane?: number
   /** For a terminal with one beside it: the share of the width it takes. */
   ratio?: number
+  /** Its shell, once started. */
+  ptyId?: number
+  /** What's running in it right now (`npm run dev`), from the last check; unset while it sits at its prompt. */
+  running?: string
 }
 
 /** A terminal tab as it's kept between launches: where it was, what it was called, and what was beside it. */
@@ -155,7 +160,18 @@ export function createTerminals({ repo }: Repo) {
     { deep: true },
   )
 
-  return { sessions, tabs, partnerOf, activeKey, open, add, split, close, closeActive, step, move, toggle, show, restoreOrAdd }
+  /**
+   * Asks the system what's running in each terminal (see `pty_running`), marks them, and returns what was found: the
+   * things that would stop if the terminals closed.
+   */
+  async function checkRunning() {
+    const ids = sessions.value.flatMap((s) => (s.ptyId ? [s.ptyId] : []))
+    const found = ids.length ? await pty.running(ids).catch(() => ({}) as Record<string, string>) : {}
+    for (const s of sessions.value) s.running = s.ptyId ? found[String(s.ptyId)] : undefined
+    return Object.values(found)
+  }
+
+  return { sessions, tabs, partnerOf, checkRunning, activeKey, open, add, split, close, closeActive, step, move, toggle, show, restoreOrAdd }
 }
 
 export type Terminals = ReturnType<typeof createTerminals>

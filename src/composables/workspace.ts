@@ -170,21 +170,20 @@ async function sleepWorkspace(id: number, { ask = true } = {}) {
   const ws = workspaces.value[i]
   const path = ws?.repo.repo.value
   if (!ws || !path || id === activeId.value) return
-  const running = ws.terminals.sessions.value.length
-  if (
-    ask &&
-    running &&
-    !(await confirmAction(
-      'Put Tab to Sleep',
-      `Its ${running === 1 ? 'terminal' : `${running} terminals`} will close, along with anything running there. Open files and unsaved edits stay.`,
-      'Sleep',
-    ))
-  )
-    return
+  // Idle shells come back as they were; only something running in one would be lost.
+  const running = ask ? await ws.terminals.checkRunning() : []
+  if (running.length && !(await confirmAction('Put Tab to Sleep', `${stops(running)} Open files and unsaved edits stay.`, 'Sleep'))) return
   const next = createWorkspace(id, path)
   next.files.drafts.value = ws.files.drafts.value
   workspaces.value = workspaces.value.map((w) => (w.id === id ? next : w))
   ws.scope.stop()
+}
+
+/** What closing terminals would stop, said plainly: "`npm run dev` is running and will stop." */
+function stops(running: string[]) {
+  const list = running.map((r) => `\`${r}\``)
+  const named = list.length > 3 ? `${list.slice(0, 3).join(', ')} and ${list.length - 3} more` : list.join(list.length === 2 ? ' and ' : ', ')
+  return `${named} ${running.length === 1 ? 'is' : 'are'} running in its terminals and will stop.`
 }
 
 /** Wakes a sleeping tab: opens its repository again, with its open files, unsaved edits and terminals. */
@@ -217,16 +216,8 @@ async function closeWorkspace(id: number) {
 /** Puts every tab but this one to sleep, asking once if any terminals will close. */
 async function sleepOtherWorkspaces(id: number) {
   const others = workspaces.value.filter((w) => w.id !== id && w.repo.repo.value && w.id !== activeId.value)
-  const running = others.reduce((n, w) => n + w.terminals.sessions.value.length, 0)
-  if (
-    running &&
-    !(await confirmAction(
-      'Put Other Tabs to Sleep',
-      `${running === 1 ? 'A terminal' : `${running} terminals`} in them will close. Open files and unsaved edits stay.`,
-      'Sleep',
-    ))
-  )
-    return
+  const running = (await Promise.all(others.map((w) => w.terminals.checkRunning()))).flat()
+  if (running.length && !(await confirmAction('Put Other Tabs to Sleep', `${stops(running)} Open files and unsaved edits stay.`, 'Sleep'))) return
   for (const w of others) await sleepWorkspace(w.id, { ask: false })
 }
 

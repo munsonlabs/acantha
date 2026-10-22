@@ -82,7 +82,8 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
                 <div>
                   <span class="label">Sleep unused tabs</span>
                   <span class="hint"
-                    >Lets go of a tab's graph, editor and terminals; it opens again when clicked. Tabs running a script stay awake.</span
+                    >Lets go of a tab's graph, editor and terminals; it opens again when clicked. Tabs with something running in a terminal stay
+                    awake.</span
                   >
                 </div>
                 <select v-model.number="prefs.autoSleepMinutes.value">

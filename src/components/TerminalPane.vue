@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useSlidingPill, useTabDrag, useTabScroll } from '@/composables/tabs'
 import { openMenu } from '@/composables/useContextMenu'
 import { ask } from '@/composables/useDialog'
@@ -8,8 +8,8 @@ import { useWorkspace } from '@/composables/workspace'
 import Icon from './Icon.vue'
 import TerminalView from './TerminalView.vue'
 
-defineProps<{ visible: boolean }>()
-const { sessions, tabs, partnerOf, activeKey, add, split, close, move, toggle } = useWorkspace().terminals
+const props = defineProps<{ visible: boolean }>()
+const { sessions, tabs, partnerOf, checkRunning, activeKey, add, split, close, move, toggle } = useWorkspace().terminals
 const strip = ref<HTMLElement>()
 
 const pill = useSlidingPill(strip, () => [activeKey.value, tabs.value.map((s) => `${s.key}:${s.name ?? s.title}:${!!partnerOf(s.key)}`)])
@@ -32,6 +32,13 @@ const label = (i: number) => {
   const n = tabs.value.slice(0, i).filter((o) => !o.name && o.title === s.title).length
   return n ? `${s.title} ${n + 1}` : s.title
 }
+
+/** What's running in a tab (its own terminal, or the one beside it), for the dot on it. */
+const busy = (s: TerminalSession) => s.running ?? partnerOf(s.key)?.running
+
+// Checked every few seconds while the terminals are on screen; it's one quick look at the system's processes.
+const checking = setInterval(() => props.visible && document.visibilityState === 'visible' && void checkRunning(), 3000)
+onBeforeUnmount(() => clearInterval(checking))
 
 /** A terminal shows while its tab is the active one, its own or the one it's split beside. */
 const shown = (s: TerminalSession) => s.key === activeKey.value || s.pane === activeKey.value
@@ -106,6 +113,7 @@ const tabMenu = (e: MouseEvent, s: TerminalSession) =>
           <Icon name="terminal" :size="13" />
           <span>{{ label(i) }}</span>
           <Icon v-if="partnerOf(s.key)" name="sidebar" :size="11" class="split-mark" />
+          <span v-if="busy(s)" class="busy" :title="`Running: ${busy(s)}`" />
           <button class="tab-close" title="Close Terminal" @mousedown.stop @click.stop="close(s.key)"><Icon name="x" :size="12" /></button>
         </div>
       </div>
@@ -122,6 +130,7 @@ const tabMenu = (e: MouseEvent, s: TerminalSession) =>
           @exit="close(s.key)"
           @title="(t) => (s.title = t)"
           @split="split(s.pane ?? s.key)"
+          @pty="(id) => (s.ptyId = id)"
         />
       </div>
       <div v-if="partner" class="split-line" :style="{ left: `${ratio * 100}%` }" @mousedown="startDrag" />
@@ -175,5 +184,12 @@ const tabMenu = (e: MouseEvent, s: TerminalSession) =>
 }
 .split-mark {
   color: var(--fg-faint);
+}
+.busy {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 </style>

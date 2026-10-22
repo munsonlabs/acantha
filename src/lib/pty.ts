@@ -11,4 +11,6 @@ export const pty = {
   write: (id: number, data: string) => invoke<void>('pty_write', { id, data }),
   resize: (id: number, cols: number, rows: number) => invoke<void>('pty_resize', { id, cols, rows }),
   kill: (id: number) => invoke<void>('pty_kill', { id }),
+  /** What's running in each of these terminals (a dev server, a build), by id; idle shells are left out. */
+  running: (ids: number[]) => invoke<Record<string, string>>('pty_running', { ids }),
 }

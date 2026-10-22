@@ -180,16 +180,18 @@ const autoFetch = setInterval(() => {
   }
 }, 30_000)
 
-// Tabs unused for a while go to sleep, when Settings says so. One running a script (a dev server, a build) is left
-// alone, since sleeping would stop it.
-const autoSleep = setInterval(() => {
+// Tabs unused for a while go to sleep, when Settings says so. One with something running in a terminal (a dev
+// server, a build) is left alone, since sleeping would stop it.
+const autoSleep = setInterval(async () => {
   const minutes = prefs.autoSleepMinutes.value
   if (!minutes) return
   const before = Date.now() - minutes * 60_000
   for (const ws of workspaces.value) {
     if (ws.id === activeId.value || ws.sleeping.value || !ws.repo.repo.value) continue
     if (!lastUsed.has(ws.id)) lastUsed.set(ws.id, Date.now())
-    if (lastUsed.get(ws.id)! > before || ws.terminals.sessions.value.some((s) => s.command)) continue
+    if (lastUsed.get(ws.id)! > before) continue
+    // Anything running in its terminals (a dev server, a build, claude) keeps it awake.
+    if ((await ws.terminals.checkRunning()).length) continue
     void sleepWorkspace(ws.id, { ask: false })
   }
 }, 60_000)

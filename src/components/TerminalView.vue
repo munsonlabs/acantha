@@ -17,7 +17,7 @@ import Icon from './Icon.vue'
 
 /** focus: take the keyboard when shown; the terminal split beside a tab's own leaves it to that one. */
 const props = withDefaults(defineProps<{ session: TerminalSession; active: boolean; focus?: boolean }>(), { focus: true })
-const emit = defineEmits<{ exit: []; title: [title: string]; split: [] }>()
+const emit = defineEmits<{ exit: []; title: [title: string]; split: []; pty: [id: number] }>()
 
 /** App shortcuts that should reach the window instead of the shell. */
 const APP_KEYS = new Set(['t', 'w', 'j', 'b', 'f', 'r', 'o', '[', ']', '{', '}', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
@@ -235,6 +235,7 @@ onMounted(async () => {
     })
     if (disposed) return void pty.kill(id)
     ptyId = id
+    emit('pty', id)
     emit('title', props.session.command ? props.session.title : shell)
     // Typed in as if by hand, so the shell's own setup (PATH, aliases) applies, and you're left at its prompt after.
     if (props.session.command) void pty.write(id, `${props.session.command}\r`)
