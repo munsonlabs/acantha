@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { prefs } from '@/composables/prefs'
+import Icon from './Icon.vue'
 
 /**
  * Commit Snake, for where the graph was while it's collapsed: steer a branch round the space and pick up commits, each
@@ -82,7 +83,14 @@ function reset() {
 }
 
 /** Starts slow and speeds up with each commit, down to a limit. */
-const delay = () => Math.max(55, 130 - score.value * 3)
+const SPEEDS = { slow: { start: 180, fastest: 70 }, normal: { start: 130, fastest: 55 }, fast: { start: 90, fastest: 45 } } as const
+const speed = prefs.gameSpeed
+const delay = () => Math.max(SPEEDS[speed.value].fastest, SPEEDS[speed.value].start - score.value * 3)
+
+function setSpeed(s: keyof typeof SPEEDS) {
+  speed.value = s
+  box.value?.focus()
+}
 
 function step() {
   const turn = turns.shift()
@@ -234,9 +242,16 @@ onBeforeUnmount(() => {
   <div ref="box" class="game" tabindex="0" aria-label="Commit Snake" @keydown="onKey" @mousedown="box?.focus()">
     <canvas ref="canvas" />
     <div class="hud">
-      <span>{{ score }} {{ score === 1 ? 'commit' : 'commits' }}</span>
-      <span class="best">{{ classic ? 'classic' : 'wrap' }} best {{ Math.max(best, score) }}</span>
-      <button class="ghost" title="Stop playing (Esc)" @click="emit('close')">Done</button>
+      <div class="stat">
+        <strong>{{ score }}</strong>
+        <span>{{ score === 1 ? 'commit' : 'commits' }}</span>
+      </div>
+      <div class="divider" />
+      <div class="stat" :title="`Best in ${classic ? 'classic' : 'wrap'} mode`">
+        <strong :class="{ record: score > 0 && score >= best }">{{ Math.max(best, score) }}</strong>
+        <span>best · {{ classic ? 'classic' : 'wrap' }}</span>
+      </div>
+      <button class="close" title="Stop playing (Esc)" @click="emit('close')"><Icon name="x" :size="12" /></button>
     </div>
     <div v-if="state !== 'playing'" class="message" @click="play">
       <strong>{{
@@ -250,6 +265,11 @@ onBeforeUnmount(() => {
       <div v-if="state !== 'paused'" class="modes" @click.stop>
         <button :class="{ on: !classic }" title="Go off one edge, come back at the other" @click="setMode(false)">Wrap edges</button>
         <button :class="{ on: classic }" title="The edges are walls" @click="setMode(true)">Classic</button>
+      </div>
+      <div v-if="state !== 'paused'" class="modes" @click.stop>
+        <button v-for="s in ['slow', 'normal', 'fast'] as const" :key="s" :class="{ on: speed === s }" @click="setSpeed(s)">
+          {{ s[0].toUpperCase() + s.slice(1) }}
+        </button>
       </div>
       <button class="primary">{{ state === 'over' ? 'Again' : state === 'paused' ? 'Carry on' : 'Play' }}</button>
     </div>
@@ -269,22 +289,59 @@ onBeforeUnmount(() => {
 canvas {
   display: block;
 }
+/* The score card in the corner: the count, the best for this mode, and a close button. */
 .hud {
   position: absolute;
-  top: 10px;
+  top: 12px;
   right: 12px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: var(--fg-muted);
-  font: 500 12px var(--font);
+  gap: 12px;
+  padding: 6px 6px 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--popover) 85%, transparent);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
 }
-.hud .best {
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+}
+.stat strong {
+  color: var(--fg);
+  font: 600 16px var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.stat strong.record {
+  color: var(--accent);
+}
+.stat span {
+  color: var(--fg-faint);
+  font-size: 10.5px;
+}
+.divider {
+  align-self: stretch;
+  width: 1px;
+  background: var(--border);
+}
+.close {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  margin-left: 2px;
+  padding: 0;
+  place-items: center;
+  border: none;
+  border-radius: 8px;
+  background: none;
   color: var(--fg-faint);
 }
-.hud button {
-  height: 24px;
-  padding: 0 10px;
+.close:hover {
+  background: var(--hover);
+  color: var(--fg);
 }
 .message {
   position: absolute;

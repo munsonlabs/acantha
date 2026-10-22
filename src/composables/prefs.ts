@@ -29,6 +29,8 @@ export const prefs = {
   /** Commit Snake's mode: edges that wrap round, or classic, where they end the game; each has its own best. */
   gameClassic: usePersisted('game-classic', false),
   gameBestClassic: usePersisted('game-best-classic', 0),
+  /** How fast Commit Snake starts; it speeds up from there with each commit. */
+  gameSpeed: usePersisted<'slow' | 'normal' | 'fast'>('game-speed', 'normal'),
   /** Slack channel IDs whose messages and canvases may be opened. Empty allows any the token can see. */
   slackChannels: usePersisted<string[]>('slack-channels', []),
   /** The panel under the terminal (Slack and to-do tabs), and its share of that column's height when both show. */
