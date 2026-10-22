@@ -184,6 +184,8 @@ td {
 }
 .code {
   white-space: pre;
+  /* The code can be selected and copied; the line numbers next to it can't, so they stay out of what's copied. */
+  user-select: text;
 }
 .add {
   background: var(--diff-add);

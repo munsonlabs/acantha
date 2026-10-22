@@ -222,6 +222,8 @@ h2 {
 }
 .meta {
   border-right: 1px solid var(--divider);
+  /* The hash, author and message can be selected and copied. */
+  user-select: text;
 }
 dl {
   display: grid;
