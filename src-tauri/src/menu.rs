@@ -132,6 +132,8 @@ pub fn build<R: Runtime>(app: &AppHandle<R>, hidden: &[String]) -> tauri::Result
             C(item("pull", "Pull", None)?),
             C(item("push", "Push", None)?),
             Sep,
+            C(item("clean-up-branches", "Clean Up Branches…", None)?),
+            Sep,
             C(item("browse-files", "Browse Files", None)?),
             C(item("source-control", "Git Panel", None)?),
         ],

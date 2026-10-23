@@ -273,6 +273,102 @@ pub struct ReflogEntry {
     lost: bool,
 }
 
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchState {
+    name: String,
+    hash: String,
+    subject: String,
+    /// When its tip was committed.
+    date: i64,
+    upstream: Option<String>,
+    /// Everything on it is in the base.
+    merged: bool,
+    /// It has an upstream that's gone from the remote: usually deleted once its pull request was merged.
+    gone: bool,
+    /// Commits on it that the base doesn't have.
+    ahead: usize,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchCleanup {
+    /// What branches are measured against: the remote's default branch (`origin/main`), or else the local main one.
+    base: Option<String>,
+    /// Every local branch but the base's own and the one checked out here.
+    branches: Vec<BranchState>,
+}
+
+/// The branch the others are measured against: the default branch of `origin` as it was last fetched, else a local
+/// `main`, `master` or `trunk`.
+fn cleanup_base(repo: &str) -> Option<String> {
+    if let Ok(remote) = git(repo, ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]) {
+        return Some(remote.trim().to_string());
+    }
+    ["main", "master", "trunk"]
+        .into_iter()
+        .find(|b| git(repo, ["show-ref", "--verify", "--quiet", &format!("refs/heads/{b}")]).is_ok())
+        .map(String::from)
+}
+
+/// The local branches, with what's needed to tell which are done with: merged into the base, their remote branch
+/// gone, or long untouched. For the Clean Up Branches list.
+#[tauri::command]
+pub async fn branch_cleanup(repo: String) -> Result<BranchCleanup, String> {
+    let base = cleanup_base(&repo);
+    let current = git(&repo, ["symbolic-ref", "--quiet", "--short", "HEAD"])
+        .ok()
+        .map(|s| s.trim().to_string());
+    // The base's own local branch (main for origin/main) isn't one to clean up.
+    let base_local = base.as_deref().map(|b| b.split_once('/').map_or(b, |(_, name)| name).to_string());
+    let merged: Vec<String> = match &base {
+        Some(b) => git(&repo, ["branch", "--format=%(refname:short)", "--merged", b.as_str()])?
+            .lines()
+            .map(String::from)
+            .collect(),
+        None => Vec::new(),
+    };
+    const FIELDS: &str = "%(refname:short)%1f%(objectname)%1f%(committerdate:unix)%1f%(upstream:short)%1f%(upstream:track)%1f%(contents:subject)";
+    // git 2.41 counts every branch's commits beyond the base in one go; older ones are asked branch by branch.
+    let counted = base.as_ref().and_then(|b| {
+        let format = format!("--format={FIELDS}%1f%(ahead-behind:{b})");
+        git(&repo, ["for-each-ref", "refs/heads", format.as_str()]).ok()
+    });
+    let out = match &counted {
+        Some(out) => out.clone(),
+        None => git(&repo, ["for-each-ref", "refs/heads", &format!("--format={FIELDS}")])?,
+    };
+    let mut branches = Vec::new();
+    for line in out.lines() {
+        let f: Vec<&str> = line.split('\x1f').collect();
+        let [name, hash, date, upstream, track, subject, ..] = f[..] else {
+            continue;
+        };
+        if Some(name) == current.as_deref() || Some(name) == base_local.as_deref() {
+            continue;
+        }
+        let ahead = match (f.get(6), &base) {
+            (Some(counts), _) => counts.split(' ').next().and_then(|n| n.parse().ok()).unwrap_or(0),
+            (None, Some(b)) => git(&repo, ["rev-list", "--count", &format!("{b}..{name}")])
+                .ok()
+                .and_then(|n| n.trim().parse().ok())
+                .unwrap_or(0),
+            (None, None) => 0,
+        };
+        branches.push(BranchState {
+            name: name.to_string(),
+            hash: hash.to_string(),
+            subject: subject.to_string(),
+            date: date.parse().unwrap_or(0),
+            upstream: (!upstream.is_empty()).then(|| upstream.to_string()),
+            merged: merged.iter().any(|m| m == name),
+            gone: track == "[gone]",
+            ahead,
+        });
+    }
+    Ok(BranchCleanup { base, branches })
+}
+
 /// Where HEAD has been, newest first: a way back to commits a reset, rebase or deleted branch left behind.
 #[tauri::command]
 pub async fn get_reflog(repo: String, limit: usize) -> Result<Vec<ReflogEntry>, String> {
@@ -1123,6 +1219,36 @@ mod tests {
         block_on(apply_patch(repo.clone(), patch.into(), true, true)).unwrap();
         assert_eq!(git(&repo, ["show", ":f.txt"]).unwrap(), "a\nb\n");
         assert!(block_on(apply_patch(repo.clone(), "nonsense".into(), true, false)).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn finds_branches_done_with() {
+        let dir = std::env::temp_dir().join(format!("acantha-cleanup-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let repo = dir.to_string_lossy().into_owned();
+        let sh = |args: &[&str]| git(&repo, args).unwrap();
+        sh(&["init", "-q", "-b", "main"]);
+        sh(&["-c", "user.name=T", "-c", "user.email=t@t", "commit", "-qm", "first", "--allow-empty"]);
+        // Merged: nothing on it that main hasn't.
+        sh(&["branch", "done"]);
+        // Its remote branch deleted after review, with a commit main never got (a squash merge, say).
+        sh(&["checkout", "-qb", "squashed"]);
+        sh(&["-c", "user.name=T", "-c", "user.email=t@t", "commit", "-qm", "work", "--allow-empty"]);
+        sh(&["remote", "add", "origin", "/nowhere"]);
+        sh(&["config", "branch.squashed.remote", "origin"]);
+        sh(&["config", "branch.squashed.merge", "refs/heads/squashed"]);
+        // Still being worked on, checked out here: left out.
+        sh(&["checkout", "-qb", "wip"]);
+
+        let found = block_on(branch_cleanup(repo.clone())).unwrap();
+        assert_eq!(found.base.as_deref(), Some("main"));
+        let names: Vec<_> = found.branches.iter().map(|b| b.name.as_str()).collect();
+        assert_eq!(names, ["done", "squashed"]);
+        let (done, squashed) = (&found.branches[0], &found.branches[1]);
+        assert!(done.merged && !done.gone && done.ahead == 0);
+        assert!(!squashed.merged && squashed.gone && squashed.ahead == 1);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

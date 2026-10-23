@@ -58,6 +58,27 @@ export interface RepoSummary {
   lastDate: number | null
 }
 
+/** A local branch, with what tells whether it's done with (see `branch_cleanup` in src-tauri/src/git.rs). */
+export interface BranchState {
+  name: string
+  hash: string
+  subject: string
+  date: number
+  upstream: string | null
+  /** Everything on it is in the base. */
+  merged: boolean
+  /** Its upstream's gone from the remote. */
+  gone: boolean
+  /** Commits on it that the base doesn't have. */
+  ahead: number
+}
+
+export interface BranchCleanup {
+  /** What branches are measured against: `origin/main`, or a local main branch. */
+  base: string | null
+  branches: BranchState[]
+}
+
 export interface ReflogEntry {
   hash: string
   selector: string
@@ -214,6 +235,8 @@ export const git = {
   summaries: (paths: string[]) => invoke<RepoSummary[]>('repo_summaries', { paths }),
   /** Where HEAD has been, newest first; `lost` marks commits only the reflog still reaches. */
   reflog: (repo: string, limit = 200) => invoke<ReflogEntry[]>('get_reflog', { repo, limit }),
+  /** The local branches, with whether each is merged, gone from the remote, or old: for Clean Up Branches. */
+  branchCleanup: (repo: string) => invoke<BranchCleanup>('branch_cleanup', { repo }),
   /** The repository's main branch (`origin/HEAD`, else `main` or `master`). */
   defaultBranch: (repo: string) => invoke<string | null>('default_branch', { repo }),
   /** How `head` differs from `base`: its own commits, how far behind it is, and where the two split. */

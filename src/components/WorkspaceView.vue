@@ -6,6 +6,7 @@ import { provideWorkspace, type Workspace } from '@/composables/workspace'
 import DiffModal from './DiffModal.vue'
 import GraphPane from './GraphPane.vue'
 import ConflictResolver from './ConflictResolver.vue'
+import BranchCleanup from './BranchCleanup.vue'
 import RebaseModal from './RebaseModal.vue'
 import GraphStamp from './GraphStamp.vue'
 import Sidebar from './Sidebar.vue'
@@ -312,6 +313,7 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
     <DiffModal />
     <ConflictResolver />
     <RebaseModal />
+    <BranchCleanup />
   </div>
 </template>
 

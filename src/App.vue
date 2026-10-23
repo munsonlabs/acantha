@@ -118,6 +118,7 @@ function onKeydown(e: KeyboardEvent) {
     else if (ws?.diff.diff.value) ws.diff.closeDiff()
     else if (ws?.ui.conflict.value) ws.ui.conflict.value = null
     else if (ws?.ui.rebase.value) ws.ui.rebase.value = null
+    else if (ws?.ui.branchCleanup.value) ws.ui.branchCleanup.value = false
     else if (menu.value) closeMenu()
     else if (!typing && ws?.files.preview.value) void ws.files.closePreview()
     else if (!typing && ws?.panel.expanded.value) ws.panel.expanded.value = false

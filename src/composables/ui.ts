@@ -10,6 +10,8 @@ export function createUi() {
     /** Interactive rebase of the commits after `base` (null: from the root). */
     rebase: shallowRef<{ base: string | null; label: string } | null>(null),
     conflict: shallowRef<StatusFile | null>(null),
+    /** The Clean Up Branches window. */
+    branchCleanup: ref(false),
   }
 }
 
