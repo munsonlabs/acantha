@@ -17,10 +17,16 @@ const props = defineProps<{ ws: Workspace; visible: boolean }>()
 provideWorkspace(props.ws)
 
 const { repo } = props.ws.repo
-/** The graph folds away only with a repository open: an empty tab always shows its start screen, where the graph goes. */
-const graphHidden = computed(() => prefs.graphCollapsed.value && !!repo.value)
 const { open, sessions } = props.ws.terminals
 const { tabs: panelTabs, expanded: panelExpanded } = props.ws.panel
+/**
+ * Collapsing folds away the graph, not the space it's in: an open file or the expanded panel shows there whatever
+ * the graph's doing, and closing it brings back the graph, or the stamp, as you left it. Only with a repository open:
+ * an empty tab always shows its start screen there.
+ */
+const graphHidden = computed(
+  () => prefs.graphCollapsed.value && !!repo.value && !props.ws.files.preview.value && !(panelExpanded.value && panelTabs.value.length),
+)
 const el = ref<HTMLElement>()
 const width = prefs.terminalWidth
 const sidebarWidth = prefs.sidebarWidth
@@ -161,11 +167,6 @@ const showPanel = computed(() => panelDocked.value || (peek.value === 'terminal'
  * at no height, then grown on the next frame; closing shrinks it, then removes it once the slide ends (so its content
  * stays put while it goes). The height only animates while opening or closing; dragging the split follows the mouse.
  */
-// Files and the expanded panel show where the graph is, so opening one brings that area back.
-watch([() => props.ws.files.preview.value, panelExpanded], ([preview, expanded]) => {
-  if (preview || expanded) prefs.graphCollapsed.value = false
-})
-
 const panelMounted = ref(showPanel.value)
 const panelGrown = ref(showPanel.value)
 const panelSliding = ref(false)
