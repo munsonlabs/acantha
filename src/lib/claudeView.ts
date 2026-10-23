@@ -4,6 +4,7 @@ import type { IconName } from './icons'
 /** What both Claude views (the panel's and the floating one) show the same way. */
 
 export const MODES = [
+  { id: 'auto', label: 'Auto', hint: 'Does what it judges safe without asking, as Claude Code’s auto mode; asks about the rest' },
   { id: 'plan', label: 'Plan', hint: 'Reads and plans; changes nothing' },
   { id: 'default', label: 'Ask', hint: 'Asks before running commands or editing files' },
   { id: 'acceptEdits', label: 'Edit files', hint: 'Edits files without asking; still asks before commands' },

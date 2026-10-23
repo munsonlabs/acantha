@@ -112,8 +112,9 @@ fn notify<R: Runtime>(app: &AppHandle<R>, title: &str, body: &str) {
     let _ = app.notification().builder().title(title).body(body).show();
 }
 
-/// The permission modes offered: read only, ask before anything, or edit files without asking.
-const MODES: &[&str] = &["plan", "default", "acceptEdits"];
+/// The permission modes offered: Claude Code's auto mode (it judges what's safe to do without asking), read only, ask
+/// before anything, or edit files without asking.
+const MODES: &[&str] = &["auto", "plan", "default", "acceptEdits"];
 
 /// A session id to resume: a UUID, so nothing else reaches the command line.
 fn session_id_ok(id: &str) -> bool {

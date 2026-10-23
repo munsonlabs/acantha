@@ -6,7 +6,7 @@ import { prefs } from './prefs'
 import { usePersisted } from './usePersisted'
 
 export type { SavedConversation }
-export type ClaudeMode = 'plan' | 'default' | 'acceptEdits'
+export type ClaudeMode = 'auto' | 'plan' | 'default' | 'acceptEdits'
 
 /** The slash commands Claude Code last said it has, to offer before a conversation's started it. */
 const knownCommands = usePersisted<SlashCommand[]>('claude-commands', [])
