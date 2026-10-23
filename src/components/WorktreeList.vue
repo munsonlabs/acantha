@@ -2,21 +2,28 @@
 import { computed, ref, watch } from 'vue'
 import type { Worktree } from '@/lib/git'
 import { shortHash } from '@/lib/format'
+import { worktreeName } from '@/lib/paths'
 import { openMenu } from '@/composables/useContextMenu'
 import { useWorkspace } from '@/composables/workspace'
 import Icon from './Icon.vue'
 
-/** The repository's worktrees, at the bottom of the Git tab: open one in its own tab, add or remove them. */
+/**
+ * The repository's worktrees, at the bottom of the Git tab: open one in its own tab, add or remove them. Ones inside
+ * folders the repository ignores (a build's or a tool's) are folded away under a line saying how many.
+ */
 const ws = useWorkspace()
 const { log } = ws.repo
 const { worktreeMenu, addWorktree, openWorktree } = ws.menus
 
-const worktrees = computed(() => log.value?.worktrees ?? [])
-const name = (w: Worktree) => w.path.split('/').pop() || w.path
+const all = computed(() => log.value?.worktrees ?? [])
+const showIgnored = ref(false)
+const hidden = computed(() => all.value.filter((w) => w.ignored && !w.current))
+const worktrees = computed(() => (showIgnored.value ? all.value : all.value.filter((w) => !hidden.value.includes(w))))
+const name = (w: Worktree) => worktreeName(w.path, all.value.find((x) => x.main)?.path)
 // With just this one there's nothing to switch to, so the list starts folded; it opens once there are others.
 const collapsed = ref(true)
 watch(
-  () => worktrees.value.length,
+  () => all.value.length - hidden.value.length,
   (n, before) => {
     if (n > 1 && !(before && before > 1)) collapsed.value = false
   },
@@ -29,7 +36,7 @@ const add = () => addWorktree({ from: 'HEAD', label: log.value?.headBranch ? `\`
 </script>
 
 <template>
-  <div v-if="worktrees.length" class="section">
+  <div v-if="all.length" class="section">
     <div class="section-head" @click="collapsed = !collapsed">
       <Icon name="chevron" :size="11" class="chevron" :class="{ open: !collapsed }" />
       <span class="title">Worktrees</span>
@@ -43,7 +50,7 @@ const add = () => addWorktree({ from: 'HEAD', label: log.value?.headBranch ? `\`
       <li
         v-for="w in worktrees"
         :key="w.path"
-        :class="{ current: w.current, gone: w.prunable }"
+        :class="{ current: w.current, gone: w.prunable, ignored: w.ignored }"
         :title="w.prunable ? `${w.path} (folder missing)` : w.current ? `${w.path} (this tab)` : `${w.path}: click to open`"
         @click="open(w)"
         @contextmenu.prevent="openMenu($event, worktreeMenu(w))"
@@ -56,7 +63,12 @@ const add = () => addWorktree({ from: 'HEAD', label: log.value?.headBranch ? `\`
         </span>
         <span v-if="w.locked" class="flag" :title="`Locked${w.lockReason ? `: ${w.lockReason}` : ''}. Right-click to unlock it`">locked</span>
         <span v-if="w.prunable" class="flag">missing</span>
+        <span v-if="w.ignored" class="flag" title="In a folder the repository ignores: likely a build's or a tool's">ignored</span>
         <span v-if="w.current" class="flag here">this tab</span>
+      </li>
+      <li v-if="hidden.length" class="toggle" @click="showIgnored = !showIgnored">
+        <Icon name="eye" :size="12" class="kind" />
+        <span class="name">{{ showIgnored ? 'Hide' : 'Show' }} {{ hidden.length }} in ignored folders</span>
       </li>
     </ul>
   </div>
@@ -125,6 +137,10 @@ li:hover {
 }
 li.current {
   cursor: default;
+}
+li.ignored,
+li.toggle {
+  color: var(--fg-faint);
 }
 li.gone {
   opacity: 0.55;

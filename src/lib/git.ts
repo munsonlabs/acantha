@@ -97,6 +97,8 @@ export interface Worktree {
   lockReason: string | null
   /** Its folder is gone; `git worktree prune` tidies it away. */
   prunable: boolean
+  /** Inside a folder the main working tree ignores: one a build or tool made for itself. */
+  ignored: boolean
 }
 
 export interface Stat {

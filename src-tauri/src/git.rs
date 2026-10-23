@@ -86,6 +86,9 @@ pub struct Worktree {
     lock_reason: Option<String>,
     /// Its folder is gone: `git worktree prune` would tidy it away.
     prunable: bool,
+    /// Inside a folder the main working tree ignores (build output, a tool's scratch space): one something made for
+    /// itself, rather than one to work in.
+    ignored: bool,
 }
 
 #[derive(Serialize, Default)]
@@ -645,7 +648,8 @@ pub async fn get_log(repo: String, limit: usize, branches: Vec<String>, show_rem
     let stashes = parse_stashes(&git(&repo, ["stash", "list", "--format=%H%x1f%P%x1f%gd%x1f%gs%x1f%an%x1f%ae%x1f%at"]).unwrap_or_default());
 
     let here = Path::new(&repo).canonicalize().unwrap_or_else(|_| PathBuf::from(&repo));
-    let worktrees = parse_worktrees(&git(&repo, ["worktree", "list", "--porcelain"]).unwrap_or_default(), &here);
+    let mut worktrees = parse_worktrees(&git(&repo, ["worktree", "list", "--porcelain"]).unwrap_or_default(), &here);
+    mark_ignored(&mut worktrees);
 
     let has_more = commits.len() > limit;
     commits.truncate(limit);
@@ -680,6 +684,7 @@ fn parse_worktrees(out: &str, current: &Path) -> Vec<Worktree> {
                 locked: false,
                 lock_reason: None,
                 prunable: false,
+                ignored: false,
             };
             for line in block.lines() {
                 let (key, value) = line.split_once(' ').unwrap_or((line, ""));
@@ -700,6 +705,19 @@ fn parse_worktrees(out: &str, current: &Path) -> Vec<Worktree> {
             (!wt.path.is_empty()).then_some(wt)
         })
         .collect()
+}
+
+/// Marks the worktrees inside folders the main working tree ignores: `git check-ignore` there, for each one within it.
+fn mark_ignored(worktrees: &mut [Worktree]) {
+    let Some(main) = worktrees.iter().find(|w| w.main).map(|w| w.path.clone()) else {
+        return;
+    };
+    for w in worktrees.iter_mut() {
+        if let Some(rel) = w.path.strip_prefix(&main).and_then(|r| r.strip_prefix('/')) {
+            // check-ignore succeeds only when the path is ignored.
+            w.ignored = git(&main, ["check-ignore", "-q", "--", rel]).is_ok();
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -1145,6 +1163,16 @@ mod tests {
             (current.len(), current[0].branch.as_deref(), current[0].main),
             (1, Some("feature"), false)
         );
+        assert!(log.worktrees.iter().all(|w| !w.ignored));
+
+        // One a tool made inside an ignored folder of the repository.
+        std::fs::write(dir.join(".gitignore"), "build/\n").unwrap();
+        let nested = format!("{repo}/build/baseline");
+        git(&repo, ["worktree", "add", "-q", "--detach", nested.as_str()]).unwrap();
+        let log = block_on(get_log(repo.clone(), 100, vec![], true)).unwrap();
+        let ignored: Vec<_> = log.worktrees.iter().filter(|w| w.ignored).map(|w| w.path.as_str()).collect();
+        // git gives the temp folder's real path (/private/var on macOS).
+        assert!(matches!(ignored[..], [path] if path.ends_with("/build/baseline")));
         let _ = std::fs::remove_dir_all(&linked);
     }
 

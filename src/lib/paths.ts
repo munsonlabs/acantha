@@ -11,3 +11,12 @@ export function resolveName(dir: string, typed: string) {
   }
   return parts.join('/')
 }
+
+/**
+ * A worktree's name: its folder's, or, for one inside the main working tree, its path from there, so a tool's
+ * `tests/.build/baseline/src` isn't just `src`.
+ */
+export function worktreeName(path: string, main: string | undefined) {
+  if (main && path.startsWith(`${main}/`)) return path.slice(main.length + 1)
+  return path.split('/').pop() || path
+}

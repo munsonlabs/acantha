@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { worktreeName } from '@/lib/paths'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { UNCOMMITTED, type Commit } from '@/lib/git'
 import { colorFor, ROW_H } from '@/lib/graph'
@@ -16,9 +17,11 @@ import RefLabels from './RefLabels.vue'
 const ws = useWorkspace()
 const { log, rows, layout, refsByHash, stats, loadMore } = ws.repo
 /** Branches checked out in other worktrees, marked on their labels. */
-const elsewhere = computed(
-  () => new Map((log.value?.worktrees ?? []).filter((w) => w.branch && !w.current).map((w) => [w.branch!, w.path.split('/').pop() ?? w.path])),
-)
+const elsewhere = computed(() => {
+  const all = log.value?.worktrees ?? []
+  const main = all.find((w) => w.main)?.path
+  return new Map(all.filter((w) => w.branch && !w.current).map((w) => [w.branch!, worktreeName(w.path, main)]))
+})
 const { selected, compareWith, select, compare, closeDetails } = ws.details
 const { matchSet, current } = ws.search
 const { target } = ws.reveal

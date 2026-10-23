@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveName } from './paths'
+import { resolveName, worktreeName } from './paths'
 
 describe('resolveName', () => {
   it('names something in the folder, or nested in it', () => {
@@ -18,5 +18,15 @@ describe('resolveName', () => {
     expect(resolveName('src', '../../../x')).toBe('x')
     expect(resolveName('', '..')).toBe('')
     expect(resolveName('src', '/')).toBe('')
+  })
+})
+
+describe('worktreeName', () => {
+  it('names a worktree by its folder, or by its path inside the main one', () => {
+    expect(worktreeName('/code/app-fix', '/code/app')).toBe('app-fix')
+    expect(worktreeName('/code/app/tests/.build/baseline/src', '/code/app')).toBe('tests/.build/baseline/src')
+    // A sibling whose name merely starts the same isn't inside it.
+    expect(worktreeName('/code/app2', '/code/app')).toBe('app2')
+    expect(worktreeName('/code/app', undefined)).toBe('app')
   })
 })
