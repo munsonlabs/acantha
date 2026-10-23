@@ -24,7 +24,10 @@ import TitleBar from '@/components/TitleBar.vue'
 import ToastMessage from '@/components/ToastMessage.vue'
 import WorkspaceView from '@/components/WorkspaceView.vue'
 import TabList from '@/components/TabList.vue'
+import { connectClaudeWindows } from '@/composables/claudeWindow'
 import { isOn } from '@/features'
+
+connectClaudeWindows()
 
 const { workspaces, activeId, active, activate, addWorkspace, closeWorkspace, openInWorkspace, sleepWorkspace } = useWorkspaces()
 const { current: dialog } = useDialog()
@@ -84,6 +87,9 @@ function onKeydown(e: KeyboardEvent) {
   } else if (e.metaKey && e.shiftKey && (e.key === '[' || e.key === '{' || e.key === ']' || e.key === '}')) {
     e.preventDefault()
     runCommand(e.key === '[' || e.key === '{' ? 'prev-tab' : 'next-tab')
+  } else if (mod && e.shiftKey && !e.altKey && key === 'i') {
+    e.preventDefault()
+    runCommand('toggle-claude')
   } else if (mod && e.shiftKey && !e.altKey && key === 'p') {
     e.preventDefault()
     runCommand('palette')

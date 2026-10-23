@@ -2,6 +2,7 @@ import { ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { isOn, type FeatureId } from '@/features'
 import { prefs } from './prefs'
+import { isPoppedOut, popOut } from './claudeWindow'
 import { promptSlackLink, togglePanel } from './slackLinks'
 import { useWorkspaces } from './workspace'
 
@@ -46,6 +47,20 @@ const withRepo = (fn: (ws: NonNullable<typeof active.value>) => unknown) => () =
 }
 
 export const commands: Command[] = [
+  {
+    id: 'toggle-claude',
+    label: 'Claude',
+    group: 'View',
+    keys: '⇧⌘I',
+    feature: 'claude',
+    // The panel's Claude tab showing (or the first), or its window when it's popped out.
+    run: withRepo((ws) => {
+      const tab = ws.panel.active.value?.kind === 'claude' ? ws.panel.active.value : ws.panel.tabs.value.find((t) => t.kind === 'claude')
+      if (tab && isPoppedOut(tab.id)) void popOut(tab.id, ws.repo.repo.value!)
+      else ws.panel.addClaude()
+    }),
+  },
+  { id: 'new-claude', label: 'New Claude Conversation', group: 'View', feature: 'claude', run: withRepo((ws) => ws.panel.addClaude(true)) },
   { id: 'go-to-file', label: 'Go to File', group: 'General', keys: '⌘P', run: () => openPalette('files') },
   { id: 'palette', label: 'Command Palette', group: 'General', keys: '⇧⌘P', run: () => openPalette('commands') },
   { id: 'checkout-branch', label: 'Check Out Branch…', group: 'Repository', run: withRepo(() => openPalette('branches')) },

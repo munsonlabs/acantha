@@ -144,6 +144,8 @@ pub fn build<R: Runtime>(app: &AppHandle<R>, hidden: &[String]) -> tauri::Result
             B(PredefinedMenuItem::minimize(app, None)?),
             B(PredefinedMenuItem::maximize(app, None)?),
             Sep,
+            C(item("toggle-claude", "Claude", Some("CmdOrCtrl+Shift+I"))?),
+            Sep,
             C(item("next-tab", "Next Tab", None)?),
             C(item("prev-tab", "Previous Tab", None)?),
         ],

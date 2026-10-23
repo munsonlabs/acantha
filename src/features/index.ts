@@ -24,6 +24,7 @@ export type FeatureId =
   | 'changeMarkers'
   | 'dashboard'
   | 'tabSleep'
+  | 'claude'
 
 export interface Feature {
   id: FeatureId
@@ -32,6 +33,11 @@ export interface Feature {
 }
 
 export const FEATURES: Feature[] = [
+  {
+    id: 'claude',
+    name: 'Claude',
+    description: 'A floating Claude Code pane for the open repository (⇧⌘I): replies as they’re written, approvals as cards.',
+  },
   {
     id: 'tabSleep',
     name: 'Tab sleep',

@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { tabShown } from '@/features/panelTabs'
 import type { TodoDraft } from '@/lib/todos'
+import { closeConversation } from './claude'
 import { prefs } from './prefs'
 import type { Repo } from './repo'
 import { usePersisted } from './usePersisted'
@@ -21,6 +22,8 @@ export type PanelTab =
   | { id: string; kind: 'compare'; title: string; base: string | null; head: string | null; uncommitted: boolean }
   | { id: string; kind: 'github'; title: string }
   | { id: string; kind: 'reflog'; title: string }
+  /** A Claude Code conversation in this repository, by the tab's id; it can pop out into its own window. */
+  | { id: string; kind: 'claude'; title: string }
   /** A Markdown file from the repository, rendered, following its edits. */
   | { id: string; kind: 'markdown'; title: string; path: string }
   /** A package's README, from node_modules or npm. */
@@ -33,6 +36,14 @@ interface PanelState {
 
 /** Every repository's panel tabs, so each repo tab reopens with its own Slack links and lists. */
 const store = usePersisted<Record<string, PanelState>>('panel-tabs', {})
+
+/** Drops a repository's Claude tabs: its conversations are forgotten. */
+export function forgetClaudeTabs(repo: string) {
+  const s = store.value[repo]
+  if (!s?.tabs.some((t) => t.kind === 'claude')) return
+  const tabs = s.tabs.filter((t) => t.kind !== 'claude')
+  store.value = { ...store.value, [repo]: { tabs, active: tabs.some((t) => t.id === s.active) ? s.active : (tabs[0]?.id ?? null) } }
+}
 
 const newId = () => Math.random().toString(36).slice(2, 10)
 const todo = (d: TodoDraft): Todo => ({ id: newId(), text: d.text, done: d.done })
@@ -110,6 +121,12 @@ export function createPanel({ repo }: Repo) {
       () => false,
       (id) => ({ id, kind: 'compare', title: 'Compare', base: null, head: null, uncommitted: false }),
     )
+  /** Shows a Claude tab, or, `fresh`, starts another conversation in a new one. */
+  const addClaude = (fresh = false) =>
+    showOrAdd(
+      (t) => !fresh && t.kind === 'claude',
+      (id) => ({ id, kind: 'claude', title: 'Claude' }),
+    )
   const addReflog = () =>
     showOrAdd(
       (t) => t.kind === 'reflog',
@@ -157,6 +174,8 @@ export function createPanel({ repo }: Repo) {
   }
 
   function close(id: string) {
+    // A conversation ends with its tab, into the past ones.
+    if (state.value.tabs.some((t) => t.id === id && t.kind === 'claude')) closeConversation(id)
     update((s) => {
       const i = s.tabs.findIndex((t) => t.id === id)
       if (i === -1) return
@@ -225,6 +244,7 @@ export function createPanel({ repo }: Repo) {
     setCompare,
     addGithub,
     addReflog,
+    addClaude,
     addMarkdown,
     addReadme,
     close,

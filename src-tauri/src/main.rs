@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod claude;
 mod files;
 mod git;
 mod github;
@@ -46,8 +47,10 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .manage(pty::Ptys::default())
+        .manage(claude::Claudes::default())
         .manage(watch::Watchers::default())
         .menu(|app| menu::build(app, &[]))
         .on_menu_event(|app, event| menu::forward(app, event.id().as_ref()))
@@ -63,6 +66,18 @@ fn main() {
             git::get_status,
             git::get_status_diff,
             git::apply_patch,
+            claude::claude_subscribe,
+            claude::claude_unsubscribe,
+            claude::claude_send,
+            claude::claude_answer,
+            claude::claude_stop,
+            claude::claude_clear,
+            claude::claude_close,
+            claude::claude_reset,
+            claude::claude_interrupt,
+            claude::claude_window_pin,
+            claude::claude_dim,
+            claude::claude_delete_session,
             menu::set_hidden_menu_items,
             git::default_branch,
             git::branch_tracking,
@@ -110,16 +125,26 @@ fn main() {
                     api.prevent_exit();
                 }
             }
+            // Closing the main window quits (asking first about unsaved files).
             tauri::RunEvent::WindowEvent {
+                label,
                 event: tauri::WindowEvent::CloseRequested { api, .. },
                 ..
             } => {
-                if !should_quit(app) {
+                // A popped-out Claude window just closes, which docks Claude back in the main window's panel; the
+                // screen it dimmed lifts.
+                if label.starts_with("claude") {
+                    let _ = app.emit_to("main", "claude:docked", label.clone());
+                    claude::undim_closed(app, &label);
+                } else if !should_quit(app) {
                     api.prevent_close();
                 }
             }
             // Don't leave shells running after the window goes away.
-            tauri::RunEvent::Exit => app.state::<pty::Ptys>().kill_all(),
+            tauri::RunEvent::Exit => {
+                app.state::<pty::Ptys>().kill_all();
+                app.state::<claude::Claudes>().kill_all();
+            }
             _ => {}
         });
 }

@@ -1,13 +1,15 @@
 <script lang="ts">
 import { ref } from 'vue'
 
-type Tab = 'appearance' | 'features' | 'git' | 'graph' | 'editor' | 'terminal' | 'slack'
+type Tab = 'appearance' | 'features' | 'git' | 'graph' | 'editor' | 'terminal' | 'claude' | 'slack'
 /** The page last open, so Settings opens where you left it. */
 const lastTab = ref<Tab>('appearance')
 </script>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { allPast, deleteAllPast, deleteConversation } from '@/composables/claude'
+import { when } from '@/lib/claudeView'
 import { overlays, ZOOM_MAX, ZOOM_MIN } from '@/composables/commands'
 import { prefs } from '@/composables/prefs'
 import { useWorkspaces } from '@/composables/workspace'
@@ -26,7 +28,11 @@ const slackChannels = computed({
   set: (v: string) => (prefs.slackChannels.value = v.split(/[\s,]+/).filter((id) => /^[A-Z0-9]+$/.test(id))),
 })
 
-/** Settings by topic, one page each; Slack's only while it's switched on. */
+/** Past Claude conversations kept to pick up again, newest first. */
+const past = computed(allPast)
+const repoName = (path: string) => path.split('/').pop() ?? path
+
+/** Settings by topic, one page each; Slack's and Claude's only while they're switched on. */
 const TABS = computed(() =>
   (
     [
@@ -36,9 +42,10 @@ const TABS = computed(() =>
       { id: 'graph', label: 'Graph', icon: 'history' },
       { id: 'editor', label: 'Editor', icon: 'pencil' },
       { id: 'terminal', label: 'Terminal', icon: 'terminal' },
+      { id: 'claude', label: 'Claude', icon: 'message' },
       { id: 'slack', label: 'Slack', icon: 'message' },
     ] as const
-  ).filter((t) => t.id !== 'slack' || isOn('slack')),
+  ).filter((t) => (t.id !== 'slack' || isOn('slack')) && (t.id !== 'claude' || isOn('claude'))),
 )
 const tab = computed({
   get: () => (TABS.value.some((t) => t.id === lastTab.value) ? lastTab.value : 'appearance'),
@@ -185,6 +192,73 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
               </label>
             </section>
 
+            <section v-if="isOn('claude')" v-show="tab === 'claude'">
+              <h3>Claude</h3>
+              <label class="row">
+                <div>
+                  <span class="label">Keep on top</span>
+                  <span class="hint">A popped-out Claude floats above other apps, full-screen ones included.</span>
+                </div>
+                <input v-model="prefs.claudeOnTop.value" type="checkbox" class="switch" />
+              </label>
+              <label class="row">
+                <div>
+                  <span class="label">Dim the screen</span>
+                  <span class="hint">While you're in a popped-out Claude, the screen behind it dims so it's easier to read.</span>
+                </div>
+                <span class="number">
+                  <input v-model.number="prefs.claudeDim.value" type="range" min="0" max="0.8" step="0.05" />
+                  <span>{{ prefs.claudeDim.value ? `${Math.round(prefs.claudeDim.value * 100)}%` : 'Off' }}</span>
+                </span>
+              </label>
+
+              <h4>Past conversations</h4>
+              <p class="hint">
+                A closed Claude tab's conversation is kept here, to pick up again from a new tab. Taking one off the list leaves the session with
+                Claude Code (<code>claude --resume</code>); deleting it deletes that too.
+              </p>
+              <label class="row">
+                <span class="label">Keep for</span>
+                <select v-model.number="prefs.claudeKeepDays.value">
+                  <option :value="7">A week</option>
+                  <option :value="30">A month</option>
+                  <option :value="90">Three months</option>
+                  <option :value="0">Until deleted</option>
+                </select>
+              </label>
+              <label class="row">
+                <span class="label">At most, per repository</span>
+                <select v-model.number="prefs.claudeKeepPerRepo.value">
+                  <option :value="5">5</option>
+                  <option :value="20">20</option>
+                  <option :value="50">50</option>
+                  <option :value="0">Any number</option>
+                </select>
+              </label>
+              <label class="row">
+                <div>
+                  <span class="label">Forget a repository's when its tab closes</span>
+                  <span class="hint">Its Claude tabs and past conversations, so the list holds only what's open.</span>
+                </div>
+                <input v-model="prefs.claudeForgetOnClose.value" type="checkbox" class="switch" />
+              </label>
+              <ul v-if="past.length" class="past">
+                <li v-for="c in past" :key="c.id">
+                  <span class="repo">{{ repoName(c.repo) }}</span>
+                  <span class="what" :title="c.title">{{ c.title || 'Untitled' }}</span>
+                  <span class="when">{{ when(c.updated) }}</span>
+                  <button class="ghost icon-btn" title="Delete this conversation" @click="deleteConversation(c.id)">
+                    <Icon name="trash" :size="12" />
+                  </button>
+                </li>
+              </ul>
+              <p v-else class="hint">None yet.</p>
+              <div v-if="past.length" class="row">
+                <span class="hint">{{ past.length === 1 ? '1 conversation' : `${past.length} conversations` }}</span>
+                <button class="ghost danger" @click="deleteAllPast()">Delete all</button>
+              </div>
+            </section>
+
             <section v-if="isOn('slack')" v-show="tab === 'slack'">
               <h3>Slack</h3>
               <label class="row">
@@ -299,6 +373,53 @@ h2 {
   overflow: auto;
   padding: 6px 20px 20px;
 }
+.past {
+  max-height: 200px;
+  margin: 8px 0;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  list-style: none;
+}
+.past li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 4px 0 10px;
+  font-size: 12.5px;
+}
+.past li + li {
+  border-top: 1px solid var(--border);
+}
+.past .repo {
+  flex: none;
+  color: var(--fg-muted);
+  font-weight: 600;
+}
+.past .what {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.past .when {
+  flex: none;
+  color: var(--fg-faint);
+  font-size: 11px;
+}
+.past .icon-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--fg-faint);
+}
+.past .icon-btn:hover,
+.danger {
+  color: var(--del);
+}
 section + section {
   margin-top: 6px;
 }
@@ -307,6 +428,12 @@ h3 {
   margin: 12px 0 6px;
   color: var(--fg);
   font-size: 14px;
+  font-weight: 600;
+}
+h4 {
+  margin: 22px 0 4px;
+  color: var(--fg);
+  font-size: 12.5px;
   font-weight: 600;
 }
 .row {

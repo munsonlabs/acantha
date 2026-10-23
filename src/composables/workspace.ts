@@ -5,7 +5,8 @@ import { createFiles } from './files'
 import { createUi } from './ui'
 import { createDiff } from './diff'
 import { createMenus } from './menus'
-import { createPanel } from './panel'
+import { forgetRepo } from './claude'
+import { createPanel, forgetClaudeTabs } from './panel'
 import { prefs } from './prefs'
 import { createRepo } from './repo'
 import { createReveal } from './reveal'
@@ -199,13 +200,28 @@ async function wake(ws: Workspace) {
   await restoreFiles(ws)
 }
 
+/**
+ * A repository no tab shows any more: its Claude conversations, open and past, are forgotten, so they don't pile up.
+ * Claude Code keeps the sessions themselves (`claude --resume`).
+ */
+function forgetClosed(closed: Workspace[]) {
+  if (!prefs.claudeForgetOnClose.value) return
+  for (const path of new Set(closed.map(pathOf))) {
+    if (!path || workspaces.value.some((w) => pathOf(w) === path)) continue
+    forgetRepo(path)
+    forgetClaudeTabs(path)
+  }
+}
+
 async function closeWorkspace(id: number) {
   const i = workspaces.value.findIndex((w) => w.id === id)
   if (i === -1) return
-  if (!(await workspaces.value[i].files.discardDrafts())) return
-  workspaces.value[i].scope.stop()
+  const closing = workspaces.value[i]
+  if (!(await closing.files.discardDrafts())) return
+  closing.scope.stop()
   const rest = workspaces.value.filter((w) => w.id !== id)
   workspaces.value = rest
+  forgetClosed([closing])
   if (activeId.value === id) {
     const next = rest[i] ?? rest[i - 1]
     if (next) activate(next.id)
@@ -222,8 +238,10 @@ async function sleepOtherWorkspaces(id: number) {
 }
 
 function closeOtherWorkspaces(id: number) {
-  for (const w of workspaces.value) if (w.id !== id) w.scope.stop()
+  const others = workspaces.value.filter((w) => w.id !== id)
+  for (const w of others) w.scope.stop()
   workspaces.value = workspaces.value.filter((w) => w.id === id)
+  forgetClosed(others)
   activate(id)
 }
 

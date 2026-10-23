@@ -9,7 +9,7 @@ license-file = "../LICENSE"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -19,6 +19,12 @@ base64 = "0.22"
 notify-debouncer-mini = "0.7"
 ignore = "0.4"
 tauri-plugin-clipboard-manager = "2"
+tauri-plugin-notification = "=2.5.1"
+
+# The Claude window joins full-screen Spaces (see claude.rs), through the AppKit bindings Tauri already uses.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.5"
+objc2-app-kit = { version = "0.3.2", features = ["NSWindow", "NSGraphics"] }
 
 [profile.release]
 lto = true

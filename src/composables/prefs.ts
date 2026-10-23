@@ -24,6 +24,18 @@ export const prefs = {
   dimIdleGraph: usePersisted('dim-idle-graph', false),
   /** The graph folded away, its place showing Acantha's mark, for more room around the terminal and panels. */
   graphCollapsed: usePersisted('graph-collapsed', false),
+  /** A popped-out Claude window: where it sits and its size, whether it floats over other apps; and how Claude works. */
+  claudeOnTop: usePersisted('claude-on-top', true),
+  claudeRect: usePersisted<{ x: number; y: number; w: number; h: number } | null>('claude-rect', null),
+  claudeMode: usePersisted<'plan' | 'default' | 'acceptEdits'>('claude-mode', 'default'),
+  claudeModel: usePersisted('claude-model', ''),
+  /** How much a popped-out Claude dims the screen behind it while you're in it: 0 to leave it be. */
+  claudeDim: usePersisted('claude-dim', 0.45),
+  /** Past Claude conversations: kept this many days (0: for good) and at most this many a repository (0: any number). */
+  claudeKeepDays: usePersisted('claude-keep-days', 30),
+  claudeKeepPerRepo: usePersisted('claude-keep-per-repo', 20),
+  /** Closing a repository's tab forgets its Claude conversations. */
+  claudeForgetOnClose: usePersisted('claude-forget-on-close', true),
   /** Reopen a repository's terminal tabs (in their folders, with their names and splits) when it's opened again. */
   restoreTerminals: usePersisted('restore-terminals', true),
   /** Optional features switched off in Settings (see src/features); everything else is on. */

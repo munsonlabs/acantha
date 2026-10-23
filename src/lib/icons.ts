@@ -1,6 +1,7 @@
 /** Icon outlines on a 24×24 grid, drawn with a 1.75 stroke (Lucide-style). */
 export const ICON_PATHS = {
   plus: 'M12 5v14M5 12h14',
+  pin: 'M12 17v5M9 10.8a2 2 0 0 1-1.1 1.8l-1.8.9A2 2 0 0 0 5 15.2V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.8a2 2 0 0 0-1.1-1.8l-1.8-.9a2 2 0 0 1-1.1-1.8V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z',
   x: 'M18 6 6 18M6 6l12 12',
   terminal: 'm5 17 5-5-5-5M12 19h7',
   branch: 'M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6M18 9a9 9 0 0 1-9 9',

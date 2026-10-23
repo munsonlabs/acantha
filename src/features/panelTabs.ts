@@ -43,6 +43,7 @@ export const PANEL_TABS: { [K in Kind]: PanelTabKind<K> } = {
     component: lazy(() => import('@/components/CompareView.vue')),
     props: (t) => ({ tabId: t.id, base: t.base, head: t.head, uncommitted: t.uncommitted }),
   },
+  claude: { feature: 'claude', icon: 'message', component: lazy(() => import('@/components/ClaudeTab.vue')), props: (t) => ({ tabId: t.id }) },
   reflog: { feature: 'reflog', icon: 'undo', component: lazy(() => import('@/components/ReflogView.vue')), props: () => ({}) },
   github: { feature: 'github', icon: 'cloud', component: lazy(() => import('@/components/GitHubView.vue')), props: (t) => ({ tabId: t.id }) },
   markdown: { feature: 'markdown', icon: 'eye', component: lazy(() => import('@/components/MarkdownPanel.vue')), props: (t) => ({ path: t.path }) },
