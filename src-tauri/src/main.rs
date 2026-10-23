@@ -75,6 +75,7 @@ fn main() {
             claude::claude_close,
             claude::claude_reset,
             claude::claude_interrupt,
+            claude::claude_statuses,
             claude::claude_window_pin,
             claude::claude_dim,
             claude::claude_delete_session,

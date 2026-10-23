@@ -2,9 +2,11 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { LogicalPosition, LogicalSize, getCurrentWindow } from '@tauri-apps/api/window'
-import { openInMain } from '@/composables/claudeWindow'
+import { conversations } from '@/composables/claude'
+import { askOpenRepos, openInMain, startIn, switchTo, type Rect } from '@/composables/claudeWindow'
+import { openMenu, type MenuEntry } from '@/composables/useContextMenu'
 import { prefs } from '@/composables/prefs'
-import { costText, statusWords } from '@/lib/claudeView'
+import { costText, statusWords, when } from '@/lib/claudeView'
 import ClaudeChat from '@/components/ClaudeChat.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
 import Icon from '@/components/Icon.vue'
@@ -74,19 +76,56 @@ watch(
   },
 )
 
+/** Where it is, expanded: collapsed, the size is the expanded one's, with the same bottom-right corner. */
+async function expandedRect(): Promise<Rect> {
+  const r = await rect()
+  const old = prefs.claudeRect.value
+  const w = expanded.value ? r.w : (old?.w ?? 420)
+  const h = expanded.value ? r.h : (old?.h ?? 640)
+  return { x: Math.round(r.x + r.w - w), y: Math.round(r.y + r.h - h), w: Math.round(w), h: Math.round(h) }
+}
+
 let saveTimer: ReturnType<typeof setTimeout> | undefined
-/** Where it is and how big, kept for the next one: the expanded size only, the corner either way. */
+/** Where it is and how big, kept for the next one. */
 function remember() {
   clearTimeout(saveTimer)
   saveTimer = setTimeout(async () => {
-    if (resizing) return
-    const r = await rect()
-    const old = prefs.claudeRect.value
-    // Collapsed, the size isn't one to keep, but its bottom-right corner is the expanded one's.
-    const w = expanded.value ? r.w : (old?.w ?? 420)
-    const h = expanded.value ? r.h : (old?.h ?? 640)
-    prefs.claudeRect.value = { x: Math.round(r.x + r.w - w), y: Math.round(r.y + r.h - h), w: Math.round(w), h: Math.round(h) }
+    if (!resizing) prefs.claudeRect.value = await expandedRect()
   }, 400)
+}
+
+/**
+ * The conversations to switch to: every open one, by repository (this one's first), saying which are working or
+ * waiting for you, and a new one in any repository open in Acantha. The one picked takes this one's place here; this
+ * one goes back to its panel tab.
+ */
+async function openSwitcher(e: MouseEvent) {
+  const [repos, statuses] = await Promise.all([
+    askOpenRepos(win.label),
+    invoke<Record<string, string>>('claude_statuses').catch((): Record<string, string> => ({})),
+  ])
+  const here = await expandedRect()
+  const name = (path: string) => path.split('/').pop() ?? path
+  const order = [root, ...repos.filter((r) => r !== root).sort((a, b) => name(a).localeCompare(name(b)))]
+  const items: MenuEntry[] = []
+  for (const repo of order) {
+    const open = Object.entries(conversations.value)
+      .filter(([, c]) => !c.closed && c.repo === repo)
+      .sort(([, a], [, b]) => b.updated - a.updated)
+    if (items.length) items.push('separator')
+    items.push({ header: name(repo) })
+    for (const [other, c] of open) {
+      const status = statuses[other]
+      items.push({
+        label: c.title || 'New conversation',
+        icon: other === id ? 'check' : status === 'waiting' ? 'warning' : 'message',
+        shortcut: status && status !== 'idle' ? statusWords(status) : when(c.updated),
+        run: () => other !== id && void switchTo(id, other, repo, here),
+      })
+    }
+    if (repos.includes(repo)) items.push({ label: 'New Conversation', icon: 'plus', run: () => void startIn(id, repo, here) })
+  }
+  openMenu(e, items)
 }
 
 /**
@@ -139,12 +178,12 @@ onBeforeUnmount(() => {
     <ClaudeChat v-show="expanded" v-if="root && id" :id="id" ref="chat" class="chat" :root="root" floating @open="(path) => openInMain(root, path)" />
     <div v-if="expanded" class="grip" title="Resize" @pointerdown.prevent="win.startResizeDragging('NorthWest')" />
 
-    <!-- The chip: dragged to move it all; click its face to collapse or expand. -->
+    <!-- The chip: dragged to move it all; its face switches conversation, or, collapsed, expands it. -->
     <div class="chip" data-tauri-drag-region>
-      <button class="face" :title="expanded ? 'Collapse' : 'Expand'" @click="setExpanded(!expanded)">
+      <button class="face" :title="expanded ? 'Switch conversation' : 'Expand'" @click="(e) => (expanded ? openSwitcher(e) : setExpanded(true))">
         <span class="avatar" :class="status">✳</span>
         <span class="who">
-          <span class="name">{{ claude?.name ?? 'Claude' }}</span>
+          <span class="name">{{ claude?.name ?? 'Claude' }}<Icon v-if="expanded" name="chevron" :size="9" class="more" /></span>
           <span class="status"
             >{{ statusWords(status) }}<template v-if="cost"> · {{ cost }}</template></span
           >
@@ -266,6 +305,11 @@ html.claude-window body {
   flex-direction: column;
   min-width: 0;
   line-height: 1.2;
+}
+.more {
+  margin-left: 4px;
+  color: var(--fg-faint);
+  transform: rotate(-90deg);
 }
 .name {
   overflow: hidden;

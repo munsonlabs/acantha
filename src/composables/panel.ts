@@ -114,6 +114,7 @@ export function createPanel({ repo }: Repo) {
       s.active = id
     })
     reveal()
+    return id
   }
 
   const addCompare = () =>
@@ -121,7 +122,7 @@ export function createPanel({ repo }: Repo) {
       () => false,
       (id) => ({ id, kind: 'compare', title: 'Compare', base: null, head: null, uncommitted: false }),
     )
-  /** Shows a Claude tab, or, `fresh`, starts another conversation in a new one. */
+  /** Shows a Claude tab, or, `fresh`, starts another conversation in a new one. Returns the tab's id. */
   const addClaude = (fresh = false) =>
     showOrAdd(
       (t) => !fresh && t.kind === 'claude',

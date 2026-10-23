@@ -31,6 +31,37 @@ struct Conversation {
     views: Vec<(u32, Channel<String>)>,
     run: Option<Run>,
     session_id: Option<String>,
+    /// What it's doing, for the list of conversations a popped-out window switches between.
+    status: Status,
+}
+
+#[derive(Default, Clone, Copy, PartialEq, Debug, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Status {
+    #[default]
+    Idle,
+    Working,
+    /// Asking permission.
+    Waiting,
+}
+
+impl Status {
+    /// What a line says Claude's doing now, if it changes it.
+    fn after(line: &str) -> Option<Status> {
+        let is = |t: &str| line.contains(&format!(r#""type":"{t}""#));
+        if is("acantha_user") || is("acantha_answered") {
+            Some(Status::Working)
+        } else if is("control_request") {
+            Some(Status::Waiting)
+        } else if ["result", "acantha_stopped", "acantha_exit", "acantha_interrupted", "acantha_cleared"]
+            .into_iter()
+            .any(is)
+        {
+            Some(Status::Idle)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Default)]
@@ -63,6 +94,9 @@ fn broadcast(c: &mut Conversation, line: String) {
     let delta = line.contains(r#""type":"stream_event""#);
     c.views.retain(|(_, ch)| ch.send(line.clone()).is_ok());
     if !delta {
+        if let Some(status) = Status::after(&line) {
+            c.status = status;
+        }
         c.log.push(line);
         if c.log.len() > LOG_MAX {
             c.log.drain(..c.log.len() - LOG_MAX);
@@ -274,6 +308,12 @@ pub fn claude_unsubscribe(state: State<'_, Claudes>, id: String, view: u32) {
     if let Some(c) = state.conversations.lock().unwrap().get_mut(&id) {
         c.views.retain(|(v, _)| *v != view);
     }
+}
+
+/// What each conversation running here is doing, by id: for a popped-out window's list to switch between.
+#[tauri::command]
+pub fn claude_statuses(state: State<'_, Claudes>) -> HashMap<String, Status> {
+    state.conversations.lock().unwrap().iter().map(|(id, c)| (id.clone(), c.status)).collect()
 }
 
 /// Lets a conversation go here, stopping Claude: another's being picked up in its place. Claude Code keeps the
@@ -603,6 +643,21 @@ mod tests {
         assert!(lines[2].contains("tool_result"));
         assert!(lines[3].contains("acantha_interrupted"));
         assert!(lines[4].contains("acantha_stopped"));
+    }
+
+    #[test]
+    fn follows_what_claude_is_doing() {
+        let mut c = Conversation::default();
+        broadcast(&mut c, json!({ "type": "acantha_user", "text": "hi" }).to_string());
+        assert_eq!(c.status, Status::Working);
+        broadcast(&mut c, r#"{"type":"control_request","request":{"subtype":"can_use_tool"}}"#.into());
+        assert_eq!(c.status, Status::Waiting);
+        broadcast(&mut c, json!({ "type": "acantha_answered" }).to_string());
+        // A tool's result isn't the turn's.
+        broadcast(&mut c, r#"{"type":"user","message":{"content":[{"type":"tool_result"}]}}"#.into());
+        assert_eq!(c.status, Status::Working);
+        broadcast(&mut c, r#"{"type":"result","subtype":"success"}"#.into());
+        assert_eq!(c.status, Status::Idle);
     }
 
     #[test]
