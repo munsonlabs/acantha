@@ -7,6 +7,7 @@ import { useSlidingPill, useTabDrag, useTabScroll } from '@/composables/tabs'
 import { openMenu } from '@/composables/useContextMenu'
 import { useWorkspace } from '@/composables/workspace'
 import AgentGlyph from './AgentGlyph.vue'
+import AgentMark from './AgentMark.vue'
 import AgentView from './AgentView.vue'
 import Icon from './Icon.vue'
 
@@ -16,7 +17,7 @@ import Icon from './Icon.vue'
  */
 const props = defineProps<{ docked?: boolean }>()
 const ws = useWorkspace()
-const { tabs, active, expanded, activate, add, addInWorktree, close, removeWorktree, move, renameAgent, titleOf } = ws.agents
+const { tabs, active, expanded, activate, addInWorktree, newAgentItems, close, removeWorktree, move, renameAgent, titleOf } = ws.agents
 useAgentActivity()
 
 const strip = ref<HTMLElement>()
@@ -30,10 +31,7 @@ function onTabDown(e: PointerEvent, t: AgentTab, index: number) {
 }
 
 function newAgent(e: MouseEvent) {
-  openMenu(e, [
-    { label: 'New Agent', icon: 'plus', run: () => add() },
-    { label: 'New Agent in a Worktree…', icon: 'folder', run: () => addInWorktree() },
-  ])
+  openMenu(e, [...newAgentItems(), 'separator', { label: 'New Agent in a Worktree…', icon: 'folder', run: () => addInWorktree() }])
 }
 
 function tabMenu(e: MouseEvent, t: AgentTab) {
@@ -72,6 +70,7 @@ const hide = () => (prefs.agentsOpen.value = false)
           @contextmenu.prevent="tabMenu($event, t)"
         >
           <AgentGlyph :state="agentState(t.id)" />
+          <AgentMark :kind="t.kind" />
           <span class="label">{{ titleOf(t) }}</span>
           <Icon v-if="t.branch" name="branch" :size="11" class="worktree" />
           <button class="tab-close" title="Close Agent" @mousedown.stop @click.stop="close(t.id)"><Icon name="x" :size="12" /></button>
@@ -91,7 +90,7 @@ const hide = () => (prefs.agentsOpen.value = false)
         <Icon name="bot" :size="26" class="mark" />
         <p>Agents are Claude Code conversations, each working on its own task. Start one here, or in a worktree of its own.</p>
         <div class="buttons">
-          <button class="ghost" @click="add()"><Icon name="plus" :size="12" /> New Agent</button>
+          <button class="ghost" @click="newAgent"><Icon name="plus" :size="12" /> New Agent</button>
           <button class="ghost" @click="addInWorktree()"><Icon name="folder" :size="12" /> In a Worktree…</button>
         </div>
       </div>

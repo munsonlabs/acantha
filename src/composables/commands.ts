@@ -62,7 +62,14 @@ export const commands: Command[] = [
       else show()
     }),
   },
-  { id: 'new-claude', label: 'New Agent', group: 'View', feature: 'claude', run: withRepo((ws) => void ws.agents.add()) },
+  { id: 'new-claude', label: 'New Claude Code Agent', group: 'View', feature: 'claude', run: withRepo((ws) => void ws.agents.add()) },
+  {
+    id: 'new-opencode-agent',
+    label: 'New OpenCode Agent',
+    group: 'View',
+    feature: 'claude',
+    run: withRepo((ws) => void ws.agents.add(undefined, 'opencode')),
+  },
   {
     id: 'new-agent-worktree',
     label: 'New Agent in a Worktree…',

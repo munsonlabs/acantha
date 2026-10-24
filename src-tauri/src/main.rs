@@ -5,6 +5,7 @@ mod files;
 mod git;
 mod github;
 mod menu;
+mod opencode;
 mod packages;
 mod pty;
 mod rebase;
@@ -51,6 +52,7 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .manage(pty::Ptys::default())
         .manage(claude::Claudes::default())
+        .manage(opencode::OpenCode::default())
         .manage(watch::Watchers::default())
         .menu(|app| menu::build(app, &[]))
         .on_menu_event(|app, event| menu::forward(app, event.id().as_ref()))
@@ -76,6 +78,11 @@ fn main() {
             claude::claude_reset,
             claude::claude_interrupt,
             claude::claude_statuses,
+            opencode::opencode_send,
+            opencode::opencode_answer,
+            opencode::opencode_interrupt,
+            opencode::opencode_models,
+            opencode::opencode_history,
             claude::claude_window_pin,
             claude::claude_dim,
             claude::claude_delete_session,
@@ -146,6 +153,7 @@ fn main() {
             tauri::RunEvent::Exit => {
                 app.state::<pty::Ptys>().kill_all();
                 app.state::<claude::Claudes>().kill_all();
+                app.state::<opencode::OpenCode>().stop();
             }
             _ => {}
         });

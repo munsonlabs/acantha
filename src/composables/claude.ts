@@ -1,7 +1,7 @@
 import { computed, onScopeDispose, reactive, ref, watch } from 'vue'
 import { Channel, invoke } from '@tauri-apps/api/core'
 import { applyEvent, newChat, type Approval, type SlashCommand } from '@/lib/claudeChat'
-import { prune, type SavedConversation } from '@/lib/claudeView'
+import { prune, type AgentKind, type SavedConversation } from '@/lib/claudeView'
 import { prefs } from './prefs'
 import { usePersisted } from './usePersisted'
 
@@ -33,10 +33,13 @@ function save(id: string, change: Partial<SavedConversation> | null) {
 }
 
 /** A repository's past conversations, newest first. */
-/** A repository's past conversations that ran in `cwd` (Claude Code keeps sessions by folder), newest first. */
-export const pastConversations = (repo: string, cwd = repo) =>
+/**
+ * A repository's past conversations that ran in `cwd` (Claude Code keeps sessions by folder) with the same tool, newest
+ * first.
+ */
+export const pastConversations = (repo: string, cwd = repo, kind: AgentKind = 'claude') =>
   Object.entries(conversations.value)
-    .filter(([, c]) => c.closed && c.repo === repo && (c.cwd ?? c.repo) === cwd && c.sessionId)
+    .filter(([, c]) => c.closed && c.repo === repo && (c.cwd ?? c.repo) === cwd && (c.kind ?? 'claude') === kind && c.sessionId)
     .sort(([, a], [, b]) => b.updated - a.updated)
     .map(([id, c]) => ({ id, ...c }))
 
@@ -85,12 +88,14 @@ export async function deleteAllPast() {
  * said (from Claude Code's own record of the session, after a restart), then follows along; what you do here goes back
  * there, and every view sees it. Ends with the component (or scope) that made it.
  */
-export function useClaudeConversation(id: string, root: string, cwd = root) {
+export function useClaudeConversation(id: string, root: string, cwd = root, kind: AgentKind = 'claude') {
+  const oc = kind === 'opencode'
+  const modelPref = oc ? prefs.opencodeModel : prefs.claudeModel
   const chat = reactive(newChat())
   const mode = ref<ClaudeMode>(prefs.claudeMode.value)
-  const model = ref<string>(prefs.claudeModel.value)
+  const model = ref<string>(modelPref.value)
   const name = root.split('/').pop() ?? root
-  const fresh = (): SavedConversation => ({ repo: root, ...(cwd !== root ? { cwd } : {}), updated: Date.now() })
+  const fresh = (): SavedConversation => ({ repo: root, ...(cwd !== root ? { cwd } : {}), ...(oc ? { kind } : {}), updated: Date.now() })
   if (!conversations.value[id]) save(id, fresh())
   let viewId: number | null = null
   let disposed = false
@@ -116,12 +121,14 @@ export function useClaudeConversation(id: string, root: string, cwd = root) {
     const mine = ++gen
     channel.onmessage = (line) => mine === gen && onLine(line)
     const saved = conversations.value[id]?.sessionId
-    void invoke<number>('claude_subscribe', { id, resume: saved ?? null, onEvent: channel }).then((view) => {
+    // Claude Code's history comes from its transcript as the backend subscribes; OpenCode's from its server, after.
+    void invoke<number>('claude_subscribe', { id, resume: oc ? null : (saved ?? null), onEvent: channel }).then(async (view) => {
       viewId = view
       if (disposed) void invoke('claude_unsubscribe', { id, view })
-      // A saved session whose history Claude Code no longer has to show: it still remembers it.
+      if (oc && saved && !chat.entries.length) await invoke('opencode_history', { id, session: saved }).catch(() => {})
+      // A saved session whose history isn't there to show any more: it's still remembered.
       if (!chat.entries.length && saved)
-        chat.entries.push({ kind: 'notice', text: 'Carrying on from last time: Claude remembers the conversation, though it isn’t shown here.' })
+        chat.entries.push({ kind: 'notice', text: 'Carrying on from last time: the conversation is remembered, though it isn’t shown here.' })
     })
   }
   connect()
@@ -137,19 +144,20 @@ export function useClaudeConversation(id: string, root: string, cwd = root) {
     if (message === '/clear') return clear()
     save(id, { updated: Date.now() })
     try {
-      await invoke('claude_send', { id, repo: cwd, text: message, mode: mode.value, model: model.value || null })
+      if (oc) await invoke('opencode_send', { id, cwd, text: message, mode: mode.value, model: model.value || null })
+      else await invoke('claude_send', { id, repo: cwd, text: message, mode: mode.value, model: model.value || null })
     } catch (e) {
       chat.entries.push({ kind: 'notice', text: String(e), error: true })
     }
   }
 
   const answer = (a: Approval, allow: boolean) =>
-    invoke('claude_answer', { id, requestId: a.requestId, allow, input: a.input }).catch((e) =>
+    invoke(oc ? 'opencode_answer' : 'claude_answer', { id, requestId: a.requestId, allow, input: a.input }).catch((e) =>
       chat.entries.push({ kind: 'notice', text: String(e), error: true }),
     )
 
   /** Stops the reply under way, as Esc does in the terminal; Claude carries on from there with the next message. */
-  const interrupt = () => invoke('claude_interrupt', { id })
+  const interrupt = () => invoke(oc ? 'opencode_interrupt' : 'claude_interrupt', { id })
 
   /** The slash commands to offer: this conversation's, or the last ones Claude Code listed, before it's started. */
   const commands = computed(() => (chat.commands.length ? chat.commands : knownCommands.value).filter((c) => !c.name.startsWith('_')))
@@ -181,14 +189,25 @@ export function useClaudeConversation(id: string, root: string, cwd = root) {
   /** A new mode or model applies from the next message: an idle Claude is let go, and the next message resumes. */
   async function setMode(m: ClaudeMode) {
     mode.value = prefs.claudeMode.value = m
-    if (!chat.working) await invoke('claude_stop', { id })
+    // OpenCode takes its mode with each message; Claude Code's is set as it starts.
+    if (!chat.working && !oc) await invoke('claude_stop', { id })
   }
   async function setModel(m: string) {
-    model.value = prefs.claudeModel.value = m
-    if (!chat.working) await invoke('claude_stop', { id })
+    model.value = modelPref.value = m
+    if (!chat.working && !oc) await invoke('claude_stop', { id })
   }
 
   const status = computed(() => (chat.approvals.length ? 'waiting' : chat.working ? 'working' : 'idle'))
 
-  return { id, root, cwd, name, chat, mode, model, status, commands, send, answer, interrupt, clear, resume, setMode, setModel }
+  return { id, root, cwd, kind, name, chat, mode, model, status, commands, send, answer, interrupt, clear, resume, setMode, setModel }
+}
+
+let openCodeModels: Promise<{ id: string; label: string }[]> | null = null
+/** The models OpenCode's set up with (its default first), asked for once. */
+export function loadOpenCodeModels() {
+  openCodeModels ??= invoke<{ id: string; label: string }[]>('opencode_models').catch(() => {
+    openCodeModels = null
+    return []
+  })
+  return openCodeModels
 }

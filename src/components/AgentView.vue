@@ -43,7 +43,7 @@ async function open(path: string) {
         <button class="ghost" @click="bringBack(agent.id)"><Icon name="minimize" :size="12" /> Bring it back here</button>
       </div>
     </div>
-    <ClaudeChat v-else :id="agent.id" :key="`${agent.id}:${root}`" :root="root" :cwd="cwd" @open="open">
+    <ClaudeChat v-else :id="agent.id" :key="`${agent.id}:${root}`" :root="root" :cwd="cwd" :kind="agent.kind" @open="open">
       <template #actions>
         <button class="ghost icon-btn" title="Pop out into its own window" @click="popOut(agent.id, root)">
           <Icon name="external" :size="13" />

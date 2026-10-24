@@ -71,8 +71,14 @@ export function when(time: number, now = new Date()) {
  * A conversation, kept so it can be carried on: after a restart, in its tab, or from the list of past ones once its tab
  * is closed. Claude Code keeps what was said (its session); this is which session, where, and what about.
  */
+/** What runs an agent: Claude Code, or OpenCode. */
+export type AgentKind = 'claude' | 'opencode'
+export const AGENT_NAMES: Record<AgentKind, string> = { claude: 'Claude Code', opencode: 'OpenCode' }
+
 export interface SavedConversation {
   repo: string
+  /** What runs it; Claude Code when not said. */
+  kind?: AgentKind
   /** Where it runs, when that's a worktree of the repository rather than the repository itself. */
   cwd?: string
   sessionId?: string

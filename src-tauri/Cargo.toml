@@ -20,6 +20,8 @@ notify-debouncer-mini = "0.7"
 ignore = "0.4"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-notification = "=2.5.1"
+# Talks to a local OpenCode server (see opencode.rs): the version Tauri already has, plain HTTP only.
+reqwest = { version = "=0.13.5", default-features = false, features = ["blocking", "json"] }
 
 # The Claude window joins full-screen Spaces (see claude.rs), through the AppKit bindings Tauri already uses.
 [target.'cfg(target_os = "macos")'.dependencies]

@@ -24,13 +24,15 @@ struct Run {
 }
 
 #[derive(Default)]
-struct Conversation {
+pub(crate) struct Conversation {
     /// Everything said, to bring a new view up to date. Text deltas are left out: the whole messages that follow them
     /// carry the same text.
-    log: Vec<String>,
-    views: Vec<(u32, Channel<String>)>,
+    pub(crate) log: Vec<String>,
+    pub(crate) views: Vec<(u32, Channel<String>)>,
     run: Option<Run>,
-    session_id: Option<String>,
+    pub(crate) session_id: Option<String>,
+    /// An OpenCode agent's session (see opencode.rs), rather than a Claude Code process.
+    pub(crate) oc: Option<crate::opencode::Session>,
     /// What it's doing, for the lists of agents: since when (ms), and when a reply last finished.
     status: Status,
     since: u64,
@@ -118,7 +120,7 @@ impl Status {
 
 #[derive(Default)]
 pub struct Claudes {
-    conversations: Mutex<HashMap<String, Conversation>>,
+    pub(crate) conversations: Mutex<HashMap<String, Conversation>>,
     next: Mutex<u64>,
 }
 
@@ -142,7 +144,7 @@ impl Claudes {
 const LOG_MAX: usize = 4000;
 
 /// Passes a line to every view of a conversation, and keeps it for views to come.
-fn broadcast(c: &mut Conversation, line: String) {
+pub(crate) fn broadcast(c: &mut Conversation, line: String) {
     let delta = line.contains(r#""type":"stream_event""#);
     c.views.retain(|(_, ch)| ch.send(line.clone()).is_ok());
     if !delta {
@@ -172,7 +174,7 @@ fn broadcast(c: &mut Conversation, line: String) {
 }
 
 /// A macOS notification, unless one of Acantha's windows is in front.
-fn notify<R: Runtime>(app: &AppHandle<R>, title: &str, body: &str) {
+pub(crate) fn notify<R: Runtime>(app: &AppHandle<R>, title: &str, body: &str) {
     if app.webview_windows().values().any(|w| w.is_focused().unwrap_or(false)) {
         return;
     }
@@ -181,7 +183,7 @@ fn notify<R: Runtime>(app: &AppHandle<R>, title: &str, body: &str) {
 
 /// The permission modes offered: Claude Code's auto mode (it judges what's safe to do without asking), read only, ask
 /// before anything, or edit files without asking.
-const MODES: &[&str] = &["auto", "plan", "default", "acceptEdits"];
+pub(crate) const MODES: &[&str] = &["auto", "plan", "default", "acceptEdits"];
 
 /// A session id to resume: a UUID, so nothing else reaches the command line.
 fn session_id_ok(id: &str) -> bool {
@@ -391,7 +393,7 @@ pub fn claude_statuses(state: State<'_, Claudes>) -> HashMap<String, Activity> {
                 status: c.status,
                 since: c.since,
                 finished: c.finished,
-                running: c.run.is_some(),
+                running: c.run.is_some() || c.oc.is_some(),
                 usage: c.usage,
             };
             (id.clone(), activity)
@@ -402,18 +404,20 @@ pub fn claude_statuses(state: State<'_, Claudes>) -> HashMap<String, Activity> {
 /// Lets a conversation go here, stopping Claude: another's being picked up in its place. Claude Code keeps the
 /// session, so it can be picked up again.
 #[tauri::command]
-pub fn claude_reset(state: State<'_, Claudes>, id: String) {
-    if let Some(mut c) = state.conversations.lock().unwrap().remove(&id) {
+pub fn claude_reset<R: Runtime>(app: AppHandle<R>, state: State<'_, Claudes>, id: String) {
+    let gone = state.conversations.lock().unwrap().remove(&id);
+    if let Some(mut c) = gone {
         if let Some(mut run) = c.run.take() {
             let _ = run.child.kill();
         }
+        crate::opencode::forget(&app, c.oc.as_ref().map(crate::opencode::leaving));
     }
 }
 
 /// Ends a conversation: its tab's closed. Its window, if it's popped out, closes too.
 #[tauri::command]
 pub fn claude_close<R: Runtime>(app: AppHandle<R>, state: State<'_, Claudes>, id: String) {
-    claude_reset(state, id.clone());
+    claude_reset(app.clone(), state, id.clone());
     if let Some(w) = app.get_webview_window(&format!("claude-{id}")) {
         let _ = w.close();
     }
@@ -508,6 +512,8 @@ pub fn claude_clear(state: State<'_, Claudes>, id: String) {
     }
     c.log.clear();
     c.session_id = None;
+    // An OpenCode agent starts a new session with its next message.
+    c.oc = None;
     broadcast(c, json!({ "type": "acantha_cleared" }).to_string());
 }
 

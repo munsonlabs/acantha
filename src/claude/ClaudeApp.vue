@@ -21,6 +21,8 @@ const params = new URLSearchParams(location.search)
 const id = params.get('conv') ?? ''
 const root = params.get('repo') ?? ''
 const cwd = params.get('cwd') || root
+/** What runs it: Claude Code, or OpenCode (its conversation says). */
+const kind = conversations.value[id]?.kind ?? 'claude'
 const win = getCurrentWindow()
 const chat = ref<InstanceType<typeof ClaudeChat>>()
 const claude = computed(() => chat.value?.claude)
@@ -189,6 +191,7 @@ onBeforeUnmount(() => {
       class="chat"
       :root="root"
       :cwd="cwd"
+      :kind="kind"
       floating
       @open="(path) => openInMain(root, path)"
     />
@@ -197,7 +200,7 @@ onBeforeUnmount(() => {
     <!-- The chip: dragged to move it all; its face switches conversation, or, collapsed, expands it. -->
     <div class="chip" data-tauri-drag-region>
       <button class="face" :title="expanded ? 'Switch conversation' : 'Expand'" @click="(e) => (expanded ? openSwitcher(e) : setExpanded(true))">
-        <span class="avatar" :class="status">✳</span>
+        <span class="avatar" :class="[status, kind]">{{ kind === 'opencode' ? '▣' : '✳' }}</span>
         <span class="who">
           <span class="name">{{ claude?.name ?? 'Claude' }}<Icon v-if="expanded" name="chevron" :size="9" class="more" /></span>
           <span class="status"
@@ -231,6 +234,9 @@ onBeforeUnmount(() => {
 html.claude-window,
 html.claude-window body {
   background: transparent !important;
+}
+.avatar.opencode {
+  --claude: #8b8bf0;
 }
 </style>
 
@@ -354,5 +360,8 @@ html.claude-window body {
   50% {
     opacity: 0.35;
   }
+}
+.avatar.opencode {
+  --claude: #8b8bf0;
 }
 </style>

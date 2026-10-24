@@ -8,6 +8,7 @@ import { copyText } from '@/composables/openers'
 import { openMenu } from '@/composables/useContextMenu'
 import { useWorkspace, useWorkspaces, type Workspace } from '@/composables/workspace'
 import AgentGlyph from './AgentGlyph.vue'
+import AgentMark from './AgentMark.vue'
 import Icon from './Icon.vue'
 
 /**
@@ -18,7 +19,7 @@ import Icon from './Icon.vue'
  */
 const ws = useWorkspace()
 const { workspaces, activate: activateWorkspace, showRepo } = useWorkspaces()
-const { tabs, active, activate, add, addInWorktree, close, removeWorktree, sleep, renameAgent, titleOf } = ws.agents
+const { tabs, active, activate, addInWorktree, newAgentItems, close, removeWorktree, sleep, renameAgent, titleOf } = ws.agents
 const activity = useAgentActivity()
 // Ticks the "working 3m" along.
 const now = ref(Date.now())
@@ -84,7 +85,9 @@ function jump(w: Workspace, agent: AgentTab) {
 }
 
 /** A new agent where `p` is: this folder, or alongside the others in its worktree. */
-const addHere = (p: Place) => (p.main ? add() : add({ cwd: p.cwd, branch: p.branch ?? placeName(p), base: p.base }))
+const hereItems = (p: Place) => newAgentItems(p.main ? undefined : { cwd: p.cwd, branch: p.branch ?? placeName(p), base: p.base })
+const addHere = (e: MouseEvent, p: Place) => openMenu(e, hereItems(p))
+const newAgent = (e: MouseEvent) => openMenu(e, newAgentItems())
 const copyName = (p: Place) => copyText(placeName(p), p.main ? 'branch name' : 'worktree name')
 
 function agentMenu(e: MouseEvent, agent: AgentTab) {
@@ -108,7 +111,7 @@ function placeMenu(e: MouseEvent, p: Place) {
   const awake = p.agents.filter((a) => activity.value[a.id]?.running)
   openMenu(e, [
     { header: placeName(p), detail: p.cwd },
-    { label: 'New Agent Here', icon: 'plus', run: () => addHere(p) },
+    ...hereItems(p).map((item) => ({ ...item, label: `${item.label} Here` })),
     { label: 'Put its Agents to Sleep', icon: 'moon', disabled: !awake.length, run: () => awake.forEach((a) => sleep(a.id)) },
     'separator',
     { label: p.main ? 'Copy Branch Name' : 'Copy Worktree Name', icon: 'copy', run: () => copyName(p) },
@@ -152,7 +155,7 @@ const showGit = () => (ws.ui.sidebarTab.value = 'scm')
           <button v-if="!p.main" class="ghost mini" title="Open the worktree in a tab of its own, on its Git panel" @click="openWorktree(p)">
             <Icon name="external" :size="11" />
           </button>
-          <button class="ghost mini" title="New agent here" @click="addHere(p)"><Icon name="plus" :size="11" /></button>
+          <button class="ghost mini" title="New agent here" @click="addHere($event, p)"><Icon name="plus" :size="11" /></button>
         </h3>
 
         <div
@@ -168,7 +171,7 @@ const showGit = () => (ws.ui.sidebarTab.value = 'scm')
         >
           <AgentGlyph :state="agentState(agent.id)" />
           <span class="what">
-            <span class="title">{{ titleOf(agent) }}</span>
+            <span class="title"><AgentMark :kind="agent.kind" /> {{ titleOf(agent) }}</span>
             <span class="sub"
               >{{ stateWords(agent.id, now) }}<template v-if="usage([agent])"> · {{ usage([agent]) }}</template></span
             >
@@ -184,14 +187,14 @@ const showGit = () => (ws.ui.sidebarTab.value = 'scm')
         <button v-for="x in elsewhere" :key="x.agent.id" class="ghost agent" @click="jump(x.w, x.agent)">
           <AgentGlyph :state="x.state" />
           <span class="what">
-            <span class="title">{{ x.w.agents.titleOf(x.agent) }}</span>
+            <span class="title"><AgentMark :kind="x.agent.kind" /> {{ x.w.agents.titleOf(x.agent) }}</span>
             <span class="sub">{{ x.w.repo.repo.value?.split('/').pop() }} · {{ stateWords(x.agent.id, now) }}</span>
           </span>
         </button>
       </section>
     </div>
     <footer>
-      <button class="ghost" @click="add()"><Icon name="plus" :size="12" /> New Agent</button>
+      <button class="ghost" @click="newAgent"><Icon name="plus" :size="12" /> New Agent</button>
       <button class="ghost" title="A new agent in a worktree of its own" @click="addInWorktree()">
         <Icon name="folder" :size="12" /> In Worktree
       </button>

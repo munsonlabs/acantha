@@ -29,6 +29,8 @@ export const prefs = {
   claudeRect: usePersisted<{ x: number; y: number; w: number; h: number } | null>('claude-rect', null),
   claudeMode: usePersisted<'auto' | 'plan' | 'default' | 'acceptEdits'>('claude-mode', 'auto'),
   claudeModel: usePersisted('claude-model', ''),
+  /** The model OpenCode agents use (`provider/model`), or its own default when empty. */
+  opencodeModel: usePersisted('opencode-model', ''),
   /** How much a popped-out Claude dims the screen behind it while you're in it: 0 to leave it be. */
   claudeDim: usePersisted('claude-dim', 0.45),
   /** Past Claude conversations: kept this many days (0: for good) and at most this many a repository (0: any number). */

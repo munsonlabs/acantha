@@ -1,6 +1,8 @@
 import { computed, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { git } from '@/lib/git'
+import { AGENT_NAMES, type AgentKind } from '@/lib/claudeView'
+import type { MenuItem } from './useContextMenu'
 import { closeConversation, conversations, forgetRepo } from './claude'
 import { forgetSeen } from './agentStatus'
 import { takeClaudeTabs } from './panel'
@@ -17,6 +19,8 @@ import { usePersisted } from './usePersisted'
 export interface AgentTab {
   id: string
   title: string
+  /** What runs it; Claude Code when not said. */
+  kind?: AgentKind
   cwd?: string
   branch?: string
   /** The commit its worktree started from, to show everything it's changed since, committed or not. */
@@ -79,11 +83,11 @@ export function createAgents({ repo, reload }: Repo) {
     show()
   }
 
-  /** A new agent, in the repository or (`at`) a worktree. Returns its id. */
-  function add(at?: { cwd: string; branch: string; base?: string }) {
+  /** A new agent run by `kind`, in the repository or (`at`) a worktree. Returns its id. */
+  function add(at?: { cwd: string; branch: string; base?: string }, kind: AgentKind = 'claude') {
     const id = newId()
     update((s) => {
-      s.tabs.push({ id, title: at ? at.branch : 'Agent', ...at })
+      s.tabs.push({ id, title: at ? at.branch : 'Agent', ...at, ...(kind !== 'claude' ? { kind } : {}) })
       s.active = id
     })
     show()
@@ -91,13 +95,20 @@ export function createAgents({ repo, reload }: Repo) {
   }
 
   /** A new agent in a worktree of its own, on a new branch from what's checked out here. */
-  async function addInWorktree() {
+  async function addInWorktree(kind: AgentKind = 'claude') {
     const root = repo.value
     if (!root) return
     const v = await ask({
       title: 'New Agent in a Worktree',
       message: 'The agent gets a folder of its own, on a new branch from here, so it can change files without touching yours.',
       fields: [
+        {
+          name: 'kind',
+          label: 'Agent',
+          type: 'select',
+          value: kind,
+          options: (['claude', 'opencode'] as const).map((k) => ({ value: k, label: AGENT_NAMES[k] })),
+        },
         { name: 'branch', label: 'Branch', value: `agent/${newId().slice(0, 5)}`, required: true },
         { name: 'path', label: 'Folder', placeholder: 'Next to this repository, named after the branch' },
       ],
@@ -115,8 +126,12 @@ export function createAgents({ repo, reload }: Repo) {
     }
     showToast(`Agent on ${branch}, in its own worktree`, 'ok')
     void reload()
-    return add({ cwd, branch, base })
+    return add({ cwd, branch, base }, v.kind === 'opencode' ? 'opencode' : 'claude')
   }
+
+  /** Menu items to start an agent run by either tool: in the repository, or (`at`) alongside others in a worktree. */
+  const newAgentItems = (at?: { cwd: string; branch: string; base?: string }): MenuItem[] =>
+    (['claude', 'opencode'] as const).map((kind) => ({ label: `New ${AGENT_NAMES[kind]} Agent`, icon: 'bot', run: () => add(at, kind) }))
 
   /** Closes an agent: Claude stops, and the conversation goes in the past ones. Its worktree stays. */
   function close(id: string) {
@@ -190,7 +205,23 @@ export function createAgents({ repo, reload }: Repo) {
     return named || !about ? t.title : about.length > 28 ? `${about.slice(0, 27).trimEnd()}…` : about
   }
 
-  return { tabs, active, expanded, show, activate, add, addInWorktree, close, removeWorktree, sleep, move, rename, renameAgent, titleOf }
+  return {
+    tabs,
+    active,
+    expanded,
+    show,
+    activate,
+    add,
+    addInWorktree,
+    close,
+    removeWorktree,
+    sleep,
+    move,
+    rename,
+    renameAgent,
+    titleOf,
+    newAgentItems,
+  }
 }
 
 export type Agents = ReturnType<typeof createAgents>

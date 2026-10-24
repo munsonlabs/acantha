@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { toolSummary, type Block } from '@/lib/claudeChat'
-import { deleteConversation, pastConversations, useClaudeConversation, type ClaudeMode } from '@/composables/claude'
+import { deleteConversation, loadOpenCodeModels, pastConversations, useClaudeConversation, type ClaudeMode } from '@/composables/claude'
 import Icon from './Icon.vue'
 import MarkdownView from './MarkdownView.vue'
-import { MODES, MODELS, SUGGESTIONS, TOOL_ICONS, asking, costText, editDiff, statusWords, when } from '@/lib/claudeView'
+import { AGENT_NAMES, MODES, MODELS, SUGGESTIONS, TOOL_ICONS, asking, costText, editDiff, statusWords, when, type AgentKind } from '@/lib/claudeView'
 
 /**
  * A repository's Claude conversation: replies as they're written, tool calls as cards (edits as diffs), permission
@@ -12,9 +12,15 @@ import { MODES, MODELS, SUGGESTIONS, TOOL_ICONS, asking, costText, editDiff, sta
  * for its own buttons (the `actions` slot). Files it mentions go to `open`.
  */
 /** floating: in a popped-out window, with no bar or background: bubbles on the desktop, each with its own shadow. */
-const props = defineProps<{ id: string; root: string; cwd?: string; floating?: boolean }>()
+const props = defineProps<{ id: string; root: string; cwd?: string; kind?: AgentKind; floating?: boolean }>()
 const emit = defineEmits<{ open: [path: string] }>()
-const claude = useClaudeConversation(props.id, props.root, props.cwd ?? props.root)
+const claude = useClaudeConversation(props.id, props.root, props.cwd ?? props.root, props.kind ?? 'claude')
+const kindName = AGENT_NAMES[claude.kind]
+/** Its mark: Claude's asterisk, or OpenCode's square. */
+const mark = claude.kind === 'opencode' ? '▣' : '✳'
+/** The models to pick from: Claude's aliases, or whatever OpenCode's set up with (asked once). */
+const models = ref<{ id: string; label: string }[]>(claude.kind === 'opencode' ? [{ id: '', label: 'Default model' }] : MODELS)
+if (claude.kind === 'opencode') void loadOpenCodeModels().then((list) => (models.value = [{ id: '', label: 'Default model' }, ...list]))
 const chat = claude.chat
 
 const draft = ref('')
@@ -104,12 +110,12 @@ function toggle(id: string) {
   expanded.value = next
 }
 
-const statusText = computed(() => (claude.status.value === 'idle' ? 'Claude Code' : statusWords(claude.status.value)))
+const statusText = computed(() => (claude.status.value === 'idle' ? kindName : statusWords(claude.status.value)))
 
 const cost = () => costText(chat.cost)
 
 /** This repository's past conversations, to pick one up again; a few, newest first. */
-const past = computed(() => pastConversations(props.root, claude.cwd).slice(0, 6))
+const past = computed(() => pastConversations(props.root, claude.cwd, claude.kind).slice(0, 6))
 
 defineExpose({ focus: () => input.value?.focus(), claude })
 </script>
@@ -117,7 +123,7 @@ defineExpose({ focus: () => input.value?.focus(), claude })
 <template>
   <div class="claude-chat" :class="{ floating }">
     <div v-if="!floating" class="bar">
-      <span class="avatar" :class="claude.status.value">✳</span>
+      <span class="avatar" :class="[claude.status.value, claude.kind]">{{ mark }}</span>
       <div class="who">
         <span class="name">{{ claude.name }}</span>
         <span class="status"
@@ -132,9 +138,9 @@ defineExpose({ focus: () => input.value?.focus(), claude })
     </div>
     <div ref="body" class="body" @scroll="onScroll">
       <div v-if="!chat.entries.length" class="welcome">
-        <span class="big">✳</span>
+        <span class="big" :class="claude.kind">{{ mark }}</span>
         <h1>What can I help with in {{ claude.name }}?</h1>
-        <p>Claude Code, working in this repository with your own settings.</p>
+        <p>{{ kindName }}, working in this repository with your own settings.</p>
         <div class="chips">
           <button v-for="s in SUGGESTIONS" :key="s" class="chip" @click="send(s)">{{ s }}</button>
         </div>
@@ -165,7 +171,7 @@ defineExpose({ focus: () => input.value?.focus(), claude })
         <div v-if="e.kind === 'user'" class="user">{{ e.text }}</div>
         <p v-else-if="e.kind === 'notice'" class="notice" :class="{ error: e.error }">{{ e.text }}</p>
         <div v-else class="assistant">
-          <span class="avatar small">✳</span>
+          <span class="avatar small" :class="claude.kind">{{ mark }}</span>
           <div class="said">
             <template v-for="(b, j) in e.blocks" :key="j">
               <MarkdownView
@@ -247,7 +253,7 @@ defineExpose({ focus: () => input.value?.focus(), claude })
             <option v-for="m in MODES" :key="m.id" :value="m.id" :title="m.hint">{{ m.label }}</option>
           </select>
           <select :value="claude.model.value" title="Model" @change="claude.setModel(($event.target as HTMLSelectElement).value)">
-            <option v-for="m in MODELS" :key="m.id" :value="m.id">{{ m.label }}</option>
+            <option v-for="m in models" :key="m.id" :value="m.id">{{ m.label }}</option>
           </select>
           <div class="spacer" />
           <button v-if="chat.working" class="ghost stop" title="Interrupt (Esc)" @click="claude.interrupt()"><Icon name="stop" :size="11" /></button>
@@ -877,5 +883,8 @@ textarea {
   border: none;
   border-radius: 20px;
   background: var(--popover);
+}
+.opencode {
+  --claude: #8b8bf0;
 }
 </style>

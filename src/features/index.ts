@@ -37,7 +37,7 @@ export const FEATURES: Feature[] = [
     id: 'claude',
     name: 'Agents',
     description:
-      'Claude Code agents (⇧⌘I): a panel of them, docked, over the graph or floating, an Agents tab in the sidebar, and worktrees of their own.',
+      'Claude Code and OpenCode agents (⇧⌘I): a panel of them, docked, over the graph or floating, an Agents tab in the sidebar, and worktrees of their own.',
   },
   {
     id: 'tabSleep',
