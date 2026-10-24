@@ -35,8 +35,7 @@ export interface TypeService {
   goTo: (file: string, line: number, col: number) => void
 }
 
-/** Files TypeScript understands. */
-export const TYPED = /\.(m?[jt]sx?|c[jt]s)$/
+export { TYPED } from './typed'
 
 export const toLocation = (doc: Text, pos: number): Location => {
   const line = doc.lineAt(pos)

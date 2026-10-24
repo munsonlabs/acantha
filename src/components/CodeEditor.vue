@@ -8,7 +8,8 @@ import { useWorkspace } from '@/composables/workspace'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { isOn } from '@/features'
-import { TYPED, type TsDiagnostic, type TypeService } from '@/lib/types'
+import { TYPED } from '@/lib/typed'
+import type { TsDiagnostic, TypeService } from '@/lib/types'
 import { holdTypes } from '@/composables/typesInUse'
 
 const props = defineProps<{ path: string; text: string; line?: number }>()

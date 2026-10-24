@@ -1,21 +1,37 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { prefs } from '@/composables/prefs'
 import { isOn } from '@/features'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { provideWorkspace, type Workspace } from '@/composables/workspace'
-import DiffModal from './DiffModal.vue'
 import GraphPane from './GraphPane.vue'
-import ConflictResolver from './ConflictResolver.vue'
-import BranchCleanup from './BranchCleanup.vue'
-import RebaseModal from './RebaseModal.vue'
 import GraphStamp from './GraphStamp.vue'
 import Sidebar from './Sidebar.vue'
 import SidePanel from './SidePanel.vue'
 import AgentsPanel from './AgentsPanel.vue'
-import TerminalPane from './TerminalPane.vue'
 
 const props = defineProps<{ ws: Workspace; visible: boolean }>()
+
+/**
+ * Loaded when first wanted rather than with the app, so its first window shows sooner: the terminal (the biggest part
+ * of the app, its xterm.js) once there's a terminal, and the occasional windows once each is first opened, staying
+ * loaded after.
+ */
+const TerminalPane = defineAsyncComponent(() => import('./TerminalPane.vue'))
+const DiffModal = defineAsyncComponent(() => import('./DiffModal.vue'))
+const ConflictResolver = defineAsyncComponent(() => import('./ConflictResolver.vue'))
+const RebaseModal = defineAsyncComponent(() => import('./RebaseModal.vue'))
+const BranchCleanup = defineAsyncComponent(() => import('./BranchCleanup.vue'))
+const used = ref({ diff: false, conflict: false, rebase: false, cleanup: false })
+watch(
+  () => [!!props.ws.diff.diff.value, !!props.ws.ui.conflict.value, !!props.ws.ui.rebase.value, props.ws.ui.branchCleanup.value],
+  ([diff, conflict, rebase, cleanup]) => {
+    const u = used.value
+    if ((diff && !u.diff) || (conflict && !u.conflict) || (rebase && !u.rebase) || (cleanup && !u.cleanup))
+      used.value = { diff: u.diff || diff, conflict: u.conflict || conflict, rebase: u.rebase || rebase, cleanup: u.cleanup || cleanup }
+  },
+  { immediate: true },
+)
 provideWorkspace(props.ws)
 
 const { repo } = props.ws.repo
@@ -333,10 +349,10 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
         </div>
       </div>
     </div>
-    <DiffModal />
-    <ConflictResolver />
-    <RebaseModal />
-    <BranchCleanup />
+    <DiffModal v-if="used.diff" />
+    <ConflictResolver v-if="used.conflict" />
+    <RebaseModal v-if="used.rebase" />
+    <BranchCleanup v-if="used.cleanup" />
   </div>
 </template>
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, watch } from 'vue'
+import { defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
@@ -17,8 +17,6 @@ import CommandPalette from '@/components/CommandPalette.vue'
 import OpenFiles from '@/components/OpenFiles.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
 import PromptDialog from '@/components/PromptDialog.vue'
-import SettingsModal from '@/components/SettingsModal.vue'
-import ShortcutsModal from '@/components/ShortcutsModal.vue'
 import StatusBar from '@/components/StatusBar.vue'
 import TitleBar from '@/components/TitleBar.vue'
 import ToastMessage from '@/components/ToastMessage.vue'
@@ -26,6 +24,18 @@ import WorkspaceView from '@/components/WorkspaceView.vue'
 import TabList from '@/components/TabList.vue'
 import { connectClaudeWindows } from '@/composables/claudeWindow'
 import { isOn } from '@/features'
+
+/** Settings and the shortcuts sheet load when first opened, not with the app. */
+const SettingsModal = defineAsyncComponent(() => import('@/components/SettingsModal.vue'))
+const ShortcutsModal = defineAsyncComponent(() => import('@/components/ShortcutsModal.vue'))
+const used = ref({ settings: false, shortcuts: false })
+watch(
+  () => [overlays.settings.value, overlays.shortcuts.value],
+  ([settings, shortcuts]) => {
+    if ((settings && !used.value.settings) || (shortcuts && !used.value.shortcuts))
+      used.value = { settings: used.value.settings || settings, shortcuts: used.value.shortcuts || shortcuts }
+  },
+)
 
 connectClaudeWindows()
 
@@ -276,8 +286,8 @@ onBeforeUnmount(() => {
   <CommandPalette />
   <OpenFiles />
   <TabList />
-  <SettingsModal />
-  <ShortcutsModal />
+  <SettingsModal v-if="used.settings" />
+  <ShortcutsModal v-if="used.shortcuts" />
   <PromptDialog />
   <ToastMessage />
 </template>
