@@ -39,6 +39,11 @@ function letter(f: StatusFile) {
   return props.mode === 'staged' ? f.index : f.worktree
 }
 
+/** A file with something on disk to edit: not deleted, and not a nested repository's folder. */
+const editable = (f: StatusFile) => !f.path.endsWith('/') && f.worktree !== 'D' && !(f.index === 'D' && f.worktree === '.')
+/** Opens the file in the editor, as it is on disk, rather than its diff. */
+const editFile = (f: StatusFile) => void ws.files.open(f.path, 'edit', null)
+
 function menu(e: MouseEvent, f: StatusFile) {
   openMenu(e, [
     { header: splitPath(f.path).name, detail: f.path },
@@ -47,6 +52,7 @@ function menu(e: MouseEvent, f: StatusFile) {
       icon: props.mode === 'conflict' ? 'warning' : 'eye',
       run: () => openFile(f),
     },
+    { label: 'Open File', icon: 'pencil', disabled: !editable(f), run: () => editFile(f) },
     'separator',
     props.mode === 'staged'
       ? { label: 'Unstage', icon: 'minus', run: () => unstage([f]) }
@@ -97,6 +103,7 @@ function menu(e: MouseEvent, f: StatusFile) {
         <span v-if="f.nestedRepo" class="dir" title="A repository of its own: click to open it">repository</span>
         <span class="dir">{{ splitPath(f.path.replace(/\/$/, '')).dir.replace(/\/$/, '') }}</span>
         <div class="actions" @click.stop>
+          <button v-if="editable(f)" class="ghost icon-btn" title="Open File" @click="editFile(f)"><Icon name="pencil" :size="12" /></button>
           <template v-if="mode === 'staged'">
             <button class="ghost icon-btn" title="Unstage" :disabled="busy" @click="unstage([f])"><Icon name="minus" :size="13" /></button>
           </template>
