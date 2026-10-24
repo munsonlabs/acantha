@@ -44,6 +44,10 @@ export const prefs = {
   claudeKeepPerRepo: usePersisted('claude-keep-per-repo', 20),
   /** Closing a repository's tab forgets its Claude conversations. */
   claudeForgetOnClose: usePersisted('claude-forget-on-close', true),
+  /** When Acantha forgets a past conversation by itself (too old, too many), delete its session from disk too. */
+  agentsTrimSessions: usePersisted('agents-trim-sessions', false),
+  /** OpenCode's sessions last used more than this many days ago are deleted as Acantha starts: 0 keeps them all. */
+  opencodePruneDays: usePersisted('opencode-prune-days', 0),
   /** Reopen a repository's terminal tabs (in their folders, with their names and splits) when it's opened again. */
   restoreTerminals: usePersisted('restore-terminals', true),
   /** Optional features switched off in Settings (see src/features); everything else is on. */

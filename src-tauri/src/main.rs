@@ -11,6 +11,7 @@ mod packages;
 mod pty;
 mod rebase;
 mod scripts;
+mod sessions;
 mod slack;
 mod tour;
 mod tsserver;
@@ -90,6 +91,10 @@ fn main() {
             opencode::opencode_models,
             opencode::opencode_history,
             tour::tour_plan,
+            sessions::agent_storage,
+            sessions::claude_set_cleanup_days,
+            sessions::opencode_delete_session,
+            sessions::opencode_prune,
             tsserver::ts_request,
             tsserver::ts_stop,
             claude::claude_window_pin,

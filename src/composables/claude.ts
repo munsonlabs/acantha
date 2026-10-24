@@ -1,5 +1,6 @@
 import { computed, onScopeDispose, reactive, ref, watch } from 'vue'
 import { Channel, invoke } from '@tauri-apps/api/core'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { applyEvent, newChat, type Approval, type SlashCommand } from '@/lib/claudeChat'
 import { prune, type AgentKind, type SavedConversation } from '@/lib/claudeView'
 import { prefs } from './prefs'
@@ -15,9 +16,20 @@ const knownCommands = usePersisted<SlashCommand[]>('claude-commands', [])
 export const conversations = usePersisted<Record<string, SavedConversation>>('claude-conversations', {}, { sync: true })
 
 const keep = () => ({ days: prefs.claudeKeepDays.value, perRepo: prefs.claudeKeepPerRepo.value })
-conversations.value = prune(conversations.value, keep())
+/**
+ * Trims the past conversations to the limits. With Settings saying so, the sessions of those it lets go are deleted
+ * from disk too (only by the main window: every window trims, but one deletes).
+ */
+function trim() {
+  const before = conversations.value
+  const after = prune(before, keep())
+  conversations.value = after
+  if (!prefs.agentsTrimSessions.value || getCurrentWindow().label !== 'main') return
+  for (const [id, c] of Object.entries(before)) if (!(id in after)) void deleteSession(c)
+}
+trim()
 // Tighter limits take effect straight away.
-watch([prefs.claudeKeepDays, prefs.claudeKeepPerRepo], () => (conversations.value = prune(conversations.value, keep())))
+watch([prefs.claudeKeepDays, prefs.claudeKeepPerRepo], trim)
 // Where sessions were kept before there could be more than one conversation a repository.
 try {
   localStorage.removeItem('acantha:claude-sessions')
@@ -64,9 +76,16 @@ export function forgetRepo(repo: string) {
  * find it either. Pruning and closing a repository only take them off the list.
  */
 export async function deleteConversation(id: string) {
-  const session = conversations.value[id]?.sessionId
+  const c = conversations.value[id]
   save(id, null)
-  if (session) await invoke('claude_delete_session', { session }).catch(() => {})
+  if (c) await deleteSession(c)
+}
+
+/** Deletes a conversation's session from the disk of whichever tool kept it: Claude Code's transcript, or OpenCode's. */
+async function deleteSession(c: SavedConversation) {
+  if (!c.sessionId) return
+  if (c.kind === 'opencode') await invoke('opencode_delete_session', { session: c.sessionId }).catch(() => {})
+  else await invoke('claude_delete_session', { session: c.sessionId }).catch(() => {})
 }
 
 /** Every past conversation, newest first, across repositories. */

@@ -76,6 +76,11 @@ const KEYS: Record<string, string> = {
   e: 'open-files',
 }
 
+// OpenCode keeps every session; with Settings saying so, old ones go a minute after Acantha starts.
+setTimeout(() => {
+  if (isOn('claude') && prefs.opencodePruneDays.value > 0) void invoke('opencode_prune', { days: prefs.opencodePruneDays.value }).catch(() => {})
+}, 60_000)
+
 /**
  * AI switched off (Settings, or the palette): nothing of it keeps running. Every agent stops (their conversations
  * kept, for when it's back on), OpenCode's server with them; floating agents close, and a review or tour is put away.

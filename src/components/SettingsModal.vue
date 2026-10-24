@@ -7,8 +7,11 @@ const lastTab = ref<Tab>('appearance')
 </script>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
 import { allPast, deleteAllPast, deleteConversation } from '@/composables/claude'
+import { bytesText } from '@/lib/memory'
+import { showToast } from '@/composables/useToast'
 import { when } from '@/lib/claudeView'
 import { overlays, ZOOM_MAX, ZOOM_MIN } from '@/composables/commands'
 import { prefs } from '@/composables/prefs'
@@ -30,6 +33,42 @@ const slackChannels = computed({
 
 /** Past Claude conversations kept to pick up again, newest first. */
 const past = computed(allPast)
+
+/** What Claude Code and OpenCode keep on disk, looked at when the Agents page opens. */
+interface Kept {
+  bytes: number
+  sessions: number
+  cleanupDays: number | null
+  present: boolean
+}
+const storage = ref<{ claude: Kept; opencode: Kept } | null>(null)
+const lookAtStorage = async () => (storage.value = await invoke<{ claude: Kept; opencode: Kept }>('agent_storage').catch(() => null))
+watch(
+  () => open.value && tab.value === 'claude',
+  (showing) => showing && void lookAtStorage(),
+  { immediate: true },
+)
+/** Claude Code's own period, set in its settings (only this value changes there). */
+async function setClaudeCleanup(days: number) {
+  try {
+    await invoke('claude_set_cleanup_days', { days })
+    showToast(`Claude Code keeps transcripts ${days} days`)
+  } catch (e) {
+    showToast(String(e), 'error')
+  }
+  void lookAtStorage()
+}
+const pruning = ref(false)
+async function pruneOpenCode() {
+  const days = prefs.opencodePruneDays.value || 30
+  pruning.value = true
+  const gone = await invoke<number>('opencode_prune', { days }).catch(() => 0)
+  pruning.value = false
+  showToast(
+    gone ? `Deleted ${gone} OpenCode session${gone === 1 ? '' : 's'} older than ${days} days` : `No OpenCode sessions older than ${days} days`,
+  )
+  void lookAtStorage()
+}
 const repoName = (path: string) => path.split('/').pop() ?? path
 
 /** Settings by topic, one page each; Slack's and Claude's only while they're switched on. */
@@ -300,6 +339,53 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
               <div v-if="past.length" class="row">
                 <span class="hint">{{ past.length === 1 ? '1 conversation' : `${past.length} conversations` }}</span>
                 <button class="ghost danger" @click="deleteAllPast()">Delete all</button>
+              </div>
+              <label class="row">
+                <div>
+                  <span class="label">Delete their sessions too</span>
+                  <span class="hint"
+                    >When Acantha lets a past conversation go by itself (too old, or too many), its session is deleted from disk as well.</span
+                  >
+                </div>
+                <input v-model="prefs.agentsTrimSessions.value" type="checkbox" class="switch" />
+              </label>
+
+              <h4>Sessions on disk</h4>
+              <p class="hint">
+                Claude Code and OpenCode keep every conversation’s session, Acantha’s agents’ and their own. Claude Code trims its own; OpenCode keeps
+                them all unless told otherwise.
+              </p>
+              <label v-if="storage?.claude.present" class="row">
+                <div>
+                  <span class="label">Claude Code · {{ bytesText(storage.claude.bytes) }}</span>
+                  <span class="hint">
+                    {{ storage.claude.sessions }} transcripts. It deletes one unused for this long as it starts (its own setting,
+                    <code>cleanupPeriodDays</code>).
+                  </span>
+                </div>
+                <select :value="storage.claude.cleanupDays ?? 30" @change="setClaudeCleanup(Number(($event.target as HTMLSelectElement).value))">
+                  <option :value="7">A week</option>
+                  <option :value="14">Two weeks</option>
+                  <option :value="30">A month{{ storage.claude.cleanupDays == null ? ' (its default)' : '' }}</option>
+                  <option :value="90">Three months</option>
+                  <option :value="365">A year</option>
+                </select>
+              </label>
+              <label v-if="storage?.opencode.present" class="row">
+                <div>
+                  <span class="label">OpenCode · {{ bytesText(storage.opencode.bytes) }}</span>
+                  <span class="hint">{{ storage.opencode.sessions }} sessions. Acantha deletes ones unused for this long as it starts.</span>
+                </div>
+                <select v-model.number="prefs.opencodePruneDays.value">
+                  <option :value="0">Keep them all</option>
+                  <option :value="7">After a week</option>
+                  <option :value="30">After a month</option>
+                  <option :value="90">After three months</option>
+                </select>
+              </label>
+              <div v-if="storage?.opencode.present" class="row">
+                <span class="hint">Delete OpenCode’s sessions unused for {{ prefs.opencodePruneDays.value || 30 }} days now.</span>
+                <button class="ghost danger" :disabled="pruning" @click="pruneOpenCode">{{ pruning ? 'Deleting…' : 'Delete them' }}</button>
               </div>
             </section>
 
