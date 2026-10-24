@@ -31,6 +31,8 @@ export const prefs = {
   claudeModel: usePersisted('claude-model', ''),
   /** The model OpenCode agents use (`provider/model`), or its own default when empty. */
   opencodeModel: usePersisted('opencode-model', ''),
+  /** Agents' tool calls shown one by one; off, each reply folds them into a line of steps, opened one reply at a time. */
+  agentSteps: usePersisted('agent-steps', true),
   /** How much a popped-out Claude dims the screen behind it while you're in it: 0 to leave it be. */
   claudeDim: usePersisted('claude-dim', 0.45),
   /** Past Claude conversations: kept this many days (0: for good) and at most this many a repository (0: any number). */

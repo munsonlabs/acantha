@@ -6,6 +6,7 @@ import { agentState, mostPressing, stateWords, usageOf, useAgentActivity, type A
 import { isPoppedOut, popOut } from '@/composables/claudeWindow'
 import { copyText } from '@/composables/openers'
 import { openMenu } from '@/composables/useContextMenu'
+import { usePersisted } from '@/composables/usePersisted'
 import { useWorkspace, useWorkspaces, type Workspace } from '@/composables/workspace'
 import AgentGlyph from './AgentGlyph.vue'
 import AgentMark from './AgentMark.vue'
@@ -134,56 +135,74 @@ async function openWorktree(p: Place) {
 }
 /** This folder's changes are the Git panel's, a tab over. */
 const showGit = () => (ws.ui.sidebarTab.value = 'scm')
+
+/** Groups folded away, by folder: remembered. */
+const folded = usePersisted<string[]>('agent-groups-folded', [])
+const toggleFold = (p: Place) => (folded.value = folded.value.includes(p.cwd) ? folded.value.filter((c) => c !== p.cwd) : [...folded.value, p.cwd])
 </script>
 
 <template>
   <div class="agents-sidebar">
+    <!-- A header like the Git panel's: what this is, and its actions. -->
+    <header class="pane-header">
+      <span class="title" :title="usage(tabs) ? `All told: ${usage(tabs)}` : undefined"><Icon name="bot" :size="13" /> Agents</span>
+      <div class="spacer" />
+      <button class="ghost icon-btn" title="New agent" @click="newAgent"><Icon name="plus" /></button>
+      <button class="ghost icon-btn" title="New agent in a worktree of its own" @click="addInWorktree()"><Icon name="folder" /></button>
+    </header>
     <div class="scroll">
       <p v-if="!tabs.length" class="none">No agents in this repository yet.</p>
-      <p v-else-if="usage(tabs)" class="summary-line">{{ tabs.length === 1 ? '1 agent' : `${tabs.length} agents` }} · {{ usage(tabs) }}</p>
+      <p v-else-if="usage(tabs)" class="meta">{{ tabs.length === 1 ? '1 agent' : `${tabs.length} agents` }} · {{ usage(tabs) }}</p>
 
       <section v-for="p in places" :key="p.cwd" class="place">
-        <h3 :title="p.cwd" @contextmenu.prevent="placeMenu($event, p)">
+        <div class="section-head" :title="p.cwd" @click="toggleFold(p)" @contextmenu.prevent="placeMenu($event, p)">
+          <Icon name="chevron" :size="11" class="chevron" :class="{ open: !folded.includes(p.cwd) }" />
           <Icon :name="p.main ? 'home' : 'branch'" :size="12" />
           <span class="place-name">{{ placeName(p) }}</span>
           <span class="where">{{ p.main ? 'this folder' : 'worktree' }}</span>
+          <span v-if="p.agents.length" class="count">{{ p.agents.length }}</span>
           <AgentGlyph v-if="p.agents.length && placeState(p) !== 'idle' && placeState(p) !== 'off'" :state="placeState(p)" />
           <span class="spacer" />
-          <button v-if="p.main && ws.status.files.value.length" class="ghost link" title="Its changes, in the Git panel" @click="showGit">
-            <Icon name="scm" :size="11" /> {{ ws.status.files.value.length }}
-          </button>
-          <button v-if="!p.main" class="ghost mini" title="Open the worktree in a tab of its own, on its Git panel" @click="openWorktree(p)">
-            <Icon name="external" :size="11" />
-          </button>
-          <button class="ghost mini" title="New agent here" @click="addHere($event, p)"><Icon name="plus" :size="11" /></button>
-        </h3>
-
-        <div
-          v-for="agent in p.agents"
-          :key="agent.id"
-          class="agent"
-          :class="{ on: agent.id === active?.id }"
-          role="button"
-          tabindex="0"
-          @click="pick(agent)"
-          @keydown.enter="pick(agent)"
-          @contextmenu.prevent="agentMenu($event, agent)"
-        >
-          <AgentGlyph :state="agentState(agent.id)" />
-          <span class="what">
-            <span class="title"><AgentMark :kind="agent.kind" /> {{ titleOf(agent) }}</span>
-            <span class="sub"
-              >{{ stateWords(agent.id, now) }}<template v-if="usage([agent])"> · {{ usage([agent]) }}</template></span
-            >
-          </span>
-          <Icon v-if="isPoppedOut(agent.id)" name="external" :size="11" class="popped" />
-          <button class="ghost close" title="Close Agent (right-click for more)" @click.stop="close(agent.id)"><Icon name="x" :size="11" /></button>
+          <div class="actions" @click.stop>
+            <button v-if="p.main && ws.status.files.value.length" class="ghost link" title="Its changes, in the Git panel" @click="showGit">
+              <Icon name="scm" :size="11" /> {{ ws.status.files.value.length }}
+            </button>
+            <button v-if="!p.main" class="ghost mini" title="Open the worktree in a tab of its own, on its Git panel" @click="openWorktree(p)">
+              <Icon name="external" :size="11" />
+            </button>
+            <button class="ghost mini" title="New agent here" @click="addHere($event, p)"><Icon name="plus" :size="11" /></button>
+          </div>
         </div>
-        <p v-if="!p.agents.length" class="quiet-line">No agents here.</p>
+        <template v-if="!folded.includes(p.cwd)">
+          <div
+            v-for="agent in p.agents"
+            :key="agent.id"
+            class="agent"
+            :class="{ on: agent.id === active?.id }"
+            role="button"
+            tabindex="0"
+            @click="pick(agent)"
+            @keydown.enter="pick(agent)"
+            @contextmenu.prevent="agentMenu($event, agent)"
+          >
+            <AgentGlyph :state="agentState(agent.id)" />
+            <span class="what">
+              <span class="title"><AgentMark :kind="agent.kind" /> {{ titleOf(agent) }}</span>
+              <span class="sub"
+                >{{ stateWords(agent.id, now) }}<template v-if="usage([agent])"> · {{ usage([agent]) }}</template></span
+              >
+            </span>
+            <Icon v-if="isPoppedOut(agent.id)" name="external" :size="11" class="popped" />
+            <button class="ghost close" title="Close Agent (right-click for more)" @click.stop="close(agent.id)"><Icon name="x" :size="11" /></button>
+          </div>
+          <p v-if="!p.agents.length" class="quiet-line">No agents here.</p>
+        </template>
       </section>
 
-      <section v-if="elsewhere.length">
-        <h3>Other repositories</h3>
+      <section v-if="elsewhere.length" class="place">
+        <div class="section-head">
+          <Icon name="history" :size="12" /> Other repositories <span class="count">{{ elsewhere.length }}</span>
+        </div>
         <button v-for="x in elsewhere" :key="x.agent.id" class="ghost agent" @click="jump(x.w, x.agent)">
           <AgentGlyph :state="x.state" />
           <span class="what">
@@ -193,12 +212,6 @@ const showGit = () => (ws.ui.sidebarTab.value = 'scm')
         </button>
       </section>
     </div>
-    <footer>
-      <button class="ghost" @click="newAgent"><Icon name="plus" :size="12" /> New Agent</button>
-      <button class="ghost" title="A new agent in a worktree of its own" @click="addInWorktree()">
-        <Icon name="folder" :size="12" /> In Worktree
-      </button>
-    </footer>
   </div>
 </template>
 
@@ -218,15 +231,6 @@ const showGit = () => (ws.ui.sidebarTab.value = 'scm')
   color: var(--fg-faint);
   font-size: 12px;
 }
-h3 {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 10px 6px 4px;
-  color: var(--fg-faint);
-  font-size: 11.5px;
-  font-weight: 550;
-}
 .count {
   padding: 0 5px;
   border-radius: 8px;
@@ -239,7 +243,7 @@ h3 {
   gap: 9px;
   width: 100%;
   height: auto;
-  padding: 6px 8px;
+  padding: 5px 6px 5px 20px;
   border-radius: 8px;
   text-align: left;
 }
@@ -297,16 +301,41 @@ h3 {
 .close:hover {
   color: var(--fg);
 }
-.summary-line,
+.meta,
 .quiet-line {
   margin: 4px 8px 2px;
   color: var(--fg-faint);
   font-size: 11px;
 }
-.place + .place {
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
   margin-top: 6px;
-  padding-top: 4px;
-  border-top: 1px solid var(--border);
+  padding: 0 6px 0 4px;
+  border-radius: 6px;
+  color: var(--fg-faint);
+  font-size: 11.5px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.section-head:hover {
+  color: var(--fg-muted);
+}
+.chevron {
+  flex: none;
+  transition: transform 0.12s;
+}
+.chevron.open {
+  transform: rotate(90deg);
+}
+.actions {
+  display: none;
+  gap: 1px;
+}
+.section-head:hover .actions {
+  display: flex;
 }
 .place-name {
   overflow: hidden;
@@ -340,21 +369,5 @@ h3 {
   padding: 0;
   place-items: center;
   color: var(--fg-faint);
-}
-footer {
-  display: flex;
-  flex: none;
-  gap: 6px;
-  padding: 6px;
-  border-top: 1px solid var(--border);
-}
-footer button {
-  display: inline-flex;
-  flex: 1;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 28px;
-  font-size: 12px;
 }
 </style>

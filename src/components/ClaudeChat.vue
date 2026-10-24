@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { toolSummary, type Block } from '@/lib/claudeChat'
 import { deleteConversation, loadOpenCodeModels, pastConversations, useClaudeConversation, type ClaudeMode } from '@/composables/claude'
+import { prefs } from '@/composables/prefs'
 import Icon from './Icon.vue'
 import MarkdownView from './MarkdownView.vue'
 import { AGENT_NAMES, MODES, MODELS, SUGGESTIONS, TOOL_ICONS, asking, costText, editDiff, statusWords, when, type AgentKind } from '@/lib/claudeView'
@@ -101,6 +102,29 @@ function openFile(path: string) {
   const r = rel(path)
   if (!r.startsWith('/')) emit('open', r)
 }
+/**
+ * Steps (tool calls) shown or folded away: folded, each reply's become one line saying how many and what, a spinner
+ * and the step under way while it works, opening that reply's on a click.
+ */
+const showSteps = prefs.agentSteps
+const openSteps = ref(new Set<string>())
+type Tool = Extract<Block, { kind: 'tool' }>
+const toolsOf = (blocks: (Block | undefined)[]) => blocks.filter((b): b is Tool => b?.kind === 'tool')
+const firstTool = (blocks: (Block | undefined)[]) => blocks.findIndex((b) => b?.kind === 'tool')
+function stepsLine(blocks: (Block | undefined)[]) {
+  const tools = toolsOf(blocks)
+  const running = tools.find((t) => t.result === undefined)
+  if (running) return toolSummary(running.name, running.input, rel)
+  const names = [...new Set(tools.map((t) => t.name))]
+  return `${tools.length === 1 ? '1 step' : `${tools.length} steps`} · ${names.slice(0, 3).join(', ')}${names.length > 3 ? '…' : ''}`
+}
+function toggleSteps(id: string) {
+  const next = new Set(openSteps.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  openSteps.value = next
+}
+
 const fileOf = (b: Extract<Block, { kind: 'tool' }>) => (typeof b.input.file_path === 'string' ? b.input.file_path : null)
 
 function toggle(id: string) {
@@ -183,21 +207,35 @@ defineExpose({ focus: () => input.value?.focus(), claude })
                 :rev="null"
                 @open="openFile"
               />
-              <div v-else-if="b && b.kind === 'tool'" class="tool" :class="{ error: b.isError, running: b.result === undefined }">
-                <div class="tool-line" @click="toggle(b.id)">
-                  <span class="tool-icon"><Icon :name="TOOL_ICONS[b.name] ?? 'app'" :size="12" /></span>
-                  <span class="summary" :class="{ mono: b.name === 'Bash' }">{{ toolSummary(b.name, b.input, rel) }}</span>
-                  <button v-if="fileOf(b)" class="ghost link" title="Open the file" @click.stop="openFile(fileOf(b)!)">
-                    <Icon name="external" :size="11" />
-                  </button>
-                  <span v-if="b.result === undefined" class="spinner" />
-                  <Icon v-else-if="b.result" name="chevron" :size="10" class="chev" :class="{ open: expanded.has(b.id) }" />
+              <template v-else-if="b && b.kind === 'tool'">
+                <!-- Folded, the reply's first step stands for them all: a line that opens them, and folds them again. -->
+                <button
+                  v-if="!showSteps && j === firstTool(e.blocks)"
+                  class="ghost steps"
+                  :class="{ error: toolsOf(e.blocks).some((t) => t.isError) }"
+                  :title="openSteps.has(e.id) ? 'Fold this reply’s steps' : 'Show this reply’s steps'"
+                  @click="toggleSteps(e.id)"
+                >
+                  <Icon name="chevron" :size="10" class="chev" :class="{ open: openSteps.has(e.id) }" />
+                  <span v-if="toolsOf(e.blocks).some((t) => t.result === undefined)" class="spinner" />
+                  <span class="summary">{{ stepsLine(e.blocks) }}</span>
+                </button>
+                <div v-if="showSteps || openSteps.has(e.id)" class="tool" :class="{ error: b.isError, running: b.result === undefined }">
+                  <div class="tool-line" @click="toggle(b.id)">
+                    <span class="tool-icon"><Icon :name="TOOL_ICONS[b.name] ?? 'app'" :size="12" /></span>
+                    <span class="summary" :class="{ mono: b.name === 'Bash' }">{{ toolSummary(b.name, b.input, rel) }}</span>
+                    <button v-if="fileOf(b)" class="ghost link" title="Open the file" @click.stop="openFile(fileOf(b)!)">
+                      <Icon name="external" :size="11" />
+                    </button>
+                    <span v-if="b.result === undefined" class="spinner" />
+                    <Icon v-else-if="b.result" name="chevron" :size="10" class="chev" :class="{ open: expanded.has(b.id) }" />
+                  </div>
+                  <div v-if="editDiff(b.input).length && (expanded.has(b.id) || b.name !== 'Write')" class="diff">
+                    <div v-for="(l, k) in editDiff(b.input)" :key="k" :class="l.sign === '+' ? 'add' : 'del'">{{ l.sign }} {{ l.text }}</div>
+                  </div>
+                  <pre v-if="expanded.has(b.id) && b.result" class="result">{{ b.result }}</pre>
                 </div>
-                <div v-if="editDiff(b.input).length && (expanded.has(b.id) || b.name !== 'Write')" class="diff">
-                  <div v-for="(l, k) in editDiff(b.input)" :key="k" :class="l.sign === '+' ? 'add' : 'del'">{{ l.sign }} {{ l.text }}</div>
-                </div>
-                <pre v-if="expanded.has(b.id) && b.result" class="result">{{ b.result }}</pre>
-              </div>
+              </template>
             </template>
           </div>
         </div>
@@ -255,6 +293,14 @@ defineExpose({ focus: () => input.value?.focus(), claude })
           <select :value="claude.model.value" title="Model" @change="claude.setModel(($event.target as HTMLSelectElement).value)">
             <option v-for="m in models" :key="m.id" :value="m.id">{{ m.label }}</option>
           </select>
+          <button
+            class="ghost steps-toggle"
+            :class="{ on: showSteps }"
+            :title="showSteps ? 'Steps shown: click to fold each reply’s into one line' : 'Steps folded: click to show them all'"
+            @click="showSteps = !showSteps"
+          >
+            <Icon name="files" :size="12" />
+          </button>
           <div class="spacer" />
           <button v-if="chat.working" class="ghost stop" title="Interrupt (Esc)" @click="claude.interrupt()"><Icon name="stop" :size="11" /></button>
           <button class="send" :disabled="!draft.trim()" title="Send (↵)" @click="send()"><Icon name="push" :size="13" /></button>
@@ -785,6 +831,41 @@ textarea {
   margin-bottom: 0;
 }
 
+.steps {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  max-width: 100%;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+.steps.error {
+  border-color: color-mix(in srgb, var(--del) 50%, transparent);
+}
+.steps .summary {
+  min-width: 0;
+}
+.steps-toggle {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--fg-faint);
+}
+.steps-toggle.on {
+  color: var(--fg-muted);
+  background: var(--pill);
+}
+.floating .steps {
+  background: var(--hover);
+}
 /* Floating: nothing behind the conversation but the desktop, so everything on it is solid, with its own shadow, and the
    oldest fade away up top. Each of Claude's replies is one card (its words and its tool calls together), rather than
    a scatter of small pieces, so there's less to pick out from whatever's behind. */
