@@ -200,11 +200,6 @@ function moreMenu(e: MouseEvent) {
     items.push(
       { label: 'Save', icon: 'check', shortcut: '⌘S', disabled: saving.value || !dirty.value, run: () => save() },
       { label: 'Save & Stage', icon: 'plus', disabled: saving.value || !dirty.value, run: () => save(true) },
-      {
-        label: prefs.editorVim.value ? 'Vim Keys: On' : 'Vim Keys: Off',
-        icon: 'pencil',
-        run: () => (prefs.editorVim.value = !prefs.editorVim.value),
-      },
       'separator',
     )
   if (isMarkdown.value && p.view === 'preview')

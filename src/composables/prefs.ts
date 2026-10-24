@@ -15,7 +15,6 @@ export const prefs = {
   activeWorkspace: usePersisted<string | null>('active-workspace', null),
   /** Put tabs to sleep after this many minutes unused; 0 never. */
   autoSleepMinutes: usePersisted('auto-sleep-minutes', 0),
-  editorVim: usePersisted('editor-vim', false),
   /** Opening a working-tree file goes straight to the editor (text files; others still preview). */
   editByDefault: usePersisted('edit-by-default', true),
   /** The card with a commit's details that appears when hovering a row in the graph. */

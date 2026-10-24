@@ -226,10 +226,6 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
             <section v-show="tab === 'editor'">
               <h3>Editor</h3>
               <label class="row">
-                <span class="label">Vim key bindings</span>
-                <input v-model="prefs.editorVim.value" type="checkbox" class="switch" />
-              </label>
-              <label class="row">
                 <div>
                   <span class="label">Open files for editing</span>
                   <span class="hint"

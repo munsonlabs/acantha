@@ -76,7 +76,6 @@ onMounted(async () => {
   editor = createEditor(el.value!, {
     doc: props.text,
     path: props.path,
-    vim: prefs.editorVim.value,
     files: () => ws.files.list.value,
     words: () => words,
     changeMarkers: isOn('changeMarkers'),
@@ -97,8 +96,6 @@ onMounted(async () => {
 
 // Files opened or closed since, or changed on disk.
 watch([ws.files.openFiles, ws.files.diskChanged], () => void gatherWords())
-
-watch(prefs.editorVim, (on) => editor?.setVim(on))
 
 /**
  * What the change markers compare with: the file as it is in the index, so staging a change clears its markers, as in

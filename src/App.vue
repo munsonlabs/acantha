@@ -113,7 +113,7 @@ function onKeydown(e: KeyboardEvent) {
   const ws = active.value
   const mod = e.metaKey || e.ctrlKey
   const key = e.key.toLowerCase()
-  // The editor is a contenteditable, and uses Escape (Vim) and ⌘F (search) itself.
+  // The editor is a contenteditable, and uses Escape and ⌘F (search) itself.
   const target = e.target instanceof Element ? e.target : null
   const inEditor = !!target?.closest('.cm-editor')
   const typing = inEditor || !!target?.matches('input, select, textarea')

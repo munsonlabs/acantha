@@ -14,7 +14,6 @@ import { indentWithTab } from '@codemirror/commands'
 import { HighlightStyle, LanguageDescription, syntaxHighlighting } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
 import { tags as t } from '@lezer/highlight'
-import { vim } from '@replit/codemirror-vim'
 
 const theme = EditorView.theme({
   '&': { height: '100%', backgroundColor: 'var(--bg)', color: 'var(--fg)', fontSize: '12.5px' },
@@ -47,7 +46,6 @@ const theme = EditorView.theme({
   },
   '.cm-tooltip': { backgroundColor: 'var(--popover)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--fg)' },
   '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--pill)', color: 'var(--fg)' },
-  '.cm-vim-panel': { fontFamily: 'var(--mono)', padding: '2px 8px' },
 })
 
 /** Token colours from the terminal palette, so code reads the same in the editor, terminal and preview. */
@@ -72,7 +70,6 @@ const highlight = HighlightStyle.define([
 export interface EditorOptions {
   doc: string
   path: string
-  vim: boolean
   /** The repository's files, for completing import paths. */
   files?: () => string[]
   /** Words from the other open files, suggested alongside the ones in this file. */
@@ -128,18 +125,15 @@ function otherWords(words: () => readonly string[]) {
   }
 }
 
-export function createEditor(parent: HTMLElement, { doc, path, vim: vimMode, files, words, changeMarkers, types, onChange, onSave }: EditorOptions) {
+export function createEditor(parent: HTMLElement, { doc, path, files, words, changeMarkers, types, onChange, onSave }: EditorOptions) {
   const typed = !!types && TYPED.test(path)
   const language = new Compartment()
-  const keys = new Compartment()
 
   const view = new EditorView({
     parent,
     state: EditorState.create({
       doc,
       extensions: [
-        // Vim has to come before the other keymaps to see keys first.
-        keys.of(vimMode ? vim() : []),
         basicSetup,
         keymap.of([
           {
@@ -201,7 +195,6 @@ export function createEditor(parent: HTMLElement, { doc, path, vim: vimMode, fil
     },
     /** The file as git has it, for the change markers; null clears them. */
     setBase: (text: string | null) => changeMarkers && setChangeBase(view, text),
-    setVim: (on: boolean) => view.dispatch({ effects: keys.reconfigure(on ? vim() : []) }),
     /** Puts the cursor at the start of a line (1-based, and a column if given) and scrolls it to the middle. */
     goTo: (line: number, col = 1) => {
       const doc = view.state.doc
