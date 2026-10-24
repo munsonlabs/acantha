@@ -141,6 +141,20 @@ const cost = () => costText(chat.cost)
 /** This repository's past conversations, to pick one up again; a few, newest first. */
 const past = computed(() => pastConversations(props.root, claude.cwd, claude.kind).slice(0, 6))
 
+/**
+ * A long conversation shows its latest messages, earlier ones a click away, so it costs the same however long it
+ * runs: what's on screen is most of what it takes. (The whole of it stays with Claude Code.)
+ */
+const PAGE = 60
+const showing = ref(PAGE)
+const hidden = computed(() => Math.max(0, chat.entries.length - showing.value))
+const visible = computed(() => chat.entries.slice(hidden.value))
+// A new conversation starts at a page again.
+watch(
+  () => chat.entries.length === 0,
+  (empty) => empty && (showing.value = PAGE),
+)
+
 defineExpose({ focus: () => input.value?.focus(), claude })
 </script>
 
@@ -191,7 +205,10 @@ defineExpose({ focus: () => input.value?.focus(), claude })
           </div>
         </template>
       </div>
-      <template v-for="(e, i) in chat.entries" :key="i">
+      <button v-if="hidden" class="ghost earlier" @click="showing += PAGE">
+        Show {{ Math.min(hidden, PAGE) }} earlier {{ Math.min(hidden, PAGE) === 1 ? 'message' : 'messages' }}
+      </button>
+      <template v-for="(e, i) in visible" :key="hidden + i">
         <div v-if="e.kind === 'user'" class="user">{{ e.text }}</div>
         <p v-else-if="e.kind === 'notice'" class="notice" :class="{ error: e.error }">{{ e.text }}</p>
         <div v-else class="assistant">
@@ -831,6 +848,15 @@ textarea {
   margin-bottom: 0;
 }
 
+.earlier {
+  display: block;
+  margin: 4px auto 10px;
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: var(--fg-faint);
+  font-size: 12px;
+}
 .steps {
   display: flex;
   align-items: center;
