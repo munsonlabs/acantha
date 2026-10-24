@@ -2,6 +2,7 @@ import { ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { isOn, type FeatureId } from '@/features'
 import { prefs } from './prefs'
+import { ask } from './useDialog'
 import { isPoppedOut, popOut } from './claudeWindow'
 import { promptSlackLink, togglePanel } from './slackLinks'
 import { useWorkspaces } from './workspace'
@@ -60,6 +61,38 @@ export const commands: Command[] = [
       if (active.value && isPoppedOut(active.value.id)) return void popOut(active.value.id, ws.repo.repo.value!)
       if (prefs.agentsOpen.value) prefs.agentsOpen.value = false
       else show()
+    }),
+  },
+  {
+    id: 'tour',
+    label: 'Take a Tour of This Repository…',
+    group: 'View',
+    feature: 'claude',
+    run: withRepo(async (ws) => {
+      // One already planned carries on where it was; a new one can be about something in particular.
+      const last = ws.tour.current()
+      const v = await ask({
+        title: 'Tour This Repository',
+        message:
+          'Claude Code reads the code, changing nothing, and plans the stops a newcomer should see, in order: the editor then walks you through them.',
+        fields: [
+          ...(last
+            ? [
+                {
+                  name: 'again',
+                  label: `Carry on with the last tour (stop ${last.at + 1} of ${last.stops.length})`,
+                  type: 'checkbox' as const,
+                  value: true,
+                },
+              ]
+            : []),
+          { name: 'focus', label: 'About anything in particular?', placeholder: 'e.g. how requests are handled (or leave empty)' },
+        ],
+        confirm: 'Start',
+      })
+      if (!v) return
+      if (v.again) ws.tour.resume()
+      else void ws.tour.start(String(v.focus ?? '').trim() || undefined)
     }),
   },
   { id: 'new-claude', label: 'New Claude Code Agent', group: 'View', feature: 'claude', run: withRepo((ws) => void ws.agents.add()) },

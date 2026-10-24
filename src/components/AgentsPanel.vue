@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import type { AgentTab } from '@/composables/agents'
 import { agentState, useAgentActivity } from '@/composables/agentStatus'
 import { prefs } from '@/composables/prefs'
+import { runCommand } from '@/composables/commands'
 import { useSlidingPill, useTabDrag, useTabScroll } from '@/composables/tabs'
 import { openMenu } from '@/composables/useContextMenu'
 import { useWorkspace } from '@/composables/workspace'
@@ -31,7 +32,12 @@ function onTabDown(e: PointerEvent, t: AgentTab, index: number) {
 }
 
 function newAgent(e: MouseEvent) {
-  openMenu(e, [...newAgentItems(), 'separator', { label: 'New Agent in a Worktree…', icon: 'folder', run: () => addInWorktree() }])
+  openMenu(e, [
+    ...newAgentItems(),
+    'separator',
+    { label: 'New Agent in a Worktree…', icon: 'folder', run: () => addInWorktree() },
+    { label: 'Take a Tour of This Repository…', icon: 'eye', run: () => runCommand('tour') },
+  ])
 }
 
 function tabMenu(e: MouseEvent, t: AgentTab) {

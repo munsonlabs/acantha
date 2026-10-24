@@ -18,6 +18,7 @@ const props = defineProps<{ ws: Workspace; visible: boolean }>()
  * loaded after.
  */
 const TerminalPane = defineAsyncComponent(() => import('./TerminalPane.vue'))
+const TourCard = defineAsyncComponent(() => import('./TourCard.vue'))
 const DiffModal = defineAsyncComponent(() => import('./DiffModal.vue'))
 const ConflictResolver = defineAsyncComponent(() => import('./ConflictResolver.vue'))
 const RebaseModal = defineAsyncComponent(() => import('./RebaseModal.vue'))
@@ -308,6 +309,7 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
       <Transition name="center">
         <GraphStamp v-if="graphHidden" class="graph-stamp" />
       </Transition>
+      <TourCard v-if="ws.tour.showing.value" />
     </div>
     <!-- Terminals stay mounted while hidden so their shells keep running. -->
     <div

@@ -213,6 +213,21 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
               </label>
               <label class="row">
                 <div>
+                  <span class="label">Tours planned with</span>
+                  <span class="hint"
+                    >The model that reads the code to plan a repository tour. Haiku plans a good one in about half a minute, lightly on your plan’s
+                    usage.</span
+                  >
+                </div>
+                <select v-model="prefs.tourModel.value">
+                  <option value="haiku">Haiku</option>
+                  <option value="sonnet">Sonnet</option>
+                  <option value="opus">Opus</option>
+                  <option value="">Claude Code’s default</option>
+                </select>
+              </label>
+              <label class="row">
+                <div>
                   <span class="label">Dim the screen</span>
                   <span class="hint"
                     >While you're in a popped-out Claude, the screen behind it dims so it's easier to read. Click the dimming to collapse

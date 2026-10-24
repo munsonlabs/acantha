@@ -141,6 +141,7 @@ function onKeydown(e: KeyboardEvent) {
     else if (ws?.ui.rebase.value) ws.ui.rebase.value = null
     else if (ws?.ui.branchCleanup.value) ws.ui.branchCleanup.value = false
     else if (menu.value) closeMenu()
+    else if (!typing && ws?.tour.showing.value) ws.tour.hide()
     // Whatever's in front over the graph goes first; then the rest, in turn.
     else if (!typing && ws && putAwayFront(ws)) closed = true
     else if (!typing && ws?.files.preview.value) void ws.files.closePreview()

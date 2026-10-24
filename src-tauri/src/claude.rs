@@ -257,15 +257,19 @@ fn asking(request: &Value) -> String {
         .unwrap_or_else(|| request["display_name"].as_str().unwrap_or("a tool").to_string())
 }
 
-/// Starts `claude` for a conversation (`id`), in `repo`, reading what it says on its own thread.
-fn spawn<R: Runtime>(app: &AppHandle<R>, id: &str, repo: &str, mode: &str, model: Option<&str>, resume: Option<&str>) -> Result<Run, String> {
+/// A PATH that finds Claude Code: apps opened from Finder get a short one, and it usually lives in ~/.local/bin.
+pub(crate) fn cli_path() -> String {
     let home = std::env::var("HOME").unwrap_or_default();
     let path = std::env::var("PATH").unwrap_or_default();
+    format!("{path}:{home}/.local/bin:/opt/homebrew/bin:/usr/local/bin")
+}
+
+/// Starts `claude` for a conversation (`id`), in `repo`, reading what it says on its own thread.
+fn spawn<R: Runtime>(app: &AppHandle<R>, id: &str, repo: &str, mode: &str, model: Option<&str>, resume: Option<&str>) -> Result<Run, String> {
     let mut child = Command::new("claude")
         .args(args(mode, resume, model))
         .current_dir(repo)
-        // Apps opened from Finder get a short PATH; Claude Code usually lives in ~/.local/bin.
-        .env("PATH", format!("{path}:{home}/.local/bin:/opt/homebrew/bin:/usr/local/bin"))
+        .env("PATH", cli_path())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

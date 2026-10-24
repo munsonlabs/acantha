@@ -9,6 +9,7 @@ import { createMenus } from './menus'
 import { createAgents, forgetAgents } from './agents'
 import { agentState } from './agentStatus'
 import { createPanel } from './panel'
+import { createTour } from './tour'
 import { prefs } from './prefs'
 import { createRepo } from './repo'
 import { createReveal } from './reveal'
@@ -73,6 +74,7 @@ function createWorkspace(id: number, asleep: string | null = null) {
       terminals: createTerminals(repo),
       panel: createPanel(repo),
       agents,
+      tour: createTour(repo, files),
     }
   })!
   // Kept as they change, for the next time this repository opens.

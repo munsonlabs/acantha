@@ -12,6 +12,7 @@ mod pty;
 mod rebase;
 mod scripts;
 mod slack;
+mod tour;
 mod tsserver;
 mod watch;
 
@@ -87,6 +88,7 @@ fn main() {
             opencode::opencode_interrupt,
             opencode::opencode_models,
             opencode::opencode_history,
+            tour::tour_plan,
             tsserver::ts_request,
             tsserver::ts_stop,
             claude::claude_window_pin,
