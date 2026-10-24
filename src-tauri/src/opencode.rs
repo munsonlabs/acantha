@@ -828,13 +828,19 @@ fn history(messages: &Value) -> Vec<Value> {
     lines
 }
 
-/// Lets go of a closed agent's session here; OpenCode keeps it, to carry on later. A reply under way stops.
+/// Lets go of a closed agent's session here (OpenCode keeps it, to carry on later), stopping a reply under way. With
+/// no OpenCode agent left, the server stops too, rather than sit there using memory: the next agent starts it again.
 pub fn forget<R: Runtime>(app: &AppHandle<R>, session: Option<(String, String, bool)>) {
-    let Some((session, cwd, busy)) = session else { return };
-    app.state::<OpenCode>().sessions.lock().unwrap().remove(&session);
-    if !busy {
-        return;
+    let oc = app.state::<OpenCode>();
+    if let Some((session, _, _)) = &session {
+        oc.sessions.lock().unwrap().remove(session);
     }
+    let any_left = app.state::<Claudes>().conversations.lock().unwrap().values().any(|c| c.oc.is_some());
+    if !any_left {
+        // Stopping it ends any reply under way, too.
+        return oc.stop();
+    }
+    let Some((session, cwd, true)) = session else { return };
     let app = app.clone();
     std::thread::spawn(move || {
         if let Ok(api) = app.state::<OpenCode>().ensure(&app) {
