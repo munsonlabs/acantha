@@ -4,6 +4,7 @@ mod claude;
 mod files;
 mod git;
 mod github;
+mod memory;
 mod menu;
 mod opencode;
 mod packages;
@@ -78,6 +79,7 @@ fn main() {
             claude::claude_reset,
             claude::claude_interrupt,
             claude::claude_statuses,
+            memory::memory_use,
             opencode::opencode_send,
             opencode::opencode_answer,
             opencode::opencode_interrupt,

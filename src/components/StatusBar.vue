@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
+import { BASELINES, bytesText, levelOf, overall, verdict, type MemoryUse, type Part } from '@/lib/memory'
+import { openMenu, type MenuEntry } from '@/composables/useContextMenu'
+import { isOn } from '@/features'
 import { relativeDate } from '@/composables/dates'
 import { runCommand } from '@/composables/commands'
 import { togglePanel } from '@/composables/slackLinks'
@@ -7,7 +11,58 @@ import { prefs } from '@/composables/prefs'
 import { useWorkspaces } from '@/composables/workspace'
 import Icon from './Icon.vue'
 
-const { active } = useWorkspaces()
+const { active, workspaces, sleepOtherWorkspaces } = useWorkspaces()
+
+/**
+ * What Acantha's using, looked at every few seconds: the total, with a dot saying whether it's in its usual range.
+ * Clicking it says what's using it, part by part against its usual, and offers what would free some.
+ */
+const memory = ref<MemoryUse | null>(null)
+const lookAtMemory = async () => (memory.value = await invoke<MemoryUse>('memory_use').catch(() => memory.value))
+void lookAtMemory()
+const memoryTimer = setInterval(() => isOn('memory') && void lookAtMemory(), 5000)
+onBeforeUnmount(() => clearInterval(memoryTimer))
+const memoryLevel = computed(() => (memory.value ? overall(memory.value) : 'good'))
+
+const PARTS: { part: Part; name: string }[] = [
+  { part: 'app', name: BASELINES.app.name },
+  { part: 'agents', name: BASELINES.agents.name },
+  { part: 'types', name: BASELINES.types.name },
+  { part: 'terminals', name: 'Terminals and what runs in them' },
+]
+async function memoryMenu(e: MouseEvent) {
+  const m = (await lookAtMemory()) ?? memory.value
+  if (!m) return
+  const awake = workspaces.value.filter((w) => w.repo.repo.value && w !== active.value)
+  const entries: MenuEntry[] = [
+    {
+      header: `Memory: ${bytesText(m.total)}`,
+      detail: `${verdict(m)}${m.system ? ` ${Math.round((m.total / m.system) * 100)}% of this Mac’s ${bytesText(m.system)}.` : ''}`,
+    },
+    ...PARTS.filter(({ part }) => m[part] > 0 || part === 'app').map(({ part, name }) => {
+      const level = levelOf(part, m[part])
+      const usual = part === 'terminals' ? 0 : BASELINES[part].usual
+      const detail = !level
+        ? 'Whatever you’re running there (a dev server, a build)'
+        : level === 'good'
+          ? `✓ Within its usual ${bytesText(usual)}`
+          : `⚠ Above its usual ${bytesText(usual)}${level === 'high' ? ', by a lot' : ''}`
+      return { header: `${name} · ${bytesText(m[part])}`, detail }
+    }),
+    'separator',
+    {
+      header: 'Biggest',
+      detail: m.top
+        .slice(0, 4)
+        .map((p) => `${p.name} ${bytesText(p.bytes)}`)
+        .join(' · '),
+    },
+    'separator',
+    { label: 'Put Other Tabs to Sleep', icon: 'moon', disabled: !awake.length, run: () => active.value && sleepOtherWorkspaces(active.value.id) },
+    { label: 'Look Again', icon: 'refresh', run: () => void lookAtMemory() },
+  ]
+  openMenu(e, entries)
+}
 
 const repo = computed(() => active.value?.repo.repo.value ?? null)
 const log = computed(() => active.value?.repo.log.value ?? null)
@@ -63,6 +118,14 @@ const crumbs = computed(() => {
     <span v-else class="item">No repository</span>
     <div class="spacer" />
     <span v-if="log" class="item">{{ log.commits.length }}{{ log.hasMore ? '+' : '' }} commits</span>
+    <button
+      v-if="memory && isOn('memory')"
+      class="ghost status-btn memory"
+      :title="`Acantha’s using ${bytesText(memory.total)}: click for what, and whether that’s usual`"
+      @click="memoryMenu"
+    >
+      <span class="dot" :class="memoryLevel" /> {{ bytesText(memory.total) }}
+    </button>
     <button
       v-if="repo"
       class="ghost status-btn"
@@ -137,6 +200,18 @@ const crumbs = computed(() => {
   height: 22px;
   padding: 0 8px;
   font-size: 11.5px;
+}
+.memory .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--add);
+}
+.memory .dot.fair {
+  background: var(--modify);
+}
+.memory .dot.high {
+  background: var(--del);
 }
 .status-btn.on {
   color: var(--fg);
