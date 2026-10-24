@@ -5,7 +5,7 @@
 import { basicSetup } from 'codemirror'
 import { completeAnyWord, startCompletion, type Completion, type CompletionContext } from '@codemirror/autocomplete'
 import { importCandidates } from './importPaths'
-import { TYPED } from './typed'
+import { BIG_FILE, TYPED } from './typed'
 import { typeAware, typeCompletions, type TypeService } from './types'
 import { changeGutter, setChangeBase } from './changeGutter'
 import { EditorView, keymap } from '@codemirror/view'
@@ -126,7 +126,8 @@ function otherWords(words: () => readonly string[]) {
 }
 
 export function createEditor(parent: HTMLElement, { doc, path, files, words, changeMarkers, types, onChange, onSave }: EditorOptions) {
-  const typed = !!types && TYPED.test(path)
+  const big = doc.length > BIG_FILE
+  const typed = !big && !!types && TYPED.test(path)
   const language = new Compartment()
 
   const view = new EditorView({
@@ -154,14 +155,16 @@ export function createEditor(parent: HTMLElement, { doc, path, files, words, cha
               EditorState.languageData.of(() => [{ autocomplete: typeCompletions(types!.file, types!.service) }]),
               typeAware(types!.file, types!.service),
             ]
-          : [
-              EditorState.languageData.of(() => [{ autocomplete: completeAnyWord }]),
-              ...(words ? [EditorState.languageData.of(() => [{ autocomplete: otherWords(words) }])] : []),
-            ]),
-        ...(files && SCRIPT.test(path) ? [EditorState.languageData.of(() => [{ autocomplete: importPaths(path, files) }])] : []),
+          : big
+            ? []
+            : [
+                EditorState.languageData.of(() => [{ autocomplete: completeAnyWord }]),
+                ...(words ? [EditorState.languageData.of(() => [{ autocomplete: otherWords(words) }])] : []),
+              ]),
+        ...(files && !big && SCRIPT.test(path) ? [EditorState.languageData.of(() => [{ autocomplete: importPaths(path, files) }])] : []),
         theme,
         syntaxHighlighting(highlight),
-        ...(changeMarkers ? [changeGutter()] : []),
+        ...(changeMarkers && !big ? [changeGutter()] : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged) onChange(u.state.doc.toString())
         }),
