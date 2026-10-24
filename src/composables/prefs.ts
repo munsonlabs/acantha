@@ -58,6 +58,12 @@ export const prefs = {
   /** The panel under the terminal (Slack and to-do tabs), and its share of that column's height when both show. */
   panelOpen: usePersisted('slack-open', false),
   panelHeight: usePersisted('slack-height', 0.45),
+  /**
+   * The Agents panel shown (while it has agents), and where: docked under the terminal, or expanded over the graph.
+   * Hiding it keeps where it was, so showing it again puts it back there.
+   */
+  agentsOpen: usePersisted('agents-open', true),
+  agentsExpanded: usePersisted('agents-expanded', false),
   /** Columns of the graph turned off from the header's right-click menu. */
   hiddenColumns: usePersisted<string[]>('hidden-columns', []),
   /** Column order dragged in the graph's header. Empty means the default. */

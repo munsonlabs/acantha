@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { prefs } from '@/composables/prefs'
+import { isOn } from '@/features'
 import { useWorkspace } from '@/composables/workspace'
 import CommitTable from './CommitTable.vue'
 import DetailsPanel from './DetailsPanel.vue'
@@ -8,14 +9,16 @@ import EmptyState from './EmptyState.vue'
 import FilePreview from './FilePreview.vue'
 import Skeleton from './Skeleton.vue'
 import SidePanel from './SidePanel.vue'
+import AgentsPanel from './AgentsPanel.vue'
 import GraphToolbar from './GraphToolbar.vue'
 
 const ws = useWorkspace()
 const { repo, log } = ws.repo
 const { preview } = ws.files
 const { tabs, expanded } = ws.panel
-/** The panel's tabs, expanded to take the graph's place. */
-const panelHere = computed(() => expanded.value && tabs.value.length > 0)
+/** The panel's tabs, or the agents, expanded to take the graph's place. */
+const agentsHere = computed(() => isOn('claude') && prefs.agentsOpen.value && ws.agents.expanded.value && ws.agents.tabs.value.length > 0)
+const panelHere = computed(() => agentsHere.value || (expanded.value && tabs.value.length > 0))
 </script>
 
 <template>
@@ -24,6 +27,7 @@ const panelHere = computed(() => expanded.value && tabs.value.length > 0)
     <section class="pane graph-pane">
       <Transition name="slide">
         <FilePreview v-if="preview" class="graph-body" />
+        <AgentsPanel v-else-if="agentsHere" class="graph-body" />
         <SidePanel v-else-if="panelHere" class="graph-body" />
       </Transition>
       <!-- The table stays mounted under a preview so its scroll position survives. -->

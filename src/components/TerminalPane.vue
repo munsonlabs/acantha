@@ -119,7 +119,7 @@ const tabMenu = (e: MouseEvent, s: TerminalSession) =>
       </div>
       <button class="ghost icon-btn" title="New Terminal (⌃⇧`)" @click="add()"><Icon name="plus" /></button>
       <div class="spacer" />
-      <button class="ghost icon-btn" title="Hide Terminal (⌘J)" @click="toggle"><Icon name="sidebar" /></button>
+      <button class="ghost icon-btn" title="Hide Terminal (⌘J)" @click="toggle"><Icon name="minus" /></button>
     </header>
     <div ref="body" class="terminal-body">
       <div v-for="s in views" v-show="shown(s)" :key="s.key" class="slot" :class="{ right: s.pane != null }" :style="placement(s)">

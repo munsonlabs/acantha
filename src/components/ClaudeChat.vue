@@ -12,9 +12,9 @@ import { MODES, MODELS, SUGGESTIONS, TOOL_ICONS, asking, costText, editDiff, sta
  * for its own buttons (the `actions` slot). Files it mentions go to `open`.
  */
 /** floating: in a popped-out window, with no bar or background: bubbles on the desktop, each with its own shadow. */
-const props = defineProps<{ id: string; root: string; floating?: boolean }>()
+const props = defineProps<{ id: string; root: string; cwd?: string; floating?: boolean }>()
 const emit = defineEmits<{ open: [path: string] }>()
-const claude = useClaudeConversation(props.id, props.root)
+const claude = useClaudeConversation(props.id, props.root, props.cwd ?? props.root)
 const chat = claude.chat
 
 const draft = ref('')
@@ -90,7 +90,7 @@ function onKey(e: KeyboardEvent) {
   }
 }
 
-const rel = (path: string) => (path.startsWith(`${props.root}/`) ? path.slice(props.root.length + 1) : path)
+const rel = (path: string) => (path.startsWith(`${claude.cwd}/`) ? path.slice(claude.cwd.length + 1) : path)
 function openFile(path: string) {
   const r = rel(path)
   if (!r.startsWith('/')) emit('open', r)
@@ -109,7 +109,7 @@ const statusText = computed(() => (claude.status.value === 'idle' ? 'Claude Code
 const cost = () => costText(chat.cost)
 
 /** This repository's past conversations, to pick one up again; a few, newest first. */
-const past = computed(() => pastConversations(props.root).slice(0, 6))
+const past = computed(() => pastConversations(props.root, claude.cwd).slice(0, 6))
 
 defineExpose({ focus: () => input.value?.focus(), claude })
 </script>
@@ -173,7 +173,7 @@ defineExpose({ focus: () => input.value?.focus(), claude })
                 class="text bubble"
                 :source="b.text"
                 path=""
-                :repo="root"
+                :repo="claude.cwd"
                 :rev="null"
                 @open="openFile"
               />

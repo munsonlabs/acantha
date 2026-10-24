@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { prefs } from '@/composables/prefs'
+import { isOn } from '@/features'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { provideWorkspace, type Workspace } from '@/composables/workspace'
 import DiffModal from './DiffModal.vue'
@@ -11,6 +12,7 @@ import RebaseModal from './RebaseModal.vue'
 import GraphStamp from './GraphStamp.vue'
 import Sidebar from './Sidebar.vue'
 import SidePanel from './SidePanel.vue'
+import AgentsPanel from './AgentsPanel.vue'
 import TerminalPane from './TerminalPane.vue'
 
 const props = defineProps<{ ws: Workspace; visible: boolean }>()
@@ -19,13 +21,24 @@ provideWorkspace(props.ws)
 const { repo } = props.ws.repo
 const { open, sessions } = props.ws.terminals
 const { tabs: panelTabs, expanded: panelExpanded } = props.ws.panel
+const { tabs: agentTabs, expanded: agentsExpanded } = props.ws.agents
+const agentsHere = computed(() => isOn('claude') && prefs.agentsOpen.value && agentsExpanded.value && agentTabs.value.length > 0)
+// One thing over the graph at a time: showing the agents there docks the panel, and the other way round. (Hidden
+// agents keep their place over the graph for when they're shown again, so only shown ones give way.)
+watch(agentsHere, (on) => on && (panelExpanded.value = false))
+watch(panelExpanded, (on) => on && agentsHere.value && (agentsExpanded.value = false))
 /**
  * Collapsing folds away the graph, not the space it's in: an open file or the expanded panel shows there whatever
  * the graph's doing, and closing it brings back the graph, or the stamp, as you left it. Only with a repository open:
  * an empty tab always shows its start screen there.
  */
 const graphHidden = computed(
-  () => prefs.graphCollapsed.value && !!repo.value && !props.ws.files.preview.value && !(panelExpanded.value && panelTabs.value.length),
+  () =>
+    prefs.graphCollapsed.value &&
+    !!repo.value &&
+    !props.ws.files.preview.value &&
+    !(panelExpanded.value && panelTabs.value.length) &&
+    !agentsHere.value,
 )
 const el = ref<HTMLElement>()
 const width = prefs.terminalWidth
@@ -69,9 +82,13 @@ watch(sidebarOpen, () => (sliding.value = 'sidebar'), { flush: 'sync' })
  * is. While the panel is expanded over the graph, it leaves the column.
  */
 const panelDocked = computed(() => prefs.panelOpen.value && !(panelExpanded.value && panelTabs.value.length))
-const rightOpen = computed(() => (open.value && sessions.value.length > 0) || panelDocked.value)
+/** The Agents panel, docked under the terminal (beside the panel, when both are): while it has agents to show. */
+const agentsDocked = computed(() => isOn('claude') && prefs.agentsOpen.value && agentTabs.value.length > 0 && !agentsExpanded.value)
+const rightOpen = computed(() => (open.value && sessions.value.length > 0) || panelDocked.value || agentsDocked.value)
 /** What a closed column has to show when peeked at. */
-const rightPeekable = computed(() => sessions.value.length > 0 || (panelTabs.value.length > 0 && !panelExpanded.value))
+const rightPeekable = computed(
+  () => sessions.value.length > 0 || (panelTabs.value.length > 0 && !panelExpanded.value) || (agentTabs.value.length > 0 && !agentsExpanded.value),
+)
 watch(rightOpen, () => (sliding.value = 'terminal'), { flush: 'sync' })
 const doneSliding = (e: TransitionEvent) => e.propertyName === 'width' && (sliding.value = null)
 
@@ -160,7 +177,9 @@ onBeforeUnmount(() => {
 })
 
 const showTerminal = computed(() => sessions.value.length > 0 && (open.value || peek.value === 'terminal'))
-const showPanel = computed(() => panelDocked.value || (peek.value === 'terminal' && panelTabs.value.length > 0 && !panelExpanded.value))
+const peekPanel = computed(() => peek.value === 'terminal' && panelTabs.value.length > 0 && !panelExpanded.value)
+const peekAgents = computed(() => peek.value === 'terminal' && agentTabs.value.length > 0 && !agentsExpanded.value)
+const showPanel = computed(() => panelDocked.value || peekPanel.value || agentsDocked.value || peekAgents.value)
 
 /**
  * The panel slides open and closed under the terminal by animating its height, like the commit details: it's added
@@ -281,7 +300,7 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
       @mouseleave="edgeLeave"
     />
     <div
-      v-if="repo && (sessions.length || panelDocked || panelTabs.length)"
+      v-if="repo && (sessions.length || panelDocked || panelTabs.length || agentsDocked || agentTabs.length)"
       ref="rightSlot"
       class="slot right"
       :class="{
@@ -307,7 +326,10 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
           :style="{ height: panelSlotHeight }"
           @transitionend="panelSlid"
         >
-          <SidePanel docked class="panel-dock" />
+          <div class="docks">
+            <SidePanel v-if="panelDocked || peekPanel" docked class="panel-dock" />
+            <AgentsPanel v-if="agentsDocked || peekAgents" docked class="panel-dock" />
+          </div>
         </div>
       </div>
     </div>
@@ -374,8 +396,15 @@ function startResize(e: MouseEvent, side: 'sidebar' | 'terminal') {
 .panel-slot.sliding {
   transition: height 0.26s var(--ease-out);
 }
-.panel-dock {
+.docks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   height: 100%;
+}
+/* The panel and the agents share the space under the terminal when both are docked. */
+.panel-dock {
+  flex: 1;
   min-height: 120px;
 }
 .graph-stamp {

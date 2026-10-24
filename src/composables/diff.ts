@@ -36,8 +36,9 @@ export function createDiff({ repo }: Repo) {
     if (d && lastLoad) await show(d, lastLoad, { quiet: true })
   }
 
-  const openDiff = (file: FileChange, from: string | null, to: string) =>
-    show({ file, label: '' }, () => git.fileDiff(repo.value!, { from, to, path: file.path, oldPath: file.oldPath, untracked: file.status === '?' }))
+  /** A file's changes between two commits (or a commit and the working tree), here or in another worktree (`at`). */
+  const openDiff = (file: FileChange, from: string | null, to: string, at = repo.value!) =>
+    show({ file, label: '' }, () => git.fileDiff(at, { from, to, path: file.path, oldPath: file.oldPath, untracked: file.status === '?' }))
 
   /** A file from the source control panel: its staged or its unstaged changes. */
   const openStatusDiff = (file: StatusFile, staged: boolean) =>

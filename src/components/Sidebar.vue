@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { agentState, useAgentActivity } from '@/composables/agentStatus'
+import { isOn } from '@/features'
+import AgentGlyph from './AgentGlyph.vue'
+import AgentsSidebar from './AgentsSidebar.vue'
 import { useSlidingPill } from '@/composables/tabs'
 import { useWorkspace } from '@/composables/workspace'
 import FileBrowser from './FileBrowser.vue'
@@ -11,7 +15,13 @@ const ws = useWorkspace()
 const { sidebarTab } = ws.ui
 const { files } = ws.status
 const nav = ref<HTMLElement>()
-const pill = useSlidingPill(nav, () => [sidebarTab.value, files.value.length])
+useAgentActivity()
+/** Agents needing you, or done with a reply you haven't seen, flagged on the Agents tab. */
+const agentsFlag = computed(() => {
+  const states = ws.agents.tabs.value.map((t) => agentState(t.id))
+  return states.includes('waiting') ? 'waiting' : states.includes('done') ? 'done' : states.includes('working') ? 'working' : null
+})
+const pill = useSlidingPill(nav, () => [sidebarTab.value, files.value.length, isOn('claude')])
 </script>
 
 <template>
@@ -21,17 +31,25 @@ const pill = useSlidingPill(nav, () => [sidebarTab.value, files.value.length])
     <Transition name="tab-in">
       <FileBrowser v-if="sidebarTab === 'files'" class="content" />
       <SearchPanel v-else-if="sidebarTab === 'search'" class="content" />
+      <AgentsSidebar v-else-if="sidebarTab === 'agents' && isOn('claude')" class="content" />
       <SourceControl v-else class="content" />
     </Transition>
-    <nav ref="nav" class="switcher">
+    <!-- Narrow, the buttons keep just their icons (and counts); each says what it is on hover. -->
+    <nav ref="nav" class="switcher" :class="{ four: isOn('claude') }">
       <span class="tab-pill" :style="pill.style.value" />
-      <button class="ghost" :class="{ active: sidebarTab === 'files' }" @click="sidebarTab = 'files'"><Icon name="files" :size="13" /> Files</button>
-      <button class="ghost" :class="{ active: sidebarTab === 'search' }" title="Search in files (⇧⌘F)" @click="sidebarTab = 'search'">
-        <Icon name="search" :size="13" /> Search
+      <button class="ghost" :class="{ active: sidebarTab === 'files' }" title="Files" @click="sidebarTab = 'files'">
+        <Icon name="files" :size="13" /> <span class="text">Files</span>
       </button>
-      <button class="ghost" :class="{ active: sidebarTab === 'scm' }" @click="sidebarTab = 'scm'">
-        <Icon name="scm" :size="13" /> Git
+      <button class="ghost" :class="{ active: sidebarTab === 'search' }" title="Search in files (⇧⌘F)" @click="sidebarTab = 'search'">
+        <Icon name="search" :size="13" /> <span class="text">Search</span>
+      </button>
+      <button class="ghost" :class="{ active: sidebarTab === 'scm' }" title="Git" @click="sidebarTab = 'scm'">
+        <Icon name="scm" :size="13" /> <span class="text">Git</span>
         <span v-if="files.length" class="count">{{ files.length }}</span>
+      </button>
+      <button v-if="isOn('claude')" class="ghost" :class="{ active: sidebarTab === 'agents' }" title="Agents" @click="sidebarTab = 'agents'">
+        <Icon name="bot" :size="13" /> <span class="text">Agents</span>
+        <AgentGlyph v-if="agentsFlag" :state="agentsFlag" />
       </button>
     </nav>
   </section>
@@ -82,5 +100,19 @@ const pill = useSlidingPill(nav, () => [sidebarTab.value, files.value.length])
   border-radius: 8px;
   background: var(--pill);
   font-size: 10px;
+}
+/* Sized by its own width, so the labels go when the sidebar's too narrow for them. */
+.switcher {
+  container-type: inline-size;
+}
+@container (max-width: 250px) {
+  .text {
+    display: none;
+  }
+}
+@container (max-width: 330px) {
+  .four .text {
+    display: none;
+  }
 }
 </style>

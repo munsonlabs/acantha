@@ -5,8 +5,8 @@ import { createFiles } from './files'
 import { createUi } from './ui'
 import { createDiff } from './diff'
 import { createMenus } from './menus'
-import { forgetRepo } from './claude'
-import { createPanel, forgetClaudeTabs } from './panel'
+import { createAgents, forgetAgents } from './agents'
+import { createPanel } from './panel'
 import { prefs } from './prefs'
 import { createRepo } from './repo'
 import { createReveal } from './reveal'
@@ -16,6 +16,7 @@ import { createTerminals } from './terminals'
 import { createWatcher } from './watcher'
 import { usePersisted } from './usePersisted'
 import { confirmAction } from './useDialog'
+import { showToast } from './useToast'
 import type { OpenFile, PreviewView } from './files'
 
 /** Each repository's open files and the one showing, so they come back after a restart or a tab's sleep. */
@@ -67,6 +68,7 @@ function createWorkspace(id: number, asleep: string | null = null) {
       }),
       terminals: createTerminals(repo),
       panel: createPanel(repo),
+      agents: createAgents(repo),
     }
   })!
   // Kept as they change, for the next time this repository opens.
@@ -208,8 +210,7 @@ function forgetClosed(closed: Workspace[]) {
   if (!prefs.claudeForgetOnClose.value) return
   for (const path of new Set(closed.map(pathOf))) {
     if (!path || workspaces.value.some((w) => pathOf(w) === path)) continue
-    forgetRepo(path)
-    forgetClaudeTabs(path)
+    forgetAgents(path)
   }
 }
 
@@ -255,6 +256,18 @@ function stepWorkspace(delta: number) {
   const list = workspaces.value
   const i = list.findIndex((w) => w.id === activeId.value)
   if (list.length > 1) activate(list[(i + delta + list.length) % list.length].id)
+}
+
+/**
+ * A changed file that's really a folder: a repository nested in `root`, which git lists whole (`path/`) rather than
+ * file by file. It opens as a repository in a tab of its own; any other folder can't be shown as a file. True when
+ * `file` was such a folder, so it's dealt with.
+ */
+export function openNestedRepo(root: string, file: { path: string; nestedRepo?: boolean }) {
+  if (!file.path.endsWith('/')) return false
+  if (file.nestedRepo) void showRepo(`${root}/${file.path.replace(/\/$/, '')}`)
+  else showToast(`${file.path} is a folder`, 'error')
+  return true
 }
 
 /** Shows the tab that has a repository open, or opens it in a new one. */
@@ -303,5 +316,7 @@ export function useWorkspaces() {
     stepWorkspace,
     openInWorkspace,
     pickRepo,
+    showRepo,
+    closeRepo,
   }
 }

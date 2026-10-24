@@ -4,7 +4,7 @@ import type { StatusFile } from '@/lib/git'
 /** Which panels and modals a workspace has open. */
 export function createUi() {
   return {
-    sidebarTab: ref<'files' | 'search' | 'scm'>('scm'),
+    sidebarTab: ref<'files' | 'search' | 'scm' | 'agents'>('scm'),
     /** Bumped to put the cursor in the file search box. */
     focusFileSearch: ref(0),
     /** Interactive rebase of the commits after `base` (null: from the root). */

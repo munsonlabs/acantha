@@ -1,6 +1,8 @@
 /** Icon outlines on a 24×24 grid, drawn with a 1.75 stroke (Lucide-style). */
 export const ICON_PATHS = {
   plus: 'M12 5v14M5 12h14',
+  /** An agent: a robot head, for agents whichever tool runs them. */
+  bot: 'M12 8V4H8M6 8h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2zM2 14h2M20 14h2M15 13v2M9 13v2',
   pin: 'M12 17v5M9 10.8a2 2 0 0 1-1.1 1.8l-1.8.9A2 2 0 0 0 5 15.2V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.8a2 2 0 0 0-1.1-1.8l-1.8-.9a2 2 0 0 1-1.1-1.8V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z',
   x: 'M18 6 6 18M6 6l12 12',
   terminal: 'm5 17 5-5-5-5M12 19h7',

@@ -156,6 +156,8 @@ export interface StatusFile {
   /** Working tree state, "." when unchanged. */
   worktree: string
   kind: 'changed' | 'untracked' | 'conflict'
+  /** An untracked folder that's a repository of its own: git lists the folder (`path/`), not its files. */
+  nestedRepo: boolean
 }
 
 export interface Status {

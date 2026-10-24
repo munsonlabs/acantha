@@ -73,12 +73,26 @@ export function when(time: number, now = new Date()) {
  */
 export interface SavedConversation {
   repo: string
+  /** Where it runs, when that's a worktree of the repository rather than the repository itself. */
+  cwd?: string
   sessionId?: string
   /** What it's about: the first thing you said. */
   title?: string
   updated: number
   /** Its tab's gone; it's in the past ones. */
   closed?: boolean
+  /** What it's used, all told: dollars (as Claude Code works them out, a subscription's included) and tokens. */
+  spent?: number
+  tokensIn?: number
+  tokensOut?: number
+}
+
+/** Dollars and tokens, short: "$0.42 · 12k tokens". */
+export function usageText(u: { spent?: number; tokensIn?: number; tokensOut?: number }) {
+  const tokens = (u.tokensIn ?? 0) + (u.tokensOut ?? 0)
+  if (!u.spent && !tokens) return ''
+  const k = tokens >= 1e6 ? `${(tokens / 1e6).toFixed(1)}M` : tokens >= 1000 ? `${Math.round(tokens / 1000)}k` : `${tokens}`
+  return [u.spent ? costText(u.spent) : '', tokens ? `${k} tokens` : ''].filter(Boolean).join(' · ')
 }
 
 /** How long past conversations are kept, in days, and how many a repository; 0 for no limit. */

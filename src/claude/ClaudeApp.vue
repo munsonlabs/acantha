@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { LogicalPosition, LogicalSize, getCurrentWindow } from '@tauri-apps/api/window'
+import { markSeen } from '@/composables/agentStatus'
 import { conversations } from '@/composables/claude'
 import { askOpenRepos, openInMain, startIn, switchTo, type Rect } from '@/composables/claudeWindow'
 import { openMenu, type MenuEntry } from '@/composables/useContextMenu'
@@ -12,13 +13,14 @@ import ContextMenu from '@/components/ContextMenu.vue'
 import Icon from '@/components/Icon.vue'
 
 /**
- * A Claude conversation popped out of its panel tab: no window to speak of, just its bubbles floating in a corner of the
+ * An agent popped out of the Agents panel: no window to speak of, just its bubbles floating in a corner of the
  * screen over whatever's there, and a status chip under them. The chip collapses it all into itself and back, pins it
  * above other apps, and ✕ docks Claude back in the panel; the conversation carries on either way.
  */
 const params = new URLSearchParams(location.search)
 const id = params.get('conv') ?? ''
 const root = params.get('repo') ?? ''
+const cwd = params.get('cwd') || root
 const win = getCurrentWindow()
 const chat = ref<InstanceType<typeof ClaudeChat>>()
 const claude = computed(() => chat.value?.claude)
@@ -97,12 +99,12 @@ function remember() {
 /**
  * The conversations to switch to: every open one, by repository (this one's first), saying which are working or
  * waiting for you, and a new one in any repository open in Acantha. The one picked takes this one's place here; this
- * one goes back to its panel tab.
+ * one goes back to the Agents panel.
  */
 async function openSwitcher(e: MouseEvent) {
   const [repos, statuses] = await Promise.all([
     askOpenRepos(win.label),
-    invoke<Record<string, string>>('claude_statuses').catch((): Record<string, string> => ({})),
+    invoke<Record<string, { status: string }>>('claude_statuses').catch((): Record<string, { status: string }> => ({})),
   ])
   const here = await expandedRect()
   const name = (path: string) => path.split('/').pop() ?? path
@@ -115,22 +117,22 @@ async function openSwitcher(e: MouseEvent) {
     if (items.length) items.push('separator')
     items.push({ header: name(repo) })
     for (const [other, c] of open) {
-      const status = statuses[other]
+      const status = statuses[other]?.status
       items.push({
-        label: c.title || 'New conversation',
+        label: c.title || 'New agent',
         icon: other === id ? 'check' : status === 'waiting' ? 'warning' : 'message',
         shortcut: status && status !== 'idle' ? statusWords(status) : when(c.updated),
         run: () => other !== id && void switchTo(id, other, repo, here),
       })
     }
-    if (repos.includes(repo)) items.push({ label: 'New Conversation', icon: 'plus', run: () => void startIn(id, repo, here) })
+    if (repos.includes(repo)) items.push({ label: 'New Agent', icon: 'plus', run: () => void startIn(id, repo, here) })
   }
   openMenu(e, items)
 }
 
 /**
  * The screen behind dims while you're in Claude (its window in front, expanded), so it's easier to read, and lifts
- * when you go elsewhere: clicks go through the dimming to whatever's under it.
+ * when you go elsewhere. Clicking the dimming collapses Claude into its chip.
  */
 const focused = ref(true)
 const dimmed = computed(() => expanded.value && focused.value && prefs.claudeDim.value > 0)
@@ -144,6 +146,8 @@ function onKey(e: KeyboardEvent) {
 }
 
 const status = computed(() => claude.value?.status.value ?? 'idle')
+// Open in front of you, it's been seen: a reply it finishes isn't news in Acantha's lists.
+watch([focused, expanded, status], () => focused.value && expanded.value && markSeen(id), { immediate: true })
 const cost = computed(() => costText(claude.value?.chat.cost ?? 0))
 
 let moveTimer: ReturnType<typeof setTimeout> | undefined
@@ -160,6 +164,8 @@ onMounted(async () => {
     }),
     await win.onResized(remember),
     await win.onFocusChanged(({ payload }) => (focused.value = payload)),
+    // A click on the dimmed screen around it folds it into its chip, like clicking outside a dialog.
+    await win.listen('claude:collapse', () => void setExpanded(false)),
   )
   document.addEventListener('keydown', onKey)
   focused.value = await win.isFocused()
@@ -175,7 +181,17 @@ onBeforeUnmount(() => {
 <template>
   <div class="claude-window" :class="{ collapsed: !expanded }">
     <!-- Kept while collapsed, so it goes on following the conversation. -->
-    <ClaudeChat v-show="expanded" v-if="root && id" :id="id" ref="chat" class="chat" :root="root" floating @open="(path) => openInMain(root, path)" />
+    <ClaudeChat
+      v-show="expanded"
+      v-if="root && id"
+      :id="id"
+      ref="chat"
+      class="chat"
+      :root="root"
+      :cwd="cwd"
+      floating
+      @open="(path) => openInMain(root, path)"
+    />
     <div v-if="expanded" class="grip" title="Resize" @pointerdown.prevent="win.startResizeDragging('NorthWest')" />
 
     <!-- The chip: dragged to move it all; its face switches conversation, or, collapsed, expands it. -->

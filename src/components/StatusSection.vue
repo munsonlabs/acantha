@@ -4,7 +4,7 @@ import type { StatusFile } from '@/lib/git'
 import { splitPath } from '@/lib/format'
 import { openMenu, type MenuItem } from '@/composables/useContextMenu'
 import { fileOpenItems } from '@/composables/openers'
-import { useWorkspace } from '@/composables/workspace'
+import { openNestedRepo, useWorkspace } from '@/composables/workspace'
 import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
 
@@ -15,8 +15,11 @@ const { stage, unstage, discard, busy } = ws.status
 const { openStatusDiff } = ws.diff
 const { conflict } = ws.ui
 
-/** Conflicted files open in the resolver; everything else shows its diff. */
-const openFile = (f: StatusFile) => (props.mode === 'conflict' ? (conflict.value = f) : openStatusDiff(f, props.mode === 'staged'))
+/** Conflicted files open in the resolver; a nested repository in a tab of its own; everything else shows its diff. */
+function openFile(f: StatusFile) {
+  if (props.mode === 'conflict') conflict.value = f
+  else if (!openNestedRepo(ws.repo.repo.value!, f)) void openStatusDiff(f, props.mode === 'staged')
+}
 const collapsed = ref(false)
 
 const STATUS: Record<string, string> = {
@@ -90,8 +93,9 @@ function menu(e: MouseEvent, f: StatusFile) {
         @contextmenu.prevent="menu($event, f)"
       >
         <FileIcon :path="f.path" />
-        <span class="name">{{ splitPath(f.path).name }}</span>
-        <span class="dir">{{ splitPath(f.path).dir.replace(/\/$/, '') }}</span>
+        <span class="name">{{ splitPath(f.path.replace(/\/$/, '')).name }}</span>
+        <span v-if="f.nestedRepo" class="dir" title="A repository of its own: click to open it">repository</span>
+        <span class="dir">{{ splitPath(f.path.replace(/\/$/, '')).dir.replace(/\/$/, '') }}</span>
         <div class="actions" @click.stop>
           <template v-if="mode === 'staged'">
             <button class="ghost icon-btn" title="Unstage" :disabled="busy" @click="unstage([f])"><Icon name="minus" :size="13" /></button>

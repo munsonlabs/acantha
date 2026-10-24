@@ -49,18 +49,37 @@ const withRepo = (fn: (ws: NonNullable<typeof active.value>) => unknown) => () =
 export const commands: Command[] = [
   {
     id: 'toggle-claude',
-    label: 'Claude',
+    label: 'Agents',
     group: 'View',
     keys: '⇧⌘I',
     feature: 'claude',
-    // The panel's Claude tab showing (or the first), or its window when it's popped out.
+    // Shows the agents (starting one if there are none), or the agent's window when it's popped out; hides them again.
     run: withRepo((ws) => {
-      const tab = ws.panel.active.value?.kind === 'claude' ? ws.panel.active.value : ws.panel.tabs.value.find((t) => t.kind === 'claude')
-      if (tab && isPoppedOut(tab.id)) void popOut(tab.id, ws.repo.repo.value!)
-      else ws.panel.addClaude()
+      const { tabs, active, add, show } = ws.agents
+      if (!tabs.value.length) return void add()
+      if (active.value && isPoppedOut(active.value.id)) return void popOut(active.value.id, ws.repo.repo.value!)
+      if (prefs.agentsOpen.value) prefs.agentsOpen.value = false
+      else show()
     }),
   },
-  { id: 'new-claude', label: 'New Claude Conversation', group: 'View', feature: 'claude', run: withRepo((ws) => ws.panel.addClaude(true)) },
+  { id: 'new-claude', label: 'New Agent', group: 'View', feature: 'claude', run: withRepo((ws) => void ws.agents.add()) },
+  {
+    id: 'new-agent-worktree',
+    label: 'New Agent in a Worktree…',
+    group: 'View',
+    feature: 'claude',
+    run: withRepo((ws) => void ws.agents.addInWorktree()),
+  },
+  {
+    id: 'show-agents',
+    label: 'Show Agents in the Sidebar',
+    group: 'View',
+    feature: 'claude',
+    run: withRepo((ws) => {
+      ws.ui.sidebarTab.value = 'agents'
+      prefs.sidebarOpen.value = true
+    }),
+  },
   { id: 'go-to-file', label: 'Go to File', group: 'General', keys: '⌘P', run: () => openPalette('files') },
   { id: 'palette', label: 'Command Palette', group: 'General', keys: '⇧⌘P', run: () => openPalette('commands') },
   { id: 'checkout-branch', label: 'Check Out Branch…', group: 'Repository', run: withRepo(() => openPalette('branches')) },

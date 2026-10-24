@@ -148,6 +148,9 @@ pub struct StatusFile {
     worktree: String,
     /// "changed" | "untracked" | "conflict"
     kind: &'static str,
+    /// An untracked folder that's a git repository of its own (it has a `.git`): git lists the folder, `path/`, not
+    /// its files, as it won't look inside another repository.
+    nested_repo: bool,
 }
 
 #[derive(Serialize)]
@@ -615,6 +618,7 @@ fn parse_status(out: &str) -> Status {
             index: xy[..1].into(),
             worktree: xy[1..2].into(),
             kind,
+            nested_repo: false,
         };
         match entry.chars().next() {
             Some('1') => {
@@ -647,6 +651,9 @@ fn parse_status(out: &str) -> Status {
 #[tauri::command]
 pub async fn get_status(repo: String) -> Result<Status, String> {
     let mut status = parse_status(&git(&repo, ["status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all"])?);
+    for f in status.files.iter_mut().filter(|f| f.kind == "untracked" && f.path.ends_with('/')) {
+        f.nested_repo = Path::new(&repo).join(&f.path).join(".git").exists();
+    }
     status.operation = operation(&repo);
     Ok(status)
 }
@@ -1219,6 +1226,22 @@ mod tests {
         block_on(apply_patch(repo.clone(), patch.into(), true, true)).unwrap();
         assert_eq!(git(&repo, ["show", ":f.txt"]).unwrap(), "a\nb\n");
         assert!(block_on(apply_patch(repo.clone(), "nonsense".into(), true, false)).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn marks_nested_repositories() {
+        let dir = std::env::temp_dir().join(format!("acantha-nested-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("inner")).unwrap();
+        let repo = dir.to_string_lossy().into_owned();
+        git(&repo, ["init", "-q"]).unwrap();
+        git(&format!("{repo}/inner"), ["init", "-q"]).unwrap();
+        std::fs::write(dir.join("inner/x.txt"), "x").unwrap();
+        std::fs::write(dir.join("loose.txt"), "y").unwrap();
+        let status = block_on(get_status(repo)).unwrap();
+        let nested: Vec<_> = status.files.iter().map(|f| (f.path.as_str(), f.nested_repo)).collect();
+        assert!(nested.contains(&("inner/", true)) && nested.contains(&("loose.txt", false)), "{nested:?}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -106,7 +106,6 @@ async function pickPackage() {
 
 /** What the + button offers, in groups, from the features that are on. */
 const NEW_TABS: [FeatureId, MenuItem][][] = [
-  [['claude', { label: 'Claude', icon: 'message', shortcut: '⇧⌘I', run: () => ws.panel.addClaude(true) }]],
   [['slack', { label: 'Slack Message or Canvas…', icon: 'message', shortcut: '⇧⌘L', run: () => promptSlackLink(ws) }]],
   [
     ['todos', { label: 'To-do List', icon: 'check', run: () => addTodos('To-dos') }],

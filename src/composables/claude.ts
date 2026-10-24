@@ -11,20 +11,13 @@ export type ClaudeMode = 'auto' | 'plan' | 'default' | 'acceptEdits'
 /** The slash commands Claude Code last said it has, to offer before a conversation's started it. */
 const knownCommands = usePersisted<SlashCommand[]>('claude-commands', [])
 
-/** Every conversation, open or past, by id (an open one's is its panel tab's). */
-export const conversations = usePersisted<Record<string, SavedConversation>>('claude-conversations', {})
+/** Every conversation, open or past, by id (an open one's is its agent's). */
+export const conversations = usePersisted<Record<string, SavedConversation>>('claude-conversations', {}, { sync: true })
 
 const keep = () => ({ days: prefs.claudeKeepDays.value, perRepo: prefs.claudeKeepPerRepo.value })
 conversations.value = prune(conversations.value, keep())
 // Tighter limits take effect straight away.
 watch([prefs.claudeKeepDays, prefs.claudeKeepPerRepo], () => (conversations.value = prune(conversations.value, keep())))
-// The panel and popped-out windows each have a copy: one changed elsewhere is taken up here, rather than written over.
-window.addEventListener('storage', (e) => {
-  if (e.key !== 'acantha:claude-conversations' || !e.newValue) return
-  try {
-    conversations.value = JSON.parse(e.newValue) as Record<string, SavedConversation>
-  } catch {}
-})
 // Where sessions were kept before there could be more than one conversation a repository.
 try {
   localStorage.removeItem('acantha:claude-sessions')
@@ -40,9 +33,10 @@ function save(id: string, change: Partial<SavedConversation> | null) {
 }
 
 /** A repository's past conversations, newest first. */
-export const pastConversations = (repo: string) =>
+/** A repository's past conversations that ran in `cwd` (Claude Code keeps sessions by folder), newest first. */
+export const pastConversations = (repo: string, cwd = repo) =>
   Object.entries(conversations.value)
-    .filter(([, c]) => c.closed && c.repo === repo && c.sessionId)
+    .filter(([, c]) => c.closed && c.repo === repo && (c.cwd ?? c.repo) === cwd && c.sessionId)
     .sort(([, a], [, b]) => b.updated - a.updated)
     .map(([id, c]) => ({ id, ...c }))
 
@@ -85,17 +79,19 @@ export async function deleteAllPast() {
 }
 
 /**
- * A view of one conversation (`id`, a panel tab's) in a repository. The conversation lives in the app's backend
+ * A view of one conversation (`id`, an agent tab's) in a repository, run in `cwd`: the repository, or a worktree of it
+ * the agent has to itself. The conversation lives in the app's backend
  * (src-tauri/src/claude.rs), so the panel and a popped-out window show the same one. Subscribing replays what's been
  * said (from Claude Code's own record of the session, after a restart), then follows along; what you do here goes back
  * there, and every view sees it. Ends with the component (or scope) that made it.
  */
-export function useClaudeConversation(id: string, root: string) {
+export function useClaudeConversation(id: string, root: string, cwd = root) {
   const chat = reactive(newChat())
   const mode = ref<ClaudeMode>(prefs.claudeMode.value)
   const model = ref<string>(prefs.claudeModel.value)
   const name = root.split('/').pop() ?? root
-  if (!conversations.value[id]) save(id, { repo: root, updated: Date.now() })
+  const fresh = (): SavedConversation => ({ repo: root, ...(cwd !== root ? { cwd } : {}), updated: Date.now() })
+  if (!conversations.value[id]) save(id, fresh())
   let viewId: number | null = null
   let disposed = false
   /** Which subscription is current: one replaced by a resume may still have lines on the way. */
@@ -141,7 +137,7 @@ export function useClaudeConversation(id: string, root: string) {
     if (message === '/clear') return clear()
     save(id, { updated: Date.now() })
     try {
-      await invoke('claude_send', { id, repo: root, text: message, mode: mode.value, model: model.value || null })
+      await invoke('claude_send', { id, repo: cwd, text: message, mode: mode.value, model: model.value || null })
     } catch (e) {
       chat.entries.push({ kind: 'notice', text: String(e), error: true })
     }
@@ -164,7 +160,7 @@ export function useClaudeConversation(id: string, root: string) {
     if (saved?.sessionId) save(newId(), { ...saved, closed: true })
     await invoke('claude_clear', { id })
     save(id, null)
-    save(id, { repo: root, updated: Date.now() })
+    save(id, fresh())
   }
 
   /** Carries on a past conversation in this tab, in place of what's here. */
@@ -194,5 +190,5 @@ export function useClaudeConversation(id: string, root: string) {
 
   const status = computed(() => (chat.approvals.length ? 'waiting' : chat.working ? 'working' : 'idle'))
 
-  return { id, root, name, chat, mode, model, status, commands, send, answer, interrupt, clear, resume, setMode, setModel }
+  return { id, root, cwd, name, chat, mode, model, status, commands, send, answer, interrupt, clear, resume, setMode, setModel }
 }

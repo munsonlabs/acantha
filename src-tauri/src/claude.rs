@@ -13,7 +13,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::Mutex;
 use tauri::ipc::Channel;
-use tauri::{AppHandle, Manager, Runtime, State};
+use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_notification::NotificationExt;
 
 struct Run {
@@ -31,8 +31,60 @@ struct Conversation {
     views: Vec<(u32, Channel<String>)>,
     run: Option<Run>,
     session_id: Option<String>,
-    /// What it's doing, for the list of conversations a popped-out window switches between.
+    /// What it's doing, for the lists of agents: since when (ms), and when a reply last finished.
     status: Status,
+    since: u64,
+    finished: u64,
+    /// What it's used since Acantha started: dollars (across its processes) and tokens.
+    usage: Usage,
+}
+
+#[derive(Default, Clone, Copy, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Usage {
+    cost: f64,
+    /// What earlier processes spent: a process reports its own running total.
+    #[serde(skip)]
+    cost_before: f64,
+    tokens_in: u64,
+    tokens_out: u64,
+}
+
+impl Usage {
+    /// Takes in a reply's `result` line: the process's running cost, and the tokens this reply used.
+    fn add(&mut self, result: &Value) {
+        if let Some(total) = result["total_cost_usd"].as_f64() {
+            self.cost = self.cost_before + total;
+        }
+        let n = |k: &str| result["usage"][k].as_u64().unwrap_or(0);
+        self.tokens_in += n("input_tokens") + n("cache_creation_input_tokens");
+        self.tokens_out += n("output_tokens");
+    }
+
+    /// The process ended: the next one starts counting from zero again.
+    fn process_ended(&mut self) {
+        self.cost_before = self.cost;
+    }
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// What a conversation's doing, as its views and the lists of agents show it.
+#[derive(serde::Serialize)]
+pub struct Activity {
+    status: Status,
+    /// Since when, in ms.
+    since: u64,
+    /// When a reply last finished, in ms; 0 if none has.
+    finished: u64,
+    /// Whether Claude's running for it (not before the first message, or once it's been put to sleep).
+    running: bool,
+    usage: Usage,
 }
 
 #[derive(Default, Clone, Copy, PartialEq, Debug, serde::Serialize)]
@@ -95,7 +147,22 @@ fn broadcast(c: &mut Conversation, line: String) {
     c.views.retain(|(_, ch)| ch.send(line.clone()).is_ok());
     if !delta {
         if let Some(status) = Status::after(&line) {
+            if status != c.status {
+                c.since = now_ms();
+            }
+            if line.contains(r#""type":"result""#) {
+                c.finished = now_ms();
+                if let Ok(result) = serde_json::from_str::<Value>(&line) {
+                    c.usage.add(&result);
+                }
+            }
             c.status = status;
+        }
+        if ["acantha_exit", "acantha_stopped", "acantha_cleared"]
+            .iter()
+            .any(|t| line.contains(&format!(r#""type":"{t}""#)))
+        {
+            c.usage.process_ended();
         }
         c.log.push(line);
         if c.log.len() > LOG_MAX {
@@ -311,10 +378,25 @@ pub fn claude_unsubscribe(state: State<'_, Claudes>, id: String, view: u32) {
     }
 }
 
-/// What each conversation running here is doing, by id: for a popped-out window's list to switch between.
+/// What each conversation running here is doing, by id: for the lists of agents, and a popped-out window's switcher.
 #[tauri::command]
-pub fn claude_statuses(state: State<'_, Claudes>) -> HashMap<String, Status> {
-    state.conversations.lock().unwrap().iter().map(|(id, c)| (id.clone(), c.status)).collect()
+pub fn claude_statuses(state: State<'_, Claudes>) -> HashMap<String, Activity> {
+    state
+        .conversations
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(id, c)| {
+            let activity = Activity {
+                status: c.status,
+                since: c.since,
+                finished: c.finished,
+                running: c.run.is_some(),
+                usage: c.usage,
+            };
+            (id.clone(), activity)
+        })
+        .collect()
 }
 
 /// Lets a conversation go here, stopping Claude: another's being picked up in its place. Claude Code keeps the
@@ -464,24 +546,68 @@ pub fn claude_window_pin<R: Runtime>(window: tauri::WebviewWindow<R>, on: bool) 
 }
 
 /// The screen dimmed behind popped-out Claude windows: a plain AppKit window each (by Claude's window's label), black
-/// and see-through, that clicks go through, kept for when it's next wanted. AppKit's, so all on the main thread.
+/// and see-through, kept for when it's next wanted. Clicking it collapses its Claude (the click goes no further), like
+/// clicking outside a dialog. AppKit's, so all on the main thread.
 #[cfg(target_os = "macos")]
 mod dim {
+    use block2::RcBlock;
     use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
     use objc2::MainThreadMarker;
     use objc2_app_kit::{
-        NSAnimatablePropertyContainer, NSBackingStoreType, NSColor, NSWindow, NSWindowCollectionBehavior as B, NSWindowOrderingMode,
-        NSWindowStyleMask,
+        NSAnimatablePropertyContainer, NSBackingStoreType, NSColor, NSEvent, NSEventMask, NSWindow, NSWindowCollectionBehavior as B,
+        NSWindowOrderingMode, NSWindowStyleMask,
     };
     use std::cell::RefCell;
     use std::collections::HashMap;
+    use std::ptr::NonNull;
+
+    type OnClick = Box<dyn Fn(&str)>;
 
     thread_local! {
         static DIMS: RefCell<HashMap<String, Retained<NSWindow>>> = RefCell::default();
+        /// Watching the app's clicks for ones on a dimming, and what to do with them: set up once.
+        static MONITOR: RefCell<Option<(Retained<AnyObject>, OnClick)>> = const { RefCell::new(None) };
     }
 
-    /// Dims the screen `claude` is on to `amount` (0 to 1), fading, just below it and on its level.
-    pub fn show(label: &str, claude: &NSWindow, amount: f64) {
+    /// Whose dimming a click landed on, if it did.
+    fn clicked(event: &NSEvent) -> Option<String> {
+        let number = event.windowNumber();
+        DIMS.with_borrow(|dims| dims.iter().find(|(_, w)| w.windowNumber() == number).map(|(label, _)| label.clone()))
+    }
+
+    /// Watches the app's clicks, once: one on a dimming goes to `on_click` with its Claude window's label, and no
+    /// further. (The app's in front whenever a dimming's showing, so its own clicks are the ones to watch.)
+    fn watch_clicks(on_click: OnClick) {
+        MONITOR.with_borrow_mut(|monitor| {
+            if monitor.is_some() {
+                return;
+            }
+            let block = RcBlock::new(|event: NonNull<NSEvent>| -> *mut NSEvent {
+                // SAFETY: AppKit passes a live event, on the main thread.
+                let Some(label) = clicked(unsafe { event.as_ref() }) else {
+                    return event.as_ptr();
+                };
+                MONITOR.with_borrow(|m| {
+                    if let Some((_, on_click)) = m {
+                        on_click(&label);
+                    }
+                });
+                std::ptr::null_mut()
+            });
+            // SAFETY: the handler returns the event it's given, or null to swallow it.
+            let token =
+                unsafe { NSEvent::addLocalMonitorForEventsMatchingMask_handler(NSEventMask::LeftMouseDown | NSEventMask::RightMouseDown, &block) };
+            if let Some(token) = token {
+                *monitor = Some((token, on_click));
+            }
+        });
+    }
+
+    /// Dims the screen `claude` is on to `amount` (0 to 1), fading, just below it and on its level. A click on it goes
+    /// to `on_click`.
+    pub fn show(label: &str, claude: &NSWindow, amount: f64, on_click: OnClick) {
+        watch_clicks(on_click);
         let (Some(mtm), Some(screen)) = (MainThreadMarker::new(), claude.screen()) else {
             return;
         };
@@ -509,6 +635,7 @@ mod dim {
                 w
             });
             w.setFrame_display(frame, false);
+            w.setIgnoresMouseEvents(false);
             w.setLevel(claude.level());
             w.orderWindow_relativeTo(NSWindowOrderingMode::Below, claude.windowNumber());
             w.animator().setAlphaValue(amount);
@@ -519,6 +646,8 @@ mod dim {
     pub fn hide(label: &str) {
         DIMS.with_borrow(|dims| {
             if let Some(w) = dims.get(label) {
+                // Fading away, it lets clicks through again.
+                w.setIgnoresMouseEvents(true);
                 w.animator().setAlphaValue(0.0);
             }
         });
@@ -543,7 +672,7 @@ mod dim {
 }
 
 /// Dims the screen behind the popped-out Claude window it's called from (`on`, to `amount`, 0 to 1), so it's easier to
-/// read, or lifts it. Clicks go straight through to what's underneath.
+/// read, or lifts it. Clicking the dimming tells that window (`claude:collapse`), which folds itself into its chip.
 #[tauri::command]
 pub fn claude_dim<R: Runtime>(window: tauri::WebviewWindow<R>, on: bool, amount: f64) -> Result<(), String> {
     #[cfg(target_os = "macos")]
@@ -552,11 +681,15 @@ pub fn claude_dim<R: Runtime>(window: tauri::WebviewWindow<R>, on: bool, amount:
         let ptr = ns_window(&window)?;
         let amount = amount.clamp(0.0, 0.9);
         let shown = label.clone();
+        let app = window.app_handle().clone();
         window
             .run_on_main_thread(move || {
                 if on {
+                    let on_click = Box::new(move |label: &str| {
+                        let _ = app.emit_to(label, "claude:collapse", ());
+                    });
                     // SAFETY: the pointer is the live NSWindow of this webview window, used on the main thread.
-                    dim::show(&shown, unsafe { &*(ptr as *const objc2_app_kit::NSWindow) }, amount);
+                    dim::show(&shown, unsafe { &*(ptr as *const objc2_app_kit::NSWindow) }, amount, on_click);
                 } else {
                     dim::hide(&shown);
                 }
@@ -657,8 +790,24 @@ mod tests {
         // A tool's result isn't the turn's.
         broadcast(&mut c, r#"{"type":"user","message":{"content":[{"type":"tool_result"}]}}"#.into());
         assert_eq!(c.status, Status::Working);
+        assert_eq!(c.finished, 0);
         broadcast(&mut c, r#"{"type":"result","subtype":"success"}"#.into());
         assert_eq!(c.status, Status::Idle);
+        assert!(c.finished > 0 && c.since > 0);
+    }
+
+    #[test]
+    fn adds_up_what_a_conversation_uses_across_processes() {
+        let mut c = Conversation::default();
+        let result = |cost: f64, out: u64| {
+            json!({ "type": "result", "total_cost_usd": cost, "usage": { "input_tokens": 10, "output_tokens": out } }).to_string()
+        };
+        broadcast(&mut c, result(0.01, 5));
+        broadcast(&mut c, result(0.03, 7));
+        broadcast(&mut c, json!({ "type": "acantha_exit" }).to_string());
+        broadcast(&mut c, result(0.02, 1));
+        assert!((c.usage.cost - 0.05).abs() < 1e-9);
+        assert_eq!((c.usage.tokens_in, c.usage.tokens_out), (30, 13));
     }
 
     #[test]

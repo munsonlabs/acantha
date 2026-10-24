@@ -15,7 +15,8 @@ export const revealInFinder = (path: string) => revealItemInDir(path).catch(fail
 export const openFolder = (path: string) => openPath(path).catch(fail('open the folder'))
 export const openInTerminalApp = (dir: string) => openPath(dir, 'Terminal').catch(fail('open Terminal'))
 
-async function copy(text: string, what: string) {
+/** Copies text, saying what was copied. */
+export async function copyText(text: string, what: string) {
   try {
     await navigator.clipboard.writeText(text)
     showToast(`Copied ${what}`)
@@ -32,8 +33,8 @@ export function fileOpenItems(repo: string, rel: string, { exists = true } = {})
     { label: 'Open with Default App', icon: 'app', disabled: !exists, run: () => openWithDefault(abs) },
     { label: 'Reveal in Finder', icon: 'folder', disabled: !exists, run: () => revealInFinder(abs) },
     'separator',
-    { label: 'Copy Path', icon: 'copy', run: () => copy(abs, 'path') },
-    { label: 'Copy Relative Path', icon: 'copy', run: () => copy(rel, 'relative path') },
+    { label: 'Copy Path', icon: 'copy', run: () => copyText(abs, 'path') },
+    { label: 'Copy Relative Path', icon: 'copy', run: () => copyText(rel, 'relative path') },
   ]
 }
 
@@ -45,6 +46,6 @@ export function folderOpenItems(abs: string, newTerminal?: () => void): MenuEntr
     { label: 'Open in Terminal', icon: 'terminal', run: () => openInTerminalApp(abs) },
     ...(newTerminal ? [{ label: 'New Terminal Here', icon: 'terminal', run: newTerminal } satisfies MenuItem] : []),
     'separator',
-    { label: 'Copy Path', icon: 'copy', run: () => copy(abs, 'path') },
+    { label: 'Copy Path', icon: 'copy', run: () => copyText(abs, 'path') },
   ]
 }

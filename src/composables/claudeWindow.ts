@@ -2,6 +2,7 @@ import { reactive } from 'vue'
 import { emitTo, listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
+import { conversations } from './claude'
 import { prefs } from './prefs'
 import { pathOf, useWorkspaces } from './workspace'
 
@@ -45,7 +46,8 @@ export async function popOut(id: string, repo: string, rect?: Rect) {
       y: (s.availTop ?? 0) + s.availHeight - 640 - 12,
     }
   const win = new WebviewWindow(key, {
-    url: `index.html?window=claude&conv=${encodeURIComponent(id)}&repo=${encodeURIComponent(repo)}`,
+    // An agent in a worktree works there (its conversation knows where).
+    url: `index.html?window=claude&conv=${encodeURIComponent(id)}&repo=${encodeURIComponent(repo)}&cwd=${encodeURIComponent(conversations.value[id]?.cwd ?? repo)}`,
     title: `Claude · ${repo.split('/').pop()}`,
     width: r.w,
     height: r.h,
@@ -90,7 +92,7 @@ export function connectClaudeWindows() {
   void listen<{ from: string; to: string; repo: string; rect: Rect }>('claude:switch', ({ payload: p }) => void swap(p.from, p.to, p.repo, p.rect))
   void listen<{ from: string; repo: string; rect: Rect }>('claude:new', ({ payload: p }) => {
     const ws = workspaces.value.find((w) => w.repo.repo.value === p.repo)
-    if (ws) void swap(p.from, ws.panel.addClaude(true), p.repo, p.rect)
+    if (ws) void swap(p.from, ws.agents.add(), p.repo, p.rect)
   })
   void listen<{ repo: string; path: string }>('claude:open-file', async ({ payload }) => {
     const ws = workspaces.value.find((w) => pathOf(w) === payload.repo)

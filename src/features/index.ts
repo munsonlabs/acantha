@@ -35,8 +35,9 @@ export interface Feature {
 export const FEATURES: Feature[] = [
   {
     id: 'claude',
-    name: 'Claude',
-    description: 'A floating Claude Code pane for the open repository (⇧⌘I): replies as they’re written, approvals as cards.',
+    name: 'Agents',
+    description:
+      'Claude Code agents (⇧⌘I): a panel of them, docked, over the graph or floating, an Agents tab in the sidebar, and worktrees of their own.',
   },
   {
     id: 'tabSleep',

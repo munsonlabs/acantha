@@ -11,6 +11,8 @@ import { ask } from '@/composables/useDialog'
 import { prefs } from '@/composables/prefs'
 import { freshTabColor, TAB_COLORS, tabColor } from '@/lib/tabColors'
 import { useSlidingPill, useTabDrag, useTabScroll } from '@/composables/tabs'
+import { agentState, mostPressing, useAgentActivity } from '@/composables/agentStatus'
+import AgentGlyph from './AgentGlyph.vue'
 import Icon from './Icon.vue'
 
 const {
@@ -59,6 +61,13 @@ async function renameTab(ws: Workspace) {
   prefs.tabNames.value = names
 }
 
+useAgentActivity()
+/** What a repository's agents are up to, when it's worth a glance from another tab: needing you, working, or done. */
+function agentsOf(ws: Workspace) {
+  if (!isOn('claude')) return null
+  const state = mostPressing(ws.agents.tabs.value.map((t) => agentState(t.id)))
+  return state === 'idle' || state === 'off' ? null : state
+}
 const pill = useSlidingPill(strip, () => [activeId.value, workspaces.value.map((w) => `${w.id}:${label(w)}:${w.repo.log.value?.headBranch ?? ''}`)])
 const { dragging, onPointerDown } = useTabDrag(strip, moveWorkspace)
 
@@ -201,6 +210,7 @@ defineExpose({ focusSearch: () => input.value?.select() })
         <span v-if="colorOf(ws)" class="dot" :style="{ background: colorOf(ws)! }" />
         <Icon v-else :name="pathOf(ws) ? 'history' : 'folder'" :size="13" />
         <span class="name">{{ label(ws) }}</span>
+        <AgentGlyph v-if="agentsOf(ws)" :state="agentsOf(ws)!" />
         <Icon v-if="ws.sleeping.value" name="moon" :size="10" class="zz" />
         <span v-if="ws.repo.log.value?.headBranch" class="branch">· {{ ws.repo.log.value.headBranch }}</span>
         <span

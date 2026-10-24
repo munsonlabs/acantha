@@ -42,7 +42,7 @@ const TABS = computed(() =>
       { id: 'graph', label: 'Graph', icon: 'history' },
       { id: 'editor', label: 'Editor', icon: 'pencil' },
       { id: 'terminal', label: 'Terminal', icon: 'terminal' },
-      { id: 'claude', label: 'Claude', icon: 'message' },
+      { id: 'claude', label: 'Agents', icon: 'bot' },
       { id: 'slack', label: 'Slack', icon: 'message' },
     ] as const
   ).filter((t) => (t.id !== 'slack' || isOn('slack')) && (t.id !== 'claude' || isOn('claude'))),
@@ -193,7 +193,7 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
             </section>
 
             <section v-if="isOn('claude')" v-show="tab === 'claude'">
-              <h3>Claude</h3>
+              <h3>Agents</h3>
               <label class="row">
                 <div>
                   <span class="label">Keep on top</span>
@@ -204,7 +204,10 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
               <label class="row">
                 <div>
                   <span class="label">Dim the screen</span>
-                  <span class="hint">While you're in a popped-out Claude, the screen behind it dims so it's easier to read.</span>
+                  <span class="hint"
+                    >While you're in a popped-out Claude, the screen behind it dims so it's easier to read. Click the dimming to collapse
+                    Claude.</span
+                  >
                 </div>
                 <span class="number">
                   <input v-model.number="prefs.claudeDim.value" type="range" min="0" max="0.8" step="0.05" />
