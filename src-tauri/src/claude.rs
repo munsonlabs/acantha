@@ -124,11 +124,32 @@ pub struct Claudes {
     next: Mutex<u64>,
 }
 
+/// Stops a process and collects it once it's gone (off this thread), so it doesn't linger in the process table.
+pub(crate) fn end(mut child: Child) {
+    let _ = child.kill();
+    std::thread::spawn(move || child.wait());
+}
+
+/// How long an agent's Claude may sit idle before it's put to sleep: its process goes, freeing the memory, and the
+/// next message starts another, carrying on the conversation.
+const IDLE_SLEEP_MS: u64 = 10 * 60 * 1000;
+
 impl Claudes {
     pub fn kill_all(&self) {
         for c in self.conversations.lock().unwrap().values_mut() {
-            if let Some(mut r) = c.run.take() {
-                let _ = r.child.kill();
+            if let Some(r) = c.run.take() {
+                end(r.child);
+            }
+        }
+    }
+
+    /// Puts agents that have sat idle a while to sleep. Ones working, or waiting for an answer, are left be.
+    fn sleep_idle(&self) {
+        let now = now_ms();
+        for c in self.conversations.lock().unwrap().values_mut() {
+            if c.run.is_some() && c.status == Status::Idle && now.saturating_sub(c.since) > IDLE_SLEEP_MS {
+                end(c.run.take().unwrap().child);
+                broadcast(c, json!({ "type": "acantha_stopped" }).to_string());
             }
         }
     }
@@ -407,8 +428,8 @@ pub fn claude_statuses(state: State<'_, Claudes>) -> HashMap<String, Activity> {
 pub fn claude_reset<R: Runtime>(app: AppHandle<R>, state: State<'_, Claudes>, id: String) {
     let gone = state.conversations.lock().unwrap().remove(&id);
     if let Some(mut c) = gone {
-        if let Some(mut run) = c.run.take() {
-            let _ = run.child.kill();
+        if let Some(run) = c.run.take() {
+            end(run.child);
         }
         crate::opencode::forget(&app, c.oc.as_ref().map(crate::opencode::leaving));
     }
@@ -504,16 +525,18 @@ pub fn claude_stop(state: State<'_, Claudes>, id: String) {
 
 /// Starts the conversation afresh.
 #[tauri::command]
-pub fn claude_clear(state: State<'_, Claudes>, id: String) {
+pub fn claude_clear<R: Runtime>(app: AppHandle<R>, state: State<'_, Claudes>, id: String) {
     let mut all = state.conversations.lock().unwrap();
     let Some(c) = all.get_mut(&id) else { return };
-    if let Some(mut run) = c.run.take() {
-        let _ = run.child.kill();
+    if let Some(run) = c.run.take() {
+        end(run.child);
     }
     c.log.clear();
     c.session_id = None;
-    // An OpenCode agent starts a new session with its next message.
-    c.oc = None;
+    // An OpenCode agent starts a new session with its next message; the old one's no longer this conversation's.
+    if let Some(s) = c.oc.take() {
+        app.state::<crate::opencode::OpenCode>().sessions.lock().unwrap().remove(&s.id);
+    }
     broadcast(c, json!({ "type": "acantha_cleared" }).to_string());
 }
 
@@ -738,6 +761,14 @@ pub fn claude_delete_session(session: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Looks for idle agents to put to sleep, every minute, for as long as Acantha runs.
+pub fn sleep_idle_agents<R: Runtime>(app: AppHandle<R>) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(60));
+        app.state::<Claudes>().sleep_idle();
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -814,6 +845,52 @@ mod tests {
         broadcast(&mut c, result(0.02, 1));
         assert!((c.usage.cost - 0.05).abs() < 1e-9);
         assert_eq!((c.usage.tokens_in, c.usage.tokens_out), (30, 13));
+    }
+
+    #[test]
+    fn puts_long_idle_agents_to_sleep() {
+        let run = || {
+            let mut child = Command::new("cat").stdin(Stdio::piped()).stdout(Stdio::null()).spawn().unwrap();
+            Run {
+                stdin: child.stdin.take().unwrap(),
+                child,
+                gen: 0,
+            }
+        };
+        let claudes = Claudes::default();
+        {
+            let mut all = claudes.conversations.lock().unwrap();
+            // Idle for an hour; idle a moment; working for an hour.
+            all.insert(
+                "old".into(),
+                Conversation {
+                    run: Some(run()),
+                    since: now_ms() - 3_600_000,
+                    ..Default::default()
+                },
+            );
+            all.insert(
+                "new".into(),
+                Conversation {
+                    run: Some(run()),
+                    since: now_ms(),
+                    ..Default::default()
+                },
+            );
+            let busy = Conversation {
+                run: Some(run()),
+                since: now_ms() - 3_600_000,
+                status: Status::Working,
+                ..Default::default()
+            };
+            all.insert("busy".into(), busy);
+        }
+        claudes.sleep_idle();
+        let all = claudes.conversations.lock().unwrap();
+        assert!(all["old"].run.is_none() && all["old"].log.iter().any(|l| l.contains("acantha_stopped")));
+        assert!(all["new"].run.is_some() && all["busy"].run.is_some());
+        drop(all);
+        claudes.kill_all();
     }
 
     #[test]

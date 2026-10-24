@@ -1,4 +1,5 @@
 import { computed, effectScope, inject, provide, shallowRef, watch, type InjectionKey } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import { createDetails } from './details'
 import { createFiles } from './files'
@@ -6,6 +7,7 @@ import { createUi } from './ui'
 import { createDiff } from './diff'
 import { createMenus } from './menus'
 import { createAgents, forgetAgents } from './agents'
+import { agentState } from './agentStatus'
 import { createPanel } from './panel'
 import { prefs } from './prefs'
 import { createRepo } from './repo'
@@ -176,6 +178,9 @@ async function sleepWorkspace(id: number, { ask = true } = {}) {
   // Idle shells come back as they were; only something running in one would be lost.
   const running = ask ? await ws.terminals.checkRunning() : []
   if (running.length && !(await confirmAction('Put Tab to Sleep', `${stops(running)} Open files and unsaved edits stay.`, 'Sleep'))) return
+  // Its agents sleep too, unless one's working or waiting for you: their processes go, their conversations stay.
+  for (const t of ws.agents.tabs.value)
+    if (!['working', 'waiting'].includes(agentState(t.id))) void invoke('claude_stop', { id: t.id }).catch(() => {})
   const next = createWorkspace(id, path)
   next.files.drafts.value = ws.files.drafts.value
   workspaces.value = workspaces.value.map((w) => (w.id === id ? next : w))

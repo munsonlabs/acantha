@@ -152,6 +152,8 @@ fn main() {
                 }
             }
             // Don't leave shells running after the window goes away.
+            // Agents idle a while are put to sleep, so their processes don't sit on memory.
+            tauri::RunEvent::Ready => claude::sleep_idle_agents(app.clone()),
             tauri::RunEvent::Exit => {
                 app.state::<pty::Ptys>().kill_all();
                 app.state::<claude::Claudes>().kill_all();

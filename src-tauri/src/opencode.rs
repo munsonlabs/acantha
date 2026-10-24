@@ -76,13 +76,13 @@ fn encode(value: &str) -> String {
 pub struct OpenCode {
     server: Mutex<Option<Server>>,
     /// Which conversation each OpenCode session is, so its events reach it.
-    sessions: Mutex<HashMap<String, String>>,
+    pub(crate) sessions: Mutex<HashMap<String, String>>,
 }
 
 impl OpenCode {
     pub fn stop(&self) {
-        if let Some(mut s) = self.server.lock().unwrap().take() {
-            let _ = s.child.kill();
+        if let Some(s) = self.server.lock().unwrap().take() {
+            crate::claude::end(s.child);
         }
     }
 
@@ -143,7 +143,7 @@ impl OpenCode {
             }
         });
         if listening.recv_timeout(Duration::from_secs(30)).is_err() {
-            let _ = child.kill();
+            crate::claude::end(child);
             return Err("OpenCode's server didn't start".into());
         }
         let s = Server {
@@ -389,6 +389,9 @@ impl Session {
                         })
                         .collect();
                     out.push(Out::Line(json!({ "type": "assistant", "message": { "id": mid, "content": content } })));
+                    // Done with: only what it used is still needed.
+                    m.parts.clear();
+                    m.order.clear();
                 }
             }
             "message.part.updated" | "message.part.delta" => {
@@ -901,6 +904,8 @@ mod tests {
         assert_eq!(rest[0]["event"]["delta"]["text"], "ne");
         let finished = lines(s.translate(&ev("message.updated", json!({ "info": { "id": "m1", "role": "assistant", "cost": 0.5, "tokens": { "input": 10, "output": 3, "cache": { "write": 2 } }, "time": { "completed": 1 } } }))));
         assert_eq!(finished[0]["message"]["content"][1]["text"], "done");
+        // A finished reply keeps only what it used.
+        assert!(s.messages["m1"].parts.is_empty());
         let result = lines(s.translate(&ev("session.idle", json!({}))));
         assert_eq!(result[0]["type"], "result");
         assert_eq!(result[0]["total_cost_usd"], 0.5);
