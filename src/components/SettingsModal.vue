@@ -125,7 +125,23 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
                 Everything beyond the graph, Git panel, files, search, editor and terminals. A feature switched off isn't loaded and leaves the menus;
                 its panel tabs are kept for when it's back on.
               </p>
-              <label v-for="f in FEATURES" :key="f.id" class="row">
+              <!-- Every AI feature at once: off, none of it shows or runs, for working the old way. -->
+              <label class="row ai">
+                <div>
+                  <span class="label">AI features</span>
+                  <span class="hint">
+                    Claude Code and OpenCode agents, Ask an Agent, reviewing an agent’s work and repository tours. Off, none of it shows, and anything
+                    running stops; your agents and their conversations are kept for when it’s back on.
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  class="switch"
+                  :checked="isOn('claude')"
+                  @change="setFeature('claude', ($event.target as HTMLInputElement).checked)"
+                />
+              </label>
+              <label v-for="f in FEATURES.filter((f) => f.id !== 'claude')" :key="f.id" class="row">
                 <div>
                   <span class="label">{{ f.name }}</span>
                   <span class="hint">{{ f.description }}</span>
@@ -400,6 +416,13 @@ h2 {
   min-width: 0;
   overflow: auto;
   padding: 6px 20px 20px;
+}
+.row.ai {
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--hover);
 }
 .past {
   max-height: 200px;

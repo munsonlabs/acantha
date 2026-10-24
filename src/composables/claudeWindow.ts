@@ -83,6 +83,13 @@ async function rectOf(key: string): Promise<Rect | undefined> {
   return { x: Math.round(pos.x), y: Math.round(pos.y), w: Math.round(size.width), h: Math.round(size.height) }
 }
 
+/** Closes every floating agent window, docking each back in the panel. */
+export async function bringBackAll() {
+  // A copy: each one closing leaves the list.
+  const ids = Array.from(poppedOut.values())
+  for (const id of ids) await bringBack(id)
+}
+
 /** Docks a conversation back in the panel, closing its window. */
 export async function bringBack(id: string) {
   const key = label(id)

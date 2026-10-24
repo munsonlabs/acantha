@@ -9,6 +9,7 @@ import { basename } from '@/lib/format'
 import { activateTabNumber, overlays, runCommand } from '@/composables/commands'
 import { prefs } from '@/composables/prefs'
 import { lastUsed, pathOf, useWorkspaces, type Workspace } from '@/composables/workspace'
+import { bringBackAll } from '@/composables/claudeWindow'
 import { closeDialog, confirmAction, useDialog } from '@/composables/useDialog'
 import { onMakeTodos, useContextMenu } from '@/composables/useContextMenu'
 import { pasteIntoPanel } from '@/composables/slackLinks'
@@ -74,6 +75,23 @@ const KEYS: Record<string, string> = {
   f: 'find',
   e: 'open-files',
 }
+
+/**
+ * AI switched off (Settings, or the palette): nothing of it keeps running. Every agent stops (their conversations
+ * kept, for when it's back on), OpenCode's server with them; floating agents close, and a review or tour is put away.
+ */
+watch(
+  () => isOn('claude'),
+  (on) => {
+    if (on) return
+    void invoke('agents_stop_all').catch(() => {})
+    void bringBackAll()
+    for (const w of workspaces.value) {
+      w.ui.review.value = null
+      w.tour.hide()
+    }
+  },
+)
 
 /** Puts away what's in front over the graph (see GraphPane): the file, a review, the agents or the panel. */
 function putAwayFront(ws: Workspace) {

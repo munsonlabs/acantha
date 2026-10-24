@@ -1,7 +1,8 @@
 import { ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import { isOn, type FeatureId } from '@/features'
+import { isOn, type FeatureId, setFeature } from '@/features'
 import { prefs } from './prefs'
+import { showToast } from './useToast'
 import { ask } from './useDialog'
 import { isPoppedOut, popOut } from './claudeWindow'
 import { promptSlackLink, togglePanel } from './slackLinks'
@@ -62,6 +63,17 @@ export const commands: Command[] = [
       if (prefs.agentsOpen.value) prefs.agentsOpen.value = false
       else show()
     }),
+  },
+  {
+    id: 'toggle-ai',
+    label: 'Turn AI Features On or Off',
+    group: 'View',
+    // Not a feature's own: it's how they're all switched.
+    run: () => {
+      const on = !isOn('claude')
+      setFeature('claude', on)
+      showToast(on ? 'AI features on' : 'AI features off: agents stopped, and none of it shows')
+    },
   },
   {
     id: 'tour',

@@ -765,6 +765,18 @@ pub fn claude_delete_session(session: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Stops every agent: AI's been switched off. Their conversations are kept, to carry on once it's back on.
+#[tauri::command]
+pub fn agents_stop_all<R: Runtime>(app: AppHandle<R>, state: State<'_, Claudes>) {
+    for c in state.conversations.lock().unwrap().values_mut() {
+        if let Some(run) = c.run.take() {
+            end(run.child);
+            broadcast(c, json!({ "type": "acantha_stopped" }).to_string());
+        }
+    }
+    app.state::<crate::opencode::OpenCode>().stop();
+}
+
 /// Looks for idle agents to put to sleep, every minute, for as long as Acantha runs.
 pub fn sleep_idle_agents<R: Runtime>(app: AppHandle<R>) {
     std::thread::spawn(move || loop {
