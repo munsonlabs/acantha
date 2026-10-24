@@ -3,6 +3,8 @@ import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vu
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { github, overall, runningRuns, type CheckState, type PullRequest, type Run } from '@/lib/github'
 import { showToast } from '@/composables/useToast'
+import { openMenu } from '@/composables/useContextMenu'
+import { isOn } from '@/features'
 import { useWorkspace } from '@/composables/workspace'
 import Icon from './Icon.vue'
 import Skeleton from './Skeleton.vue'
@@ -107,6 +109,26 @@ watch(
 )
 onBeforeUnmount(() => soon.forEach(clearTimeout))
 
+/** A run's menu: open it, or (failed) start an agent on finding out why and fixing it. */
+function runMenu(e: MouseEvent, r: Run) {
+  openMenu(e, [
+    { header: r.workflow, detail: r.title },
+    { label: 'Open on GitHub', icon: 'external', run: () => openUrl(r.url) },
+    ...(r.state === 'fail' && isOn('claude')
+      ? [
+          {
+            label: 'Ask an Agent Why It Failed',
+            icon: 'bot' as const,
+            run: () =>
+              ws.agents.askAgent(
+                `The GitHub Actions run "${r.workflow}: ${r.title}" on ${r.branch} failed (${r.url}). \`gh run view ${r.id} --log-failed\` shows why: find the cause and fix it.`,
+              ),
+          },
+        ]
+      : []),
+  ])
+}
+
 const ICON: Record<CheckState, string> = { pass: '✓', fail: '✕', pending: '●', skipped: '–' }
 const REVIEW: Record<string, string> = { APPROVED: 'approved', CHANGES_REQUESTED: 'changes requested', REVIEW_REQUIRED: 'review needed' }
 
@@ -178,7 +200,13 @@ const prState = (p: PullRequest) => overall(p.checks)
       </h3>
       <p v-if="!shown.length" class="none">No workflow runs{{ branchOnly && branch ? ` on ${branch}` : '' }}.</p>
       <ul>
-        <li v-for="r in shown" :key="r.id" :title="`${r.workflow}: ${r.title}\n${r.event} on ${r.branch}`" @click="openUrl(r.url)">
+        <li
+          v-for="r in shown"
+          :key="r.id"
+          :title="`${r.workflow}: ${r.title}\n${r.event} on ${r.branch}`"
+          @click="openUrl(r.url)"
+          @contextmenu.prevent="runMenu($event, r)"
+        >
           <span class="state" :class="r.state">{{ ICON[r.state] }}</span>
           <span class="wf">{{ r.workflow }}</span>
           <span class="subject">{{ r.title }}</span>

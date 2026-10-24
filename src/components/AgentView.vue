@@ -18,6 +18,8 @@ const { workspaces, active, showRepo } = useWorkspaces()
 const root = computed(() => ws.repo.repo.value)
 const cwd = computed(() => props.agent.cwd ?? root.value ?? undefined)
 const out = computed(() => isPoppedOut(props.agent.id))
+/** A request it was started with, waiting in its box to be read over and sent. */
+const draft = ws.agents.takeDraft(props.agent.id)
 
 useAgentActivity()
 const look = () => active.value === ws && document.hasFocus() && markSeen(props.agent.id)
@@ -43,7 +45,7 @@ async function open(path: string) {
         <button class="ghost" @click="bringBack(agent.id)"><Icon name="minimize" :size="12" /> Bring it back here</button>
       </div>
     </div>
-    <ClaudeChat v-else :id="agent.id" :key="`${agent.id}:${root}`" :root="root" :cwd="cwd" :kind="agent.kind" @open="open">
+    <ClaudeChat v-else :id="agent.id" :key="`${agent.id}:${root}`" :root="root" :cwd="cwd" :kind="agent.kind" :draft="draft" @open="open">
       <template #actions>
         <button class="ghost icon-btn" title="Pop out into its own window" @click="popOut(agent.id, root)">
           <Icon name="external" :size="13" />

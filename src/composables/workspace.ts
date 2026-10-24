@@ -47,6 +47,7 @@ function createWorkspace(id: number, asleep: string | null = null) {
       ui.sidebarTab.value = 'files'
       prefs.sidebarOpen.value = true
     }
+    const agents = createAgents(repo)
     const status = createStatus(repo)
     createWatcher(repo, async () => {
       files.diskChanged.value++
@@ -67,10 +68,11 @@ function createWorkspace(id: number, asleep: string | null = null) {
         rebaseFrom: (base, label) => (ui.rebase.value = { base, label }),
         openWorktree: (path) => void showRepo(path),
         closeWorktree: closeRepo,
+        askAgent: (text) => void agents.askAgent(text),
       }),
       terminals: createTerminals(repo),
       panel: createPanel(repo),
-      agents: createAgents(repo),
+      agents,
     }
   })!
   // Kept as they change, for the next time this repository opens.

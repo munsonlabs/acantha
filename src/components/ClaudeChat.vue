@@ -13,7 +13,7 @@ import { AGENT_NAMES, MODES, MODELS, SUGGESTIONS, TOOL_ICONS, asking, costText, 
  * for its own buttons (the `actions` slot). Files it mentions go to `open`.
  */
 /** floating: in a popped-out window, with no bar or background: bubbles on the desktop, each with its own shadow. */
-const props = defineProps<{ id: string; root: string; cwd?: string; kind?: AgentKind; floating?: boolean }>()
+const props = defineProps<{ id: string; root: string; cwd?: string; kind?: AgentKind; floating?: boolean; draft?: string }>()
 const emit = defineEmits<{ open: [path: string] }>()
 const claude = useClaudeConversation(props.id, props.root, props.cwd ?? props.root, props.kind ?? 'claude')
 const kindName = AGENT_NAMES[claude.kind]
@@ -24,7 +24,7 @@ const models = ref<{ id: string; label: string }[]>(claude.kind === 'opencode' ?
 if (claude.kind === 'opencode') void loadOpenCodeModels().then((list) => (models.value = [{ id: '', label: 'Default model' }, ...list]))
 const chat = claude.chat
 
-const draft = ref('')
+const draft = ref(props.draft ?? '')
 const input = ref<HTMLTextAreaElement>()
 const body = ref<HTMLElement>()
 const expanded = ref(new Set<string>())

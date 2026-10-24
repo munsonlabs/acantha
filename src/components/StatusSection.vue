@@ -4,6 +4,7 @@ import type { StatusFile } from '@/lib/git'
 import { splitPath } from '@/lib/format'
 import { openMenu, type MenuItem } from '@/composables/useContextMenu'
 import { fileOpenItems } from '@/composables/openers'
+import { isOn } from '@/features'
 import { openNestedRepo, useWorkspace } from '@/composables/workspace'
 import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
@@ -41,6 +42,15 @@ function letter(f: StatusFile) {
 
 /** A file with something on disk to edit: not deleted, and not a nested repository's folder. */
 const editable = (f: StatusFile) => !f.path.endsWith('/') && f.worktree !== 'D' && !(f.index === 'D' && f.worktree === '.')
+/** What to ask an agent about a file: to resolve its conflict, or to look over the change. */
+const askLabel = () => (props.mode === 'conflict' ? 'Ask an Agent to Resolve It' : 'Ask an Agent to Review This Change')
+function askText(f: StatusFile) {
+  if (props.mode === 'conflict')
+    return `Resolve the merge conflicts in ${f.path}: keep what each side meant, remove the conflict markers, and say what you chose.`
+  const diff = f.kind === 'untracked' ? `the new file ${f.path}` : `\`git diff${props.mode === 'staged' ? ' --cached' : ''} -- ${f.path}\``
+  return `Review my change to ${f.path} (${diff}): is anything wrong, missing or worth improving?`
+}
+
 /** Opens the file in the editor, as it is on disk, rather than its diff. */
 const editFile = (f: StatusFile) => void ws.files.open(f.path, 'edit', null)
 
@@ -53,6 +63,7 @@ function menu(e: MouseEvent, f: StatusFile) {
       run: () => openFile(f),
     },
     { label: 'Open File', icon: 'pencil', disabled: !editable(f), run: () => editFile(f) },
+    ...(isOn('claude') ? [{ label: askLabel(), icon: 'bot' as const, run: () => ws.agents.askAgent(askText(f)) }] : []),
     'separator',
     props.mode === 'staged'
       ? { label: 'Unstage', icon: 'minus', run: () => unstage([f]) }

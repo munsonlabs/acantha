@@ -27,11 +27,13 @@ interface MenuActions {
   openWorktree: (path: string) => void
   /** Closes any tab showing a worktree, before it's removed. False when unsaved edits there were kept. */
   closeWorktree: (path: string) => Promise<boolean>
+  /** Starts an agent with a request in its box, to read over and send. */
+  askAgent: (text: string) => void
 }
 
 export function createMenus(
   { repo, log, rows, run, reload, lastFetch, refsByHash, branches, setBranches }: Repo,
-  { browse, rebaseFrom, openWorktree, closeWorktree }: MenuActions,
+  { browse, rebaseFrom, openWorktree, closeWorktree, askAgent }: MenuActions,
 ) {
   const currentBranch = () => log.value?.headBranch ?? null
   const remotes = () => log.value?.remotes ?? []
@@ -217,6 +219,16 @@ export function createMenus(
     const s = shortHash(c.hash)
     return [
       { header: c.subject, detail: `${s} · ${c.author}` },
+      ...(isOn('claude')
+        ? [
+            {
+              label: 'Ask an Agent About This Commit',
+              icon: 'bot' as const,
+              run: () => askAgent(`Explain commit ${c.hash} ("${c.subject}"): what it changes and why. \`git show ${s}\` shows it.`),
+            },
+            'separator' as const,
+          ]
+        : []),
       {
         label: 'Add Tag…',
         icon: 'tag',

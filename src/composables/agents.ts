@@ -178,6 +178,25 @@ export function createAgents({ repo, reload }: Repo) {
   /** Puts an agent to sleep: Claude stops for now, and the next message wakes it, carrying on where it was. */
   const sleep = (id: string) => invoke('claude_stop', { id })
 
+  /** Messages waiting in new agents' boxes, for when each first shows. */
+  const waiting = new Map<string, string>()
+  /**
+   * Starts an agent with a request already in its message box (from a menu's "Ask an Agent"), shown so it can be
+   * read over, changed and sent.
+   */
+  function askAgent(text: string, kind: AgentKind = 'claude') {
+    const id = add(undefined, kind)
+    waiting.set(id, text)
+    expanded.value = false
+    return id
+  }
+  /** What's waiting in an agent's box, taken once. */
+  function takeDraft(id: string) {
+    const text = waiting.get(id)
+    waiting.delete(id)
+    return text
+  }
+
   /** Asks for an agent's new name. */
   async function renameAgent(t: AgentTab) {
     const v = await ask({ title: 'Rename Agent', fields: [{ name: 'title', label: 'Name', value: titleOf(t), required: true }], confirm: 'Rename' })
@@ -221,6 +240,8 @@ export function createAgents({ repo, reload }: Repo) {
     renameAgent,
     titleOf,
     newAgentItems,
+    askAgent,
+    takeDraft,
   }
 }
 
