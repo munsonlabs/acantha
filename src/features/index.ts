@@ -23,6 +23,7 @@ export type FeatureId =
   | 'reflog'
   | 'changeMarkers'
   | 'memory'
+  | 'types'
   | 'dashboard'
   | 'tabSleep'
   | 'claude'
@@ -55,6 +56,12 @@ export const FEATURES: Feature[] = [
     id: 'memory',
     name: 'Memory use',
     description: 'How much memory Acantha and what it started are using, in the status bar, and whether that’s usual for each part.',
+  },
+  {
+    id: 'types',
+    name: 'Type awareness',
+    description:
+      'TypeScript and JavaScript in the editor know their types, from the repository’s own TypeScript: on hover, in completions, errors underlined, ⌘-click to a definition.',
   },
   { id: 'worktrees', name: 'Worktrees', description: 'The Worktrees list in the Git panel, and checking branches out into new ones.' },
   { id: 'reflog', name: 'Reflog', description: 'A panel tab of everywhere HEAD has been, to get back commits a reset or rebase left behind.' },

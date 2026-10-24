@@ -5,6 +5,7 @@
 import { basicSetup } from 'codemirror'
 import { completeAnyWord, startCompletion, type Completion, type CompletionContext } from '@codemirror/autocomplete'
 import { importCandidates } from './importPaths'
+import { TYPED, typeAware, typeCompletions, type TypeService } from './types'
 import { changeGutter, setChangeBase } from './changeGutter'
 import { EditorView, keymap } from '@codemirror/view'
 import { Compartment, EditorState } from '@codemirror/state'
@@ -77,6 +78,8 @@ export interface EditorOptions {
   words?: () => readonly string[]
   /** Show change markers in the margin, against the text given with `setBase`. */
   changeMarkers?: boolean
+  /** TypeScript's view of the file (`file`, its absolute path), for a file it understands: types, errors, definitions. */
+  types?: { file: string; service: TypeService }
   onChange: (doc: string) => void
   onSave: () => void
 }
@@ -124,7 +127,8 @@ function otherWords(words: () => readonly string[]) {
   }
 }
 
-export function createEditor(parent: HTMLElement, { doc, path, vim: vimMode, files, words, changeMarkers, onChange, onSave }: EditorOptions) {
+export function createEditor(parent: HTMLElement, { doc, path, vim: vimMode, files, words, changeMarkers, types, onChange, onSave }: EditorOptions) {
+  const typed = !!types && TYPED.test(path)
   const language = new Compartment()
   const keys = new Compartment()
 
@@ -148,9 +152,17 @@ export function createEditor(parent: HTMLElement, { doc, path, vim: vimMode, fil
           indentWithTab,
         ]),
         language.of([]),
-        // Alongside each language's own suggestions: any word already in this file or the other open ones, and import paths.
-        EditorState.languageData.of(() => [{ autocomplete: completeAnyWord }]),
-        ...(words ? [EditorState.languageData.of(() => [{ autocomplete: otherWords(words) }])] : []),
+        // Alongside each language's own suggestions: TypeScript's, where it knows the file; otherwise any word already
+        // in this file or the other open ones. And import paths.
+        ...(typed
+          ? [
+              EditorState.languageData.of(() => [{ autocomplete: typeCompletions(types!.file, types!.service) }]),
+              typeAware(types!.file, types!.service),
+            ]
+          : [
+              EditorState.languageData.of(() => [{ autocomplete: completeAnyWord }]),
+              ...(words ? [EditorState.languageData.of(() => [{ autocomplete: otherWords(words) }])] : []),
+            ]),
         ...(files && SCRIPT.test(path) ? [EditorState.languageData.of(() => [{ autocomplete: importPaths(path, files) }])] : []),
         theme,
         syntaxHighlighting(highlight),

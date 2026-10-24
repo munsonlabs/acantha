@@ -185,6 +185,12 @@ async function sleepWorkspace(id: number, { ask = true } = {}) {
   next.files.drafts.value = ws.files.drafts.value
   workspaces.value = workspaces.value.map((w) => (w.id === id ? next : w))
   ws.scope.stop()
+  stopTypes(path)
+}
+
+/** A repository's TypeScript (see tsserver.rs) stops with the last tab showing it: it takes a fair bit of memory. */
+function stopTypes(path: string | null) {
+  if (path && !workspaces.value.some((w) => w.repo.repo.value === path)) void invoke('ts_stop', { repo: path }).catch(() => {})
 }
 
 /** What closing terminals would stop, said plainly: "`npm run dev` is running and will stop." */
@@ -227,6 +233,7 @@ async function closeWorkspace(id: number) {
   closing.scope.stop()
   const rest = workspaces.value.filter((w) => w.id !== id)
   workspaces.value = rest
+  stopTypes(closing.repo.repo.value)
   forgetClosed([closing])
   if (activeId.value === id) {
     const next = rest[i] ?? rest[i - 1]
@@ -248,6 +255,7 @@ function closeOtherWorkspaces(id: number) {
   for (const w of others) w.scope.stop()
   workspaces.value = workspaces.value.filter((w) => w.id === id)
   forgetClosed(others)
+  for (const w of others) stopTypes(w.repo.repo.value)
   activate(id)
 }
 

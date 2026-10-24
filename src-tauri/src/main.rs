@@ -12,6 +12,7 @@ mod pty;
 mod rebase;
 mod scripts;
 mod slack;
+mod tsserver;
 mod watch;
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -54,6 +55,7 @@ fn main() {
         .manage(pty::Ptys::default())
         .manage(claude::Claudes::default())
         .manage(opencode::OpenCode::default())
+        .manage(tsserver::TsServers::default())
         .manage(watch::Watchers::default())
         .menu(|app| menu::build(app, &[]))
         .on_menu_event(|app, event| menu::forward(app, event.id().as_ref()))
@@ -85,6 +87,8 @@ fn main() {
             opencode::opencode_interrupt,
             opencode::opencode_models,
             opencode::opencode_history,
+            tsserver::ts_request,
+            tsserver::ts_stop,
             claude::claude_window_pin,
             claude::claude_dim,
             claude::claude_delete_session,
@@ -158,6 +162,7 @@ fn main() {
                 app.state::<pty::Ptys>().kill_all();
                 app.state::<claude::Claudes>().kill_all();
                 app.state::<opencode::OpenCode>().stop();
+                app.state::<tsserver::TsServers>().stop_all();
             }
             _ => {}
         });
