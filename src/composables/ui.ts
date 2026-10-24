@@ -12,6 +12,8 @@ export function createUi() {
     conflict: shallowRef<StatusFile | null>(null),
     /** The Clean Up Branches window. */
     branchCleanup: ref(false),
+    /** A worktree agent's work under review, in place of the graph: by its id. */
+    review: ref<string | null>(null),
   }
 }
 

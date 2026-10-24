@@ -37,6 +37,7 @@ function newAgent(e: MouseEvent) {
 function tabMenu(e: MouseEvent, t: AgentTab) {
   openMenu(e, [
     { label: 'Rename…', icon: 'pencil', run: () => renameAgent(t) },
+    ...(t.base ? [{ label: 'Review its Work', icon: 'eye' as const, run: () => (ws.ui.review.value = t.id) }] : []),
     'separator',
     { label: 'Close Agent', icon: 'x', run: () => close(t.id) },
     ...(t.cwd ? [{ label: 'Close and Remove its Worktree…', icon: 'trash' as const, danger: true, run: () => removeWorktree(t.cwd!) }] : []),

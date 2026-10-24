@@ -131,6 +131,7 @@ function onKeydown(e: KeyboardEvent) {
     else if (ws?.ui.branchCleanup.value) ws.ui.branchCleanup.value = false
     else if (menu.value) closeMenu()
     else if (!typing && ws?.files.preview.value) void ws.files.closePreview()
+    else if (!typing && ws?.ui.review.value) ws.ui.review.value = null
     else if (!typing && ws?.panel.expanded.value) ws.panel.expanded.value = false
     else if (!typing && prefs.agentsOpen.value && ws?.agents.expanded.value && ws.agents.tabs.value.length) ws.agents.expanded.value = false
     else if (!typing && ws?.details.details.value) ws.details.closeDetails()

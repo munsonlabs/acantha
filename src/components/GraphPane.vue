@@ -10,6 +10,7 @@ import FilePreview from './FilePreview.vue'
 import Skeleton from './Skeleton.vue'
 import SidePanel from './SidePanel.vue'
 import AgentsPanel from './AgentsPanel.vue'
+import AgentReview from './AgentReview.vue'
 import GraphToolbar from './GraphToolbar.vue'
 
 const ws = useWorkspace()
@@ -17,8 +18,10 @@ const { repo, log } = ws.repo
 const { preview } = ws.files
 const { tabs, expanded } = ws.panel
 /** The panel's tabs, or the agents, expanded to take the graph's place. */
+/** A worktree agent's work under review. */
+const reviewHere = computed(() => !!ws.ui.review.value && ws.agents.tabs.value.some((t) => t.id === ws.ui.review.value))
 const agentsHere = computed(() => isOn('claude') && prefs.agentsOpen.value && ws.agents.expanded.value && ws.agents.tabs.value.length > 0)
-const panelHere = computed(() => agentsHere.value || (expanded.value && tabs.value.length > 0))
+const panelHere = computed(() => reviewHere.value || agentsHere.value || (expanded.value && tabs.value.length > 0))
 </script>
 
 <template>
@@ -27,6 +30,7 @@ const panelHere = computed(() => agentsHere.value || (expanded.value && tabs.val
     <section class="pane graph-pane">
       <Transition name="slide">
         <FilePreview v-if="preview" class="graph-body" />
+        <AgentReview v-else-if="reviewHere" class="graph-body" />
         <AgentsPanel v-else-if="agentsHere" class="graph-body" />
         <SidePanel v-else-if="panelHere" class="graph-body" />
       </Transition>

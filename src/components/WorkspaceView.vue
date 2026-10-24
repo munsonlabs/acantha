@@ -54,7 +54,8 @@ const graphHidden = computed(
     !!repo.value &&
     !props.ws.files.preview.value &&
     !(panelExpanded.value && panelTabs.value.length) &&
-    !agentsHere.value,
+    !agentsHere.value &&
+    !props.ws.ui.review.value,
 )
 const el = ref<HTMLElement>()
 const width = prefs.terminalWidth

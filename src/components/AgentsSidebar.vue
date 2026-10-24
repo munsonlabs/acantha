@@ -91,11 +91,16 @@ const addHere = (e: MouseEvent, p: Place) => openMenu(e, hereItems(p))
 const newAgent = (e: MouseEvent) => openMenu(e, newAgentItems())
 const copyName = (p: Place) => copyText(placeName(p), p.main ? 'branch name' : 'worktree name')
 
+/** A worktree agent's work, reviewed in place of the graph: for one that knows where it started. */
+const review = (agent: AgentTab) => (ws.ui.review.value = agent.id)
+const reviewable = (p: Place) => p.agents.find((a) => a.base)
+
 function agentMenu(e: MouseEvent, agent: AgentTab) {
   const p = places.value.find((x) => x.agents.includes(agent))!
   const running = !!activity.value[agent.id]?.running
   openMenu(e, [
     { header: titleOf(agent), detail: p.main ? `In this folder, on ${placeName(p)}` : `In a worktree, on ${placeName(p)}` },
+    ...(agent.base ? [{ label: 'Review its Work', icon: 'eye' as const, run: () => review(agent) }] : []),
     { label: 'Rename…', icon: 'pencil', run: () => renameAgent(agent) },
     { label: isPoppedOut(agent.id) ? 'Show its Window' : 'Pop Out', icon: 'external', run: () => popOut(agent.id, root.value) },
     { label: 'Sleep', icon: 'moon', disabled: !running, run: () => sleep(agent.id) },
@@ -112,6 +117,7 @@ function placeMenu(e: MouseEvent, p: Place) {
   const awake = p.agents.filter((a) => activity.value[a.id]?.running)
   openMenu(e, [
     { header: placeName(p), detail: p.cwd },
+    ...(reviewable(p) ? [{ label: 'Review its Work', icon: 'eye' as const, run: () => review(reviewable(p)!) }] : []),
     ...hereItems(p).map((item) => ({ ...item, label: `${item.label} Here` })),
     { label: 'Put its Agents to Sleep', icon: 'moon', disabled: !awake.length, run: () => awake.forEach((a) => sleep(a.id)) },
     'separator',
@@ -166,6 +172,9 @@ const toggleFold = (p: Place) => (folded.value = folded.value.includes(p.cwd) ? 
           <div class="actions" @click.stop>
             <button v-if="p.main && ws.status.files.value.length" class="ghost link" title="Its changes, in the Git panel" @click="showGit">
               <Icon name="scm" :size="11" /> {{ ws.status.files.value.length }}
+            </button>
+            <button v-if="reviewable(p)" class="ghost mini" title="Review its work" @click="review(reviewable(p)!)">
+              <Icon name="eye" :size="11" />
             </button>
             <button v-if="!p.main" class="ghost mini" title="Open the worktree in a tab of its own, on its Git panel" @click="openWorktree(p)">
               <Icon name="external" :size="11" />

@@ -211,3 +211,16 @@ export function loadOpenCodeModels() {
   })
   return openCodeModels
 }
+
+/**
+ * Sends an agent a message from outside its conversation (a review asking for changes, a menu's "Ask an Agent"),
+ * in its folder, with the mode and model set for agents. Its conversation's kept like any other's.
+ */
+export async function sendToAgent(a: { id: string; root: string; cwd?: string; kind?: AgentKind; text: string }) {
+  const cwd = a.cwd ?? a.root
+  if (!conversations.value[a.id])
+    save(a.id, { repo: a.root, ...(cwd !== a.root ? { cwd } : {}), ...(a.kind === 'opencode' ? { kind: a.kind } : {}), updated: Date.now() })
+  const mode = prefs.claudeMode.value
+  if (a.kind === 'opencode') await invoke('opencode_send', { id: a.id, cwd, text: a.text, mode, model: prefs.opencodeModel.value || null })
+  else await invoke('claude_send', { id: a.id, repo: cwd, text: a.text, mode, model: prefs.claudeModel.value || null })
+}
