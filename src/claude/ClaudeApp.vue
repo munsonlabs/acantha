@@ -276,7 +276,7 @@ html.claude-window body {
   height: 40px;
   margin-right: 14px;
   padding: 0 6px 0 4px;
-  border-radius: 20px;
+  border-radius: 12px;
   background: var(--popover);
   box-shadow:
     0 0 0 0.5px var(--border-strong),
@@ -293,7 +293,7 @@ html.claude-window body {
   height: 34px;
   padding: 0 6px 0 2px;
   border: none;
-  border-radius: 17px;
+  border-radius: 8px;
   background: none;
   text-align: left;
 }
@@ -350,7 +350,7 @@ html.claude-window body {
   width: 24px;
   height: 24px;
   padding: 0;
-  border-radius: 12px;
+  border-radius: 7px;
   color: var(--fg-muted);
 }
 .icon-btn.on {

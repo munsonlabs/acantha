@@ -962,7 +962,7 @@ textarea {
 }
 .floating .composer {
   border: none;
-  border-radius: 20px;
+  border-radius: 16px;
   background: var(--popover);
 }
 .opencode {
