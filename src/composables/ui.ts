@@ -14,8 +14,8 @@ export function createUi() {
     branchCleanup: ref(false),
     /** A worktree agent's work under review, in place of the graph: by its id. */
     review: ref<string | null>(null),
-    /** What was last brought over the graph, so it's what shows there while it's open (see GraphPane). */
-    front: ref<'file' | 'review' | 'agents' | 'panel' | null>(null),
+    /** What's been brought to the graph's place, in order, the latest last (see composables/center.ts). */
+    stack: ref<('file' | 'review' | 'agents' | 'panel' | 'graph')[]>([]),
   }
 }
 

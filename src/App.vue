@@ -10,6 +10,7 @@ import { activateTabNumber, overlays, runCommand } from '@/composables/commands'
 import { prefs } from '@/composables/prefs'
 import { lastUsed, pathOf, useWorkspaces, type Workspace } from '@/composables/workspace'
 import { bringBackAll } from '@/composables/claudeWindow'
+import { overGraph } from '@/composables/center'
 import { closeDialog, confirmAction, useDialog } from '@/composables/useDialog'
 import { onMakeTodos, useContextMenu } from '@/composables/useContextMenu'
 import { pasteIntoPanel } from '@/composables/slackLinks'
@@ -100,11 +101,11 @@ watch(
 
 /** Puts away what's in front over the graph (see GraphPane): the file, a review, the agents or the panel. */
 function putAwayFront(ws: Workspace) {
-  const front = ws.ui.front.value
-  if (front === 'agents' && prefs.agentsOpen.value && ws.agents.expanded.value && ws.agents.tabs.value.length) ws.agents.expanded.value = false
-  else if (front === 'panel' && ws.panel.expanded.value) ws.panel.expanded.value = false
-  else if (front === 'review' && ws.ui.review.value) ws.ui.review.value = null
-  else if (front === 'file' && ws.files.preview.value) void ws.files.closePreview()
+  const front = overGraph(ws)
+  if (front === 'agents') ws.agents.expanded.value = false
+  else if (front === 'panel') ws.panel.expanded.value = false
+  else if (front === 'review') ws.ui.review.value = null
+  else if (front === 'file') void ws.files.closePreview()
   else return false
   return true
 }
@@ -166,11 +167,8 @@ function onKeydown(e: KeyboardEvent) {
     else if (menu.value) closeMenu()
     else if (!typing && ws?.tour.showing.value) ws.tour.hide()
     // Whatever's in front over the graph goes first; then the rest, in turn.
+    // Only what's in front: with the graph brought forward, what's open behind it stays.
     else if (!typing && ws && putAwayFront(ws)) closed = true
-    else if (!typing && ws?.files.preview.value) void ws.files.closePreview()
-    else if (!typing && ws?.ui.review.value) ws.ui.review.value = null
-    else if (!typing && ws?.panel.expanded.value) ws.panel.expanded.value = false
-    else if (!typing && prefs.agentsOpen.value && ws?.agents.expanded.value && ws.agents.tabs.value.length) ws.agents.expanded.value = false
     else if (!typing && ws?.details.details.value) ws.details.closeDetails()
     else closed = false
     if (closed) e.preventDefault()

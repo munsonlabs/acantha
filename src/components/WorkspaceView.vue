@@ -4,6 +4,7 @@ import { prefs } from '@/composables/prefs'
 import { isOn } from '@/features'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { provideWorkspace, type Workspace } from '@/composables/workspace'
+import { overGraph } from '@/composables/center'
 import GraphPane from './GraphPane.vue'
 import GraphStamp from './GraphStamp.vue'
 import Sidebar from './Sidebar.vue'
@@ -49,15 +50,7 @@ watch(panelExpanded, (on) => on && agentsHere.value && (agentsExpanded.value = f
  * the graph's doing, and closing it brings back the graph, or the stamp, as you left it. Only with a repository open:
  * an empty tab always shows its start screen there.
  */
-const graphHidden = computed(
-  () =>
-    prefs.graphCollapsed.value &&
-    !!repo.value &&
-    !props.ws.files.preview.value &&
-    !(panelExpanded.value && panelTabs.value.length) &&
-    !agentsHere.value &&
-    !props.ws.ui.review.value,
-)
+const graphHidden = computed(() => prefs.graphCollapsed.value && !!repo.value && overGraph(props.ws) === null)
 const el = ref<HTMLElement>()
 const width = prefs.terminalWidth
 const sidebarWidth = prefs.sidebarWidth

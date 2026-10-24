@@ -5,6 +5,7 @@ import { prefs } from './prefs'
 import { showToast } from './useToast'
 import { ask } from './useDialog'
 import { isPoppedOut, popOut } from './claudeWindow'
+import { toggleGraph } from './center'
 import { promptSlackLink, togglePanel } from './slackLinks'
 import { useWorkspaces } from './workspace'
 
@@ -206,7 +207,8 @@ export const commands: Command[] = [
     run: () => active.value && promptSlackLink(active.value),
   },
   { id: 'open-files', label: 'Open Files', group: 'View', keys: '⌘E', run: withRepo(() => (overlays.openFiles.value = !overlays.openFiles.value)) },
-  { id: 'toggle-graph', label: 'Toggle Graph', group: 'View', run: () => (prefs.graphCollapsed.value = !prefs.graphCollapsed.value) },
+  // The graph to the front, or collapsed when it already is.
+  { id: 'toggle-graph', label: 'Toggle Graph', group: 'View', run: withRepo((ws) => toggleGraph(ws)) },
   { id: 'toggle-panel', label: 'Toggle Panel', group: 'View', run: () => active.value && togglePanel(active.value) },
   { id: 'new-todo-list', label: 'New To-do List', group: 'View', feature: 'todos', run: withRepo((ws) => ws.panel.addTodos('To-dos')) },
   { id: 'new-notes', label: 'New Notes', group: 'View', feature: 'notes', run: withRepo((ws) => ws.panel.addNotes()) },

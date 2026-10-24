@@ -3,6 +3,8 @@ import { defineAsyncComponent, ref } from 'vue'
 import logo from '../../icon.svg?url'
 import { prefs } from '@/composables/prefs'
 import { isOn } from '@/features'
+import { showGraph } from '@/composables/center'
+import { useWorkspace } from '@/composables/workspace'
 import Icon from './Icon.vue'
 
 /**
@@ -10,6 +12,7 @@ import Icon from './Icon.vue'
  * Or, for a break, a little game in its place; its code loads only when it's first played.
  */
 const MiniGame = defineAsyncComponent(() => import('./MiniGame.vue'))
+const ws = useWorkspace()
 const playing = ref(false)
 </script>
 
@@ -19,9 +22,7 @@ const playing = ref(false)
     <template v-else>
       <img class="stamp" :src="logo" alt="" draggable="false" />
       <div class="actions">
-        <button class="ghost" title="Show the graph again" @click="prefs.graphCollapsed.value = false">
-          <Icon name="history" :size="13" /> Show graph
-        </button>
+        <button class="ghost" title="Show the graph again" @click="showGraph(ws)"><Icon name="history" :size="13" /> Show graph</button>
         <button v-if="isOn('snake')" class="ghost" title="Play Commit Snake while you wait" @click="playing = true">
           <Icon name="play" :size="13" /> Play
         </button>

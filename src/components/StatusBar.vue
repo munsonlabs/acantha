@@ -9,6 +9,7 @@ import { runCommand } from '@/composables/commands'
 import { togglePanel } from '@/composables/slackLinks'
 import { prefs } from '@/composables/prefs'
 import { useWorkspaces } from '@/composables/workspace'
+import { graphShowing, toggleGraph } from '@/composables/center'
 import Icon from './Icon.vue'
 
 const { active, workspaces, sleepOtherWorkspaces } = useWorkspaces()
@@ -134,9 +135,9 @@ const crumbs = computed(() => {
     <button
       v-if="repo"
       class="ghost status-btn"
-      :class="{ on: !prefs.graphCollapsed.value }"
-      title="Show or collapse the graph"
-      @click="prefs.graphCollapsed.value = !prefs.graphCollapsed.value"
+      :class="{ on: !!active && graphShowing(active) }"
+      title="Bring the graph to the front, or collapse it when it is"
+      @click="active && toggleGraph(active)"
     >
       <Icon name="history" :size="12" /> Graph
     </button>

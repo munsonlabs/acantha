@@ -3,6 +3,7 @@ import { computed, watch } from 'vue'
 import { prefs } from '@/composables/prefs'
 import { isOn } from '@/features'
 import { useWorkspace } from '@/composables/workspace'
+import { bringToFront, overGraph, whatsOpen, type Over } from '@/composables/center'
 import CommitTable from './CommitTable.vue'
 import DetailsPanel from './DetailsPanel.vue'
 import EmptyState from './EmptyState.vue'
@@ -17,30 +18,16 @@ const ws = useWorkspace()
 const { repo, log } = ws.repo
 const { preview } = ws.files
 const { tabs, expanded } = ws.panel
-/**
- * What can take the graph's place: a file, a worktree agent's work under review, the agents expanded, or the panel
- * expanded. Whichever was brought there last shows; closing it shows whichever's still open behind it, the graph once
- * none is.
- */
-type Over = 'file' | 'review' | 'agents' | 'panel'
-const reviewHere = computed(() => !!ws.ui.review.value && ws.agents.tabs.value.some((t) => t.id === ws.ui.review.value))
-const agentsHere = computed(() => isOn('claude') && prefs.agentsOpen.value && ws.agents.expanded.value && ws.agents.tabs.value.length > 0)
-const panelOver = computed(() => expanded.value && tabs.value.length > 0)
-const open = computed<Record<Over, boolean>>(() => ({
-  file: !!preview.value,
-  review: reviewHere.value,
-  agents: agentsHere.value,
-  panel: panelOver.value,
-}))
-const front = computed<Over | null>(() => {
-  const last = ws.ui.front.value
-  if (last && open.value[last]) return last
-  return (['file', 'review', 'agents', 'panel'] as const).find((k) => open.value[k]) ?? null
-})
+/** What's over the graph, in front (see composables/center.ts). */
+const front = computed(() => overGraph(ws))
+const open = computed(() => whatsOpen(ws))
+const reviewHere = computed(() => open.value.review)
+const agentsHere = computed(() => open.value.agents)
+const panelOver = computed(() => open.value.panel)
 /** Something's over the graph. */
 const panelHere = computed(() => front.value !== null)
 // Bringing something there puts it in front: a file opened, a review started, the agents or the panel expanded.
-const bring = (what: Over) => (on: unknown) => on && (ws.ui.front.value = what)
+const bring = (what: Over) => (on: unknown) => on && bringToFront(ws, what)
 watch(preview, bring('file'))
 watch(reviewHere, bring('review'))
 watch(agentsHere, bring('agents'))
