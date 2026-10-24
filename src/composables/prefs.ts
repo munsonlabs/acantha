@@ -26,6 +26,8 @@ export const prefs = {
   graphCollapsed: usePersisted('graph-collapsed', false),
   /** A popped-out Claude window: where it sits and its size, whether it floats over other apps; and how Claude works. */
   claudeOnTop: usePersisted('claude-on-top', true),
+  /** One floating agent window at a time: popping out another swaps it in, the first going back to the panel. */
+  agentOneWindow: usePersisted('agent-one-window', true),
   claudeRect: usePersisted<{ x: number; y: number; w: number; h: number } | null>('claude-rect', null),
   claudeMode: usePersisted<'auto' | 'plan' | 'default' | 'acceptEdits'>('claude-mode', 'auto'),
   claudeModel: usePersisted('claude-model', ''),

@@ -203,6 +203,16 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
               </label>
               <label class="row">
                 <div>
+                  <span class="label">One floating agent at a time</span>
+                  <span class="hint"
+                    >Popping out another agent swaps it in where the first was, and the first goes back to the panel. Each floating window takes a
+                    hundred-odd MB.</span
+                  >
+                </div>
+                <input v-model="prefs.agentOneWindow.value" type="checkbox" class="switch" />
+              </label>
+              <label class="row">
+                <div>
                   <span class="label">Dim the screen</span>
                   <span class="hint"
                     >While you're in a popped-out Claude, the screen behind it dims so it's easier to read. Click the dimming to collapse

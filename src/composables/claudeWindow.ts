@@ -36,6 +36,10 @@ export async function popOut(id: string, repo: string, rect?: Rect) {
     await existing.show()
     return existing.setFocus()
   }
+  // One floating agent at a time (each window's a web process of its own, a hundred-odd MB): another that's out goes
+  // back to the panel, and this one takes its place.
+  const others = prefs.agentOneWindow.value ? [...poppedOut.values()].filter((o) => o !== id) : []
+  rect ??= others.length ? await rectOf(label(others[0])) : undefined
   // Where it's asked to be, where the last one was, or the screen's bottom-right corner.
   const s = window.screen as Screen & { availLeft?: number; availTop?: number }
   const r = rect ??
@@ -66,6 +70,17 @@ export async function popOut(id: string, repo: string, rect?: Rect) {
     void win.once('tauri://created', () => resolve())
     void win.once('tauri://error', () => resolve())
   })
+  for (const other of others) await bringBack(other)
+}
+
+/** Where a window is and how big, in points. */
+async function rectOf(key: string): Promise<Rect | undefined> {
+  const w = await WebviewWindow.getByLabel(key)
+  if (!w) return undefined
+  const scale = await w.scaleFactor()
+  const pos = (await w.outerPosition()).toLogical(scale)
+  const size = (await w.innerSize()).toLogical(scale)
+  return { x: Math.round(pos.x), y: Math.round(pos.y), w: Math.round(size.width), h: Math.round(size.height) }
 }
 
 /** Docks a conversation back in the panel, closing its window. */
