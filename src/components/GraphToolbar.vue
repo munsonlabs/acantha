@@ -51,8 +51,8 @@ const collapsed = prefs.graphCollapsed
     </button>
     <button class="ghost icon-btn" :disabled="!log?.remotes.length" title="Fetch from all remotes" @click="fetchAll"><Icon name="fetch" /></button>
     <button class="ghost icon-btn" title="Refresh (⌘R)" @click="reload"><Icon name="refresh" /></button>
-    <button class="ghost icon-btn" title="Collapse the graph (show it again from the status bar)" @click="collapsed = true">
-      <Icon name="minimize" />
+    <button class="ghost icon-btn" title="Hide the graph (show it again from the status bar)" @click="collapsed = true">
+      <Icon name="minus" />
     </button>
   </header>
 </template>
