@@ -5,7 +5,7 @@ import { prefs } from './prefs'
 import { showToast } from './useToast'
 import { ask } from './useDialog'
 import { isPoppedOut, popOut } from './claudeWindow'
-import { toggleGraph } from './center'
+import { graphShowing, toggleGraph } from './center'
 import { promptSlackLink, togglePanel } from './slackLinks'
 import { useWorkspaces } from './workspace'
 
@@ -47,6 +47,13 @@ const inTerminal = () => !!document.activeElement?.closest('.terminal-pane')
 const withRepo = (fn: (ws: NonNullable<typeof active.value>) => unknown) => () => {
   const ws = active.value
   if (ws?.repo.repo.value) return fn(ws)
+}
+
+function openFileSearch(ws: NonNullable<typeof active.value>) {
+  if (ws.files.search.scope.value === 'names') ws.files.search.scope.value = 'all'
+  ws.ui.sidebarTab.value = 'search'
+  prefs.sidebarOpen.value = true
+  ws.ui.focusFileSearch.value++
 }
 
 export const commands: Command[] = [
@@ -172,19 +179,16 @@ export const commands: Command[] = [
     label: 'Search Commits',
     group: 'View',
     keys: '⌘F',
-    run: withRepo(() => document.querySelector<HTMLInputElement>('.titlebar .search input')?.select()),
+    // The graph's hidden behind a file, agents or a panel: searching its commits wouldn't show anything, so this
+    // searches files instead, same as ⇧⌘F.
+    run: withRepo((ws) => (graphShowing(ws) ? document.querySelector<HTMLInputElement>('.titlebar .search input')?.select() : openFileSearch(ws))),
   },
   {
     id: 'search-files',
     label: 'Search in Files',
     group: 'View',
     keys: '⇧⌘F',
-    run: withRepo((ws) => {
-      if (ws.files.search.scope.value === 'names') ws.files.search.scope.value = 'all'
-      ws.ui.sidebarTab.value = 'search'
-      prefs.sidebarOpen.value = true
-      ws.ui.focusFileSearch.value++
-    }),
+    run: withRepo(openFileSearch),
   },
   {
     id: 'search-file-names',

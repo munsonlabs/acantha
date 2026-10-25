@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { basename } from '@/lib/format'
 import { pathOf, useWorkspaces, type Workspace } from '@/composables/workspace'
+import { graphShowing } from '@/composables/center'
 import { overlays } from '@/composables/commands'
 import { openMenu, type MenuEntry, type MenuItem } from '@/composables/useContextMenu'
 import { isOn } from '@/features'
@@ -30,6 +31,9 @@ const {
 const input = ref<HTMLInputElement>()
 const strip = ref<HTMLElement>()
 
+// The graph is what this searches; hidden behind a file, agents or a panel, it wouldn't show anything (⌘F then
+// searches files instead, see commands.ts).
+const showCommitSearch = computed(() => !!active.value && graphShowing(active.value))
 const search = computed(() => active.value?.search ?? null)
 const query = computed({
   get: () => search.value?.query.value ?? '',
@@ -226,7 +230,7 @@ defineExpose({ focusSearch: () => input.value?.select() })
     <button v-if="crowded" class="ghost icon-btn all-tabs" :title="`All ${workspaces.length} tabs`" @click="overlays.tabList.value = true">
       <Icon name="chevron" :size="12" class="down" />
     </button>
-    <label v-if="active?.repo.repo.value" class="search">
+    <label v-if="showCommitSearch" class="search">
       <Icon name="search" :size="13" />
       <input ref="input" v-model="query" type="text" placeholder="Search commits (⌘F)" spellcheck="false" autocomplete="off" @keydown="onSearchKey" />
       <span v-if="query" class="count">{{ search!.matches.value.length ? `${search!.index.value + 1}/${search!.matches.value.length}` : '0' }}</span>
