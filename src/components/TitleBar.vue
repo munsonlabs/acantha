@@ -72,7 +72,12 @@ function agentsOf(ws: Workspace) {
   const state = mostPressing(ws.agents.tabs.value.map((t) => agentState(t.id)))
   return state === 'idle' || state === 'off' ? null : state
 }
-const pill = useSlidingPill(strip, () => [activeId.value, workspaces.value.map((w) => `${w.id}:${label(w)}:${w.repo.log.value?.headBranch ?? ''}`)])
+const pill = useSlidingPill(strip, () => [
+  activeId.value,
+  // The agent glyph changes a tab's width too (it comes and goes, and "needs you" is a size of its own), so the
+  // highlight has to re-measure when it does, not just when the tab's own label changes.
+  workspaces.value.map((w) => `${w.id}:${label(w)}:${w.repo.log.value?.headBranch ?? ''}:${agentsOf(w) ?? ''}`),
+])
 const { dragging, onPointerDown } = useTabDrag(strip, moveWorkspace)
 
 /** Too many tabs to see at once: the ▾ after them lists them all. */
