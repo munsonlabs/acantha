@@ -39,7 +39,14 @@ impl TsServers {
 
 /// What the editor may ask: these answer; the file-keeping ones (`open`, `change`, `close`, `geterr`) answer only
 /// with events, or not at all.
-const ASKS: &[&str] = &["quickinfo", "completionInfo", "completionEntryDetails", "definition", "signatureHelp"];
+const ASKS: &[&str] = &[
+    "quickinfo",
+    "completionInfo",
+    "completionEntryDetails",
+    "definition",
+    "signatureHelp",
+    "navto",
+];
 const TELLS: &[&str] = &["open", "change", "close", "geterr"];
 
 /// Compiler options for files no tsconfig.json covers: what a Vite or other bundled project builds with.

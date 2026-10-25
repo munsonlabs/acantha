@@ -24,8 +24,9 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { isOn } from '@/features'
 import { BIG_FILE, TYPED } from '@/lib/typed'
-import type { TsDiagnostic, TypeService } from '@/lib/types'
+import { symbolsOf, type Symbol, type TsDiagnostic, type TypeService } from '@/lib/types'
 import { holdTypes } from '@/composables/typesInUse'
+import SymbolPicker from './SymbolPicker.vue'
 
 const props = defineProps<{ path: string; text: string; line?: number }>()
 const emit = defineEmits<{ change: [doc: string]; save: [] }>()
@@ -43,6 +44,25 @@ let editor: Editor | null = null
 /** Lets the repository's TypeScript go, when this editor was using it. */
 let releaseTypes = () => {}
 let disposed = false
+
+/** ⇧⌘O: this file's symbols, to jump to. */
+const showSymbols = ref(false)
+const symbols = ref<Symbol[]>([])
+async function openSymbolPicker() {
+  const root = ws.repo.repo.value
+  if (!root) return
+  const file = `${root}/${props.path}`
+  const found = await invoke('ts_request', {
+    repo: root,
+    command: 'navto',
+    arguments: { file, searchValue: '', maxResultCount: 300, currentFileOnly: true },
+  }).catch(() => null)
+  symbols.value = symbolsOf(found)
+  showSymbols.value = true
+}
+function chooseSymbol(s: Symbol) {
+  editor?.goTo(s.start.line, s.start.offset)
+}
 
 /**
  * Words from the other open files, for completion: their unsaved drafts, or what's on disk or at their commit. Each
@@ -114,6 +134,7 @@ onMounted(async () => {
     words: () => words,
     changeMarkers: isOn('changeMarkers'),
     types: root && typed ? { file: `${root}/${props.path}`, service: typeService(root, `${root}/${props.path}`) } : undefined,
+    onJumpToSymbol: typed ? openSymbolPicker : undefined,
     onChange: (doc) => emit('change', doc),
     onSave: () => emit('save'),
   })
@@ -170,6 +191,7 @@ defineExpose({
   <div class="code-editor">
     <p v-if="loading" class="note">Loading editor…</p>
     <div ref="el" class="host" />
+    <SymbolPicker v-model:open="showSymbols" :symbols="symbols" @choose="chooseSymbol" />
   </div>
 </template>
 

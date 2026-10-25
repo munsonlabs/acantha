@@ -78,6 +78,8 @@ export interface EditorOptions {
   changeMarkers?: boolean
   /** TypeScript's view of the file (`file`, its absolute path), for a file it understands: types, errors, definitions. */
   types?: { file: string; service: TypeService }
+  /** ⇧⌘O, for a file TypeScript understands: a list of this file's symbols to jump to. */
+  onJumpToSymbol?: () => void
   onChange: (doc: string) => void
   onSave: () => void
 }
@@ -125,7 +127,10 @@ function otherWords(words: () => readonly string[]) {
   }
 }
 
-export function createEditor(parent: HTMLElement, { doc, path, files, words, changeMarkers, types, onChange, onSave }: EditorOptions) {
+export function createEditor(
+  parent: HTMLElement,
+  { doc, path, files, words, changeMarkers, types, onJumpToSymbol, onChange, onSave }: EditorOptions,
+) {
   const big = doc.length > BIG_FILE
   const typed = !big && !!types && TYPED.test(path)
   const language = new Compartment()
@@ -145,6 +150,18 @@ export function createEditor(parent: HTMLElement, { doc, path, files, words, cha
               return true
             },
           },
+          ...(typed && onJumpToSymbol
+            ? [
+                {
+                  key: 'Shift-Mod-o',
+                  preventDefault: true,
+                  run: () => {
+                    onJumpToSymbol()
+                    return true
+                  },
+                },
+              ]
+            : []),
           indentWithTab,
         ]),
         language.of([]),

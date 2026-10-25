@@ -234,3 +234,28 @@ export function typeAware(file: string, ts: TypeService): Extension {
     }),
   ]
 }
+
+/** A symbol in a file, to jump to (⇧⌘O): a function, class, method, property and the like. */
+export interface Symbol {
+  name: string
+  kind: string
+  containerName?: string
+  start: Location
+}
+
+/**
+ * tsserver's `navto` for one file lists every identifier, local variables included, which is too much to pick from.
+ * Kept: everything but a plain local variable or a parameter — functions, classes, methods, properties, types and
+ * the like, and a top-level `const` (no container), which is usually worth naming.
+ */
+export function symbolsOf(entries: unknown): Symbol[] {
+  if (!Array.isArray(entries)) return []
+  return entries
+    .filter((e): e is { name: string; kind: string; containerName?: string; start: Location } => {
+      if (typeof e?.name !== 'string' || typeof e?.kind !== 'string' || !e.start) return false
+      if (e.kind === 'parameter') return false
+      if (['var', 'let', 'const'].includes(e.kind) && e.containerName) return false
+      return true
+    })
+    .map((e) => ({ name: e.name, kind: e.kind, containerName: e.containerName, start: e.start }))
+}

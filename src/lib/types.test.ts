@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Text } from '@codemirror/state'
 import { CompletionContext } from '@codemirror/autocomplete'
 import { EditorState } from '@codemirror/state'
-import { TYPED, toLocation, toPos, typeCompletions, type TypeService } from './types'
+import { symbolsOf, TYPED, toLocation, toPos, typeCompletions, type TypeService } from './types'
 
 describe('places', () => {
   const doc = Text.of(['const a = 1', 'a.toFixed()'])
@@ -48,5 +48,20 @@ describe('typeCompletions', () => {
     expect(result!.options[0].boost!).toBeGreaterThan(result!.options[1].boost!)
     // Not after a space, unless asked for.
     expect(await typeCompletions('/r/x.ts', ts)(new CompletionContext(EditorState.create({ doc: 'a ' }), 2, false))).toBeNull()
+  })
+})
+
+describe('symbolsOf', () => {
+  it('keeps what you could reasonably jump to, not every local variable', () => {
+    const entries = [
+      { name: 'resolveName', kind: 'function', start: { line: 6, offset: 1 } },
+      { name: 'parts', kind: 'const', containerName: 'resolveName', start: { line: 7, offset: 9 } },
+      { name: 'dir', kind: 'parameter', start: { line: 6, offset: 20 } },
+      { name: 'API_URL', kind: 'const', start: { line: 1, offset: 1 } },
+      { name: 'render', kind: 'method', containerName: 'Widget', start: { line: 10, offset: 3 } },
+    ]
+    expect(symbolsOf(entries).map((s) => s.name)).toEqual(['resolveName', 'API_URL', 'render'])
+    expect(symbolsOf('nope')).toEqual([])
+    expect(symbolsOf([{ name: 1 }])).toEqual([])
   })
 })
