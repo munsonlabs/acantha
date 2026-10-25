@@ -66,6 +66,7 @@ fn main() {
             git::initial_repo,
             git::resolve_repo,
             git::get_log,
+            git::get_log_page,
             git::get_commit,
             git::get_changes,
             git::get_file_diff,

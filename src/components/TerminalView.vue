@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Terminal, type ILink, type ITheme } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
@@ -86,7 +86,6 @@ function onFindKey(e: KeyboardEvent) {
   e.preventDefault()
   e.stopPropagation()
 }
-const known = computed(() => new Set(ws.files.list.value))
 
 /**
  * Paths in the output that name a file in the repository (`src/x.ts:42:7`, `./App.vue`, `README.md`) are links: ⌘-click
@@ -97,7 +96,7 @@ function fileLinks(y: number, callback: (links: ILink[] | undefined) => void) {
   const text = term?.buffer.active.getLine(y - 1)?.translateToString(true)
   if (!root || !text) return callback(undefined)
   const links = findFileRefs(text).flatMap((ref): ILink[] => {
-    const path = resolveFileRef(ref.path, root, props.session.cwd, ws.files.list.value, known.value)
+    const path = resolveFileRef(ref.path, root, props.session.cwd, ws.files.list.value, ws.files.known.value)
     if (!path) return []
     return [
       {
@@ -158,6 +157,36 @@ const redraw = () => {
   term.clearTextureAtlas()
   term.refresh(0, term.rows - 1)
 }
+/**
+ * WebGL draws quickest, but each terminal's context holds a GPU texture of its letters, and WebKit only allows so many
+ * contexts at once. A terminal that's been out of sight for a while (another tab, a hidden panel) lets its context go
+ * and falls back to the DOM renderer, which costs next to nothing while hidden, and takes it up again when shown.
+ */
+let webgl: WebglAddon | null = null
+let webglTimer: ReturnType<typeof setTimeout> | undefined
+const WEBGL_LINGER = 30_000
+function useWebgl(on: boolean) {
+  clearTimeout(webglTimer)
+  if (!term || on === !!webgl) return
+  if (!on) {
+    webglTimer = setTimeout(() => {
+      webgl?.dispose()
+      webgl = null
+    }, WEBGL_LINGER)
+    return
+  }
+  try {
+    const addon = new WebglAddon()
+    addon.onContextLoss(() => {
+      addon.dispose()
+      if (webgl === addon) webgl = null
+    })
+    term.loadAddon(addon)
+    webgl = addon
+  } catch {
+    // The DOM renderer is a fine fallback.
+  }
+}
 const onVisible = () => document.visibilityState === 'visible' && redraw()
 let scale: MediaQueryList | null = null
 function watchScale() {
@@ -196,13 +225,7 @@ onMounted(async () => {
   // Links are checked against the repository's files, which the sidebar may not have loaded yet.
   if (!ws.files.list.value.length) void ws.files.load()
   term.open(el.value!)
-  try {
-    const webgl = new WebglAddon()
-    webgl.onContextLoss(() => webgl.dispose())
-    term.loadAddon(webgl)
-  } catch {
-    // The DOM renderer is a fine fallback.
-  }
+  if (props.active) useWebgl(true)
   // Straight away, not on the next frame: the shell starts at this size.
   if (el.value && el.value.offsetWidth > 0 && el.value.offsetHeight > 0) fit?.fit()
 
@@ -273,6 +296,7 @@ watch(prefs.terminalFontSize, (size) => {
 watch(
   () => props.active,
   async (active) => {
+    useWebgl(active)
     if (!active) return
     await nextTick()
     fitNow()
@@ -287,6 +311,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('panel-resize-end', fitNow)
   clearTimeout(fitTimer)
   clearTimeout(ptyTimer)
+  clearTimeout(webglTimer)
   scheme.removeEventListener('change', updateTheme)
   document.fonts.removeEventListener('loadingdone', redraw)
   document.removeEventListener('visibilitychange', onVisible)

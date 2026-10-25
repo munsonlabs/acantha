@@ -54,7 +54,7 @@ async function poll() {
 /** Keeps the agents' activity up to date while something shows it: polled, as it's a cheap look at the backend. */
 /**
  * Whether there's anything to look at: some agent's been running (or has a conversation open), the window's showing,
- * and, while Acantha's not in front, only every few ticks, as nobody's watching closely.
+ * and, while every agent's idle or Acantha's not in front, only every few ticks, as nobody's watching closely.
  */
 let tick = 0
 function worthLooking() {
@@ -62,7 +62,9 @@ function worthLooking() {
   if (document.hidden) return false
   const any = Object.keys(activity.value).length > 0 || Object.values(conversations.value).some((c) => !c.closed)
   if (!any) return false
-  return document.hasFocus() || tick % 4 === 0
+  // While nothing's working or waiting on you, a change is less likely: look half as often.
+  const busy = Object.values(activity.value).some((a) => a.status === 'working' || a.status === 'waiting')
+  return document.hasFocus() ? busy || tick % 2 === 0 : tick % 4 === 0
 }
 
 export function useAgentActivity() {

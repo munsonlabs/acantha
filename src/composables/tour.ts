@@ -55,8 +55,7 @@ export function createTour({ repo }: Repo, files: Files) {
     try {
       if (!files.list.value.length) await files.load()
       const answer = await invoke<string>('tour_plan', { repo: path, focus: focus || null, model: prefs.tourModel.value || null })
-      const known = new Set(files.list.value)
-      const stops = parseTour(answer, (p) => known.has(p))
+      const stops = parseTour(answer, (p) => files.known.value.has(p))
       if (!stops.length) throw new Error('Claude Code’s tour didn’t name any files in this repository')
       if (repo.value !== path) return
       save({ stops, at: 0, focus })

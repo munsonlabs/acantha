@@ -1,6 +1,6 @@
-import { computed, ref, shallowRef } from 'vue'
+import { computed, ref, shallowRef, triggerRef } from 'vue'
 import { git, UNCOMMITTED, type Commit, type GitRef, type Log, type Stat } from '@/lib/git'
-import { layoutGraph } from '@/lib/graph'
+import { layoutGraph, type GraphLayout } from '@/lib/graph'
 import { addRecent, prefs } from './prefs'
 import { confirmAction } from './useDialog'
 import { showToast } from './useToast'
@@ -73,7 +73,8 @@ export function createRepo() {
     return [pseudo, ...list]
   })
 
-  const layout = computed(() => layoutGraph(rows.value))
+  // When a page is added below, the layout carries on from the previous one rather than starting over.
+  const layout = computed<GraphLayout>((previous) => layoutGraph(rows.value, previous))
 
   const refsByHash = computed(() => {
     const map = new Map<string, RefGroup>()
@@ -98,28 +99,44 @@ export function createRepo() {
     return map
   })
 
-  let reloadSeq = 0
+  /** What a read of the graph depends on, so one finishing after any of it changed (another repository, a different filter) is set aside. */
+  const inputs = () => JSON.stringify([repo.value, limit.value, branches.value, showRemotes.value])
 
-  async function reload() {
-    if (!repo.value) return
-    const seq = ++reloadSeq
+  let running: Promise<void> | null = null
+  let queued: Promise<void> | null = null
+
+  /**
+   * Reads the graph again. The watcher, actions and focus changes often ask for this several times at once: while one
+   * read is under way, the rest share a single read after it (the one under way may have started before the change
+   * they're asking about), rather than each running every git command again.
+   */
+  function reload(): Promise<void> {
+    if (!running) return (running = readLog().finally(() => (running = null)))
+    return (queued ??= running.then(() => {
+      queued = null
+      return reload()
+    }))
+  }
+
+  async function readLog(): Promise<void> {
+    const path = repo.value
+    if (!path) return
+    const asked = inputs()
     try {
-      const result = await git.log(repo.value, { limit: limit.value, branches: branches.value, showRemotes: showRemotes.value })
-      if (seq === reloadSeq) {
-        log.value = result
-        void loadStats(repo.value, result.commits)
-      }
+      const result = await git.log(path, { limit: limit.value, branches: branches.value, showRemotes: showRemotes.value })
+      if (asked !== inputs()) return void reload()
+      log.value = result
+      void loadStats(path, result.commits)
     } catch (e) {
-      if (seq !== reloadSeq) return
+      if (asked !== inputs()) return void reload()
       // A filtered branch may have been deleted or renamed: drop just the ones that are gone, keep the rest.
       if (branches.value.length) {
-        const path = repo.value
         const exists = await Promise.all(branches.value.map((b) => git.revParse(path, b).catch(() => null)))
-        if (seq !== reloadSeq) return
+        if (asked !== inputs()) return void reload()
         const kept = branches.value.filter((_, i) => exists[i])
         if (kept.length < branches.value.length) {
           branches.value = kept
-          return reload()
+          return readLog()
         }
       }
       showToast(String(e), 'error')
@@ -132,9 +149,9 @@ export function createRepo() {
     try {
       const found = await git.stats(root, missing)
       if (root !== repo.value) return
-      const next = new Map(stats.value)
-      for (const [hash, stat] of Object.entries(found)) next.set(hash, stat)
-      stats.value = next
+      // Added to in place: copying a map of every commit seen so far for each page adds up.
+      for (const [hash, stat] of Object.entries(found)) stats.value.set(hash, stat)
+      triggerRef(stats)
     } catch {
       // Stats are a nicety; the graph works without them.
     }
@@ -172,9 +189,29 @@ export function createRepo() {
     return reload()
   }
 
+  let paging: Promise<void> | null = null
+
+  /** Reads just the next page and adds it below, rather than reading the whole graph again at the new length. */
   function loadMore() {
+    return (paging ??= readPage().finally(() => (paging = null)))
+  }
+
+  async function readPage() {
+    const base = log.value
+    const path = repo.value
+    if (!base || !path) return
     limit.value += PAGE
-    return reload()
+    // A read under way will replace the log anyway: let it, and the one after it, read the longer list.
+    if (running) return reload()
+    try {
+      const page = await git.logPage(path, base.commits.length, { limit: PAGE, branches: branches.value, showRemotes: showRemotes.value })
+      // The graph was read again meanwhile, so it may have changed under the page: read it whole at the new length.
+      if (log.value !== base) return reload()
+      log.value = { ...base, commits: [...base.commits, ...page.commits], hasMore: page.hasMore }
+      void loadStats(path, page.commits)
+    } catch (e) {
+      showToast(String(e), 'error')
+    }
   }
 
   /** Runs one or more git commands in sequence, reporting the outcome and refreshing the graph. */

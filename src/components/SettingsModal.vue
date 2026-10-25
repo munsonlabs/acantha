@@ -416,6 +416,7 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
                 </div>
                 <select v-model.number="prefs.terminalScrollback.value">
                   <option :value="1000">1,000 lines</option>
+                  <option :value="2000">2,000 lines</option>
                   <option :value="5000">5,000 lines</option>
                   <option :value="10000">10,000 lines</option>
                   <option :value="50000">50,000 lines</option>

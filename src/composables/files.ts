@@ -19,6 +19,8 @@ export function createFiles({ repo }: Repo) {
   /** null is the working tree. */
   const rev = ref<string | null>(null)
   const list = shallowRef<string[]>([])
+  /** The same paths, for looking one up. Shared, so each terminal checking its output for paths doesn't build its own. */
+  const known = computed(() => new Set(list.value))
   /** Folders git can't list through their files (new or empty), for the working tree. */
   const folders = shallowRef<string[]>([])
   const loading = ref(false)
@@ -252,6 +254,7 @@ export function createFiles({ repo }: Repo) {
   return {
     rev,
     list,
+    known,
     folders,
     diskChanged,
     loading,

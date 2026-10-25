@@ -220,6 +220,8 @@ export const git = {
   initialRepo: () => invoke<string | null>('initial_repo'),
   resolveRepo: (path: string) => invoke<string>('resolve_repo', { path }),
   log: (repo: string, opts: LogOptions) => invoke<Log>('get_log', { repo, ...opts }),
+  /** The next `limit` commits after the first `skip`, for loading more below the graph. */
+  logPage: (repo: string, skip: number, opts: LogOptions) => invoke<{ commits: Commit[]; hasMore: boolean }>('get_log_page', { repo, skip, ...opts }),
   commit: (repo: string, hash: string) => invoke<CommitDetails>('get_commit', { repo, hash }),
   changes: (repo: string, from: string | null, to: string) => invoke<FileChange[]>('get_changes', { repo, from, to }),
   fileDiff: (repo: string, opts: FileDiffOptions) => invoke<string>('get_file_diff', { repo, ...opts }),

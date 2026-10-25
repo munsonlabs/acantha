@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { UNCOMMITTED, type Commit } from '@/lib/git'
-import { colorFor, edgePath, nodeX, rowY, NODE_R, ROW_H, type GraphLayout } from '@/lib/graph'
+import { colorFor, edgePath, nodeX, rowY, NODE_R, ROW_H, type GraphEdge, type GraphLayout } from '@/lib/graph'
 
 /**
  * `highlight` is a lane colour to emphasise, dimming the rest. `range` is the rows on screen (with some to spare):
- * only their nodes are drawn, since a long history would otherwise mean thousands of them. The lines are drawn whole,
- * as one path per colour, which stays small.
+ * only their nodes are drawn, since a long history would otherwise mean thousands of them. Lines are grouped into
+ * chunks by the row they start on, and only chunks with a line reaching the screen are drawn, as one path per colour.
  */
 const props = defineProps<{
   layout: GraphLayout
@@ -16,16 +16,47 @@ const props = defineProps<{
   range?: { start: number; end: number }
 }>()
 
-/** One <path> per colour keeps the DOM small even for thousands of commits. */
-const paths = computed(() => {
-  const groups = new Map<string, { d: string; stroke: string; dashed: boolean; color: number }>()
+const CHUNK = 100
+
+type Paths = [string, { d: string; stroke: string; dashed: boolean; color: number }][]
+
+/**
+ * Each chunk's lines, and the last row any of them reaches (a straight run can go on far below its chunk). Its paths
+ * are built the first time it's on screen, and kept until the layout changes.
+ */
+const chunks = computed(() => {
+  const list: { edges: GraphEdge[]; reach: number; paths?: Paths }[] = []
   for (const e of props.layout.edges) {
+    const k = Math.floor(Math.max(0, e.r1) / CHUNK)
+    const chunk = (list[k] ??= { edges: [], reach: 0 })
+    chunk.edges.push(e)
+    chunk.reach = Math.max(chunk.reach, e.r2)
+  }
+  return list
+})
+
+/** One <path> per colour keeps the DOM small. */
+function toPaths(edges: GraphEdge[]): Paths {
+  const groups = new Map<string, { d: string; stroke: string; dashed: boolean; color: number }>()
+  for (const e of edges) {
     const key = `${e.color}|${e.dashed}`
     const group = groups.get(key)
     if (group) group.d += edgePath(e)
     else groups.set(key, { d: edgePath(e), stroke: colorFor(e.color), dashed: e.dashed, color: e.color })
   }
   return [...groups.entries()]
+}
+
+const paths = computed(() => {
+  const start = props.range?.start ?? 0
+  const end = props.range?.end ?? props.layout.nodes.length
+  const out: { key: string; d: string; stroke: string; dashed: boolean; color: number }[] = []
+  chunks.value.forEach((chunk, k) => {
+    if (!chunk || k * CHUNK > end || chunk.reach < start) return
+    for (const [key, group] of (chunk.paths ??= toPaths(chunk.edges))) out.push({ key: `${k}|${key}`, ...group })
+  })
+  for (const [key, group] of toPaths(props.layout.tail)) out.push({ key: `tail|${key}`, ...group })
+  return out
 })
 
 const nodes = computed(() => {
@@ -49,8 +80,8 @@ const nodes = computed(() => {
 <template>
   <svg class="commit-graph" :class="{ focused: highlight != null }" :width="layout.width" :height="rows.length * ROW_H" aria-hidden="true">
     <path
-      v-for="[key, p] in paths"
-      :key="key"
+      v-for="p in paths"
+      :key="p.key"
       :d="p.d"
       :class="{ on: p.color === highlight }"
       :stroke="p.stroke"

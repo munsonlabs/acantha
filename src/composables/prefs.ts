@@ -84,7 +84,7 @@ export const prefs = {
   avatars: usePersisted('avatars', true),
   terminalFontSize: usePersisted('terminal-font-size', 12.5),
   /** Lines each terminal keeps to scroll back through. Hidden terminals keep theirs, so this bounds their memory. */
-  terminalScrollback: usePersisted('terminal-scrollback', 5000),
+  terminalScrollback: usePersisted('terminal-scrollback', 2000),
   /** Scale of the whole interface: 1 is 100%. */
   uiZoom: usePersisted('ui-zoom', 1),
   /** Tab colours picked per repository path. 'none' turns the colour off. */

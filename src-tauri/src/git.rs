@@ -709,64 +709,119 @@ pub async fn resolve_repo(path: String) -> Result<String, String> {
 
 #[tauri::command]
 pub async fn get_log(repo: String, limit: usize, branches: Vec<String>, show_remotes: bool) -> Result<Log, String> {
-    let head = trimmed(git(&repo, ["rev-parse", "--verify", "-q", "HEAD"]));
-    let head_branch = trimmed(git(&repo, ["symbolic-ref", "--short", "-q", "HEAD"]));
-    let refs = parse_refs(&git(
-        &repo,
-        [
-            "for-each-ref",
-            "--format=%(objectname)%1f%(*objectname)%1f%(refname)",
-            "refs/heads",
-            "refs/remotes",
-            "refs/tags",
-        ],
-    )?);
-    let remotes: Vec<String> = git(&repo, ["remote"])?.lines().map(String::from).collect();
-    let remote_url = remotes.first().and_then(|r| trimmed(git(&repo, ["remote", "get-url", r.as_str()])));
-    let uncommitted = git(&repo, ["status", "--porcelain", "--untracked-files=all"])?.lines().count();
+    tauri::async_runtime::spawn_blocking(move || read_log(&repo, limit, branches, show_remotes))
+        .await
+        .map_err(|e| e.to_string())?
+}
 
-    let mut commits = Vec::new();
-    if head.is_some() || !refs.is_empty() {
-        let mut args = vec![
-            "log".to_string(),
-            "--date-order".into(),
-            format!("--max-count={}", limit + 1),
-            COMMIT_FORMAT.into(),
-        ];
-        if branches.is_empty() {
-            args.extend(["--branches".into(), "--tags".into()]);
-            if show_remotes {
-                args.push("--remotes".into());
-            }
-            if head.is_some() {
-                args.push("HEAD".into());
-            }
-        } else {
-            args.extend(branches);
+/// The commits after the first `skip`, for loading another page below the graph without reading it all again.
+#[tauri::command]
+pub async fn get_log_page(repo: String, skip: usize, limit: usize, branches: Vec<String>, show_remotes: bool) -> Result<LogPage, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let head = trimmed(git(&repo, ["rev-parse", "--verify", "-q", "HEAD"]));
+        let mut commits = read_commits(&repo, head.is_some(), skip, limit, branches, show_remotes)?;
+        let has_more = commits.len() > limit;
+        commits.truncate(limit);
+        Ok(LogPage { commits, has_more })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LogPage {
+    commits: Vec<Commit>,
+    has_more: bool,
+}
+
+/// Up to `limit + 1` commits (the extra one says whether there are more), in the graph's order.
+fn read_commits(repo: &str, has_head: bool, skip: usize, limit: usize, branches: Vec<String>, show_remotes: bool) -> Result<Vec<Commit>, String> {
+    let mut args = vec![
+        "log".to_string(),
+        "--date-order".into(),
+        format!("--skip={skip}"),
+        format!("--max-count={}", limit + 1),
+        COMMIT_FORMAT.into(),
+    ];
+    let all = branches.is_empty();
+    if all {
+        args.extend(["--branches".into(), "--tags".into()]);
+        if show_remotes {
+            args.push("--remotes".into());
         }
-        args.push("--".into());
-        commits = parse_commits(&git(&repo, &args)?);
+        if has_head {
+            args.push("HEAD".into());
+        }
+    } else {
+        args.extend(branches);
     }
+    args.push("--".into());
+    match git(repo, &args) {
+        Ok(out) => Ok(parse_commits(&out)),
+        // Without HEAD and with no refs at all (a new repository), there's simply nothing to show.
+        Err(_) if all && !has_head => Ok(Vec::new()),
+        Err(e) => Err(e),
+    }
+}
 
-    let stashes = parse_stashes(&git(&repo, ["stash", "list", "--format=%H%x1f%P%x1f%gd%x1f%gs%x1f%an%x1f%ae%x1f%at"]).unwrap_or_default());
+/// Everything the graph shows. The parts are independent, so each runs side by side: a refresh takes as long as the
+/// slowest (usually `log` or `status`), not all of them added up.
+fn read_log(repo: &str, limit: usize, branches: Vec<String>, show_remotes: bool) -> Result<Log, String> {
+    let head = trimmed(git(repo, ["rev-parse", "--verify", "-q", "HEAD"]));
+    let has_head = head.is_some();
+    std::thread::scope(|s| {
+        let commits = s.spawn(move || read_commits(repo, has_head, 0, limit, branches, show_remotes));
+        let head_branch = s.spawn(|| trimmed(git(repo, ["symbolic-ref", "--short", "-q", "HEAD"])));
+        let refs = s.spawn(|| {
+            git(
+                repo,
+                [
+                    "for-each-ref",
+                    "--format=%(objectname)%1f%(*objectname)%1f%(refname)",
+                    "refs/heads",
+                    "refs/remotes",
+                    "refs/tags",
+                ],
+            )
+            .map(|out| parse_refs(&out))
+        });
+        let remotes = s.spawn(|| -> Result<_, String> {
+            let remotes: Vec<String> = git(repo, ["remote"])?.lines().map(String::from).collect();
+            let url = remotes.first().and_then(|r| trimmed(git(repo, ["remote", "get-url", r.as_str()])));
+            Ok((remotes, url))
+        });
+        // Just counting, so it shouldn't take the index lock and get in the way of git run in a terminal meanwhile.
+        let uncommitted = s.spawn(|| {
+            git(repo, ["--no-optional-locks", "status", "--porcelain", "--untracked-files=all"]).map(|out| out.lines().count())
+        });
+        let stashes = s.spawn(|| {
+            parse_stashes(&git(repo, ["stash", "list", "--format=%H%x1f%P%x1f%gd%x1f%gs%x1f%an%x1f%ae%x1f%at"]).unwrap_or_default())
+        });
+        let worktrees = s.spawn(|| {
+            let here = Path::new(repo).canonicalize().unwrap_or_else(|_| PathBuf::from(repo));
+            let mut worktrees = parse_worktrees(&git(repo, ["worktree", "list", "--porcelain"]).unwrap_or_default(), &here);
+            mark_ignored(&mut worktrees);
+            worktrees
+        });
 
-    let here = Path::new(&repo).canonicalize().unwrap_or_else(|_| PathBuf::from(&repo));
-    let mut worktrees = parse_worktrees(&git(&repo, ["worktree", "list", "--porcelain"]).unwrap_or_default(), &here);
-    mark_ignored(&mut worktrees);
-
-    let has_more = commits.len() > limit;
-    commits.truncate(limit);
-    Ok(Log {
-        remote_url,
-        worktrees,
-        commits,
-        refs,
-        remotes,
-        head,
-        head_branch,
-        uncommitted,
-        has_more,
-        stashes,
+        let join = |what: &str| format!("Reading the {what} failed");
+        let mut commits = commits.join().map_err(|_| join("log"))??;
+        let (remotes, remote_url) = remotes.join().map_err(|_| join("remotes"))??;
+        let has_more = commits.len() > limit;
+        commits.truncate(limit);
+        Ok(Log {
+            remote_url,
+            worktrees: worktrees.join().map_err(|_| join("worktrees"))?,
+            commits,
+            refs: refs.join().map_err(|_| join("refs"))??,
+            remotes,
+            head,
+            head_branch: head_branch.join().map_err(|_| join("branch"))?,
+            uncommitted: uncommitted.join().map_err(|_| join("status"))??,
+            has_more,
+            stashes: stashes.join().map_err(|_| join("stashes"))?,
+        })
     })
 }
 
@@ -1325,6 +1380,16 @@ mod tests {
         let _ = std::fs::remove_dir_all(&linked);
     }
 
+    fn reads_the_log_a_page_at_a_time(repo: &str) {
+        let repo = repo.to_string();
+        let first = block_on(get_log(repo.clone(), 2, vec![], true)).unwrap();
+        assert!(first.has_more);
+        let rest = block_on(get_log_page(repo.clone(), 2, 2, vec![], true)).unwrap();
+        assert!(!rest.has_more);
+        let paged: Vec<_> = first.commits.iter().chain(&rest.commits).map(|c| c.subject.as_str()).collect();
+        assert_eq!(paged, ["merge", "rename", "first"]);
+    }
+
     #[test]
     fn reads_log_refs_and_changes() {
         let repo = repo();
@@ -1334,6 +1399,7 @@ mod tests {
             ["merge", "rename", "first"]
         );
         assert_eq!(log.commits[0].parents.len(), 2);
+        reads_the_log_a_page_at_a_time(&repo);
         assert_eq!(log.head_branch.as_deref(), Some("main"));
         assert_eq!(log.uncommitted, 1);
         // The annotated tag resolves to the commit, not the tag object.

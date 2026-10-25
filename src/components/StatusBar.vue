@@ -15,18 +15,19 @@ import Icon from './Icon.vue'
 const { active, workspaces, sleepOtherWorkspaces } = useWorkspaces()
 
 /**
- * What Acantha's using, looked at every few seconds: the total, with a dot saying whether it's in its usual range.
+ * What Acantha's using, looked at every so often: the total, with a dot saying whether it's in its usual range.
  * Clicking it says what's using it, part by part against its usual, and offers what would free some.
  */
 const memory = ref<MemoryUse | null>(null)
 const lookAtMemory = async () => (memory.value = await invoke<MemoryUse>('memory_use').catch(() => memory.value))
 void lookAtMemory()
-// Every 5s while Acantha's in front, every 30s while it's behind other apps, not at all while hidden.
+// Every 15s while Acantha's in front, every 60s while it's behind other apps, not at all while hidden. Each look goes
+// through every process on the machine, and a dot that changes slowly doesn't need it more often.
 let memoryTicks = 0
 const memoryTimer = setInterval(() => {
   memoryTicks++
-  if (isOn('memory') && !document.hidden && (document.hasFocus() || memoryTicks % 6 === 0)) void lookAtMemory()
-}, 5000)
+  if (isOn('memory') && !document.hidden && (document.hasFocus() || memoryTicks % 4 === 0)) void lookAtMemory()
+}, 15_000)
 onBeforeUnmount(() => clearInterval(memoryTimer))
 const memoryLevel = computed(() => (memory.value ? overall(memory.value) : 'good'))
 
