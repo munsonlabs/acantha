@@ -68,7 +68,9 @@ function follow(path: string) {
     <div v-else-if="path" class="bar">
       <span class="muted path">{{ path }}</span>
       <div class="spacer" />
-      <button class="ghost icon-btn" title="Edit the file" @click="ws.files.open(path, 'edit', null)"><Icon name="pencil" :size="13" /></button>
+      <button class="ghost icon-btn" title="Edit the file" @click="ws.files.open(path, 'edit', null, undefined, { pin: true })">
+        <Icon name="pencil" :size="13" />
+      </button>
     </div>
     <p v-if="error" class="note error">{{ error }}</p>
     <Skeleton v-else-if="source === null" :lines="8" />

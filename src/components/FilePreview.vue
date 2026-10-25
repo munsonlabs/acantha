@@ -20,7 +20,7 @@ import MarkdownView from './MarkdownView.vue'
 import Skeleton from './Skeleton.vue'
 
 const ws = useWorkspace()
-const { preview, dirty, open, closePreview, diskChanged, openFiles, drafts, setDraft } = ws.files
+const { preview, dirty, open, closePreview, closeOthers, closeSaved, diskChanged, tabs, drafts, setDraft } = ws.files
 const { stage, refresh } = ws.status
 const { repo, rows } = ws.repo
 const { select } = ws.details
@@ -205,8 +205,18 @@ function moreMenu(e: MouseEvent) {
   if (isMarkdown.value && p.view === 'preview')
     items.push({ label: rendered.value ? 'Show Source' : 'Show Rendered', icon: 'eye', run: () => (rendered.value = !rendered.value) }, 'separator')
   if (p.rev === null && repo.value)
-    items.push(...fileOpenItems(repo.value, p.path), { label: 'Choose Editor…', icon: 'app', run: () => chooseEditor(at) }, 'separator')
-  items.push({ label: `Open Files (${openFiles.value.length})`, icon: 'files', shortcut: '⌘E', run: () => (overlays.openFiles.value = true) })
+    items.push(
+      { label: 'Reveal in Sidebar', icon: 'folder', run: () => ws.revealFile(p.path) },
+      ...fileOpenItems(repo.value, p.path),
+      { label: 'Choose Editor…', icon: 'app', run: () => chooseEditor(at) },
+      'separator',
+    )
+  items.push(
+    { label: 'Close Other Tabs', icon: 'x', disabled: tabs.value.length < 2, run: () => closeOthers({ path: p.path, rev: p.rev }) },
+    { label: 'Close Saved Tabs', icon: 'x', run: () => closeSaved() },
+    'separator',
+    { label: `Open Files (${tabs.value.length})`, icon: 'files', shortcut: '⌘E', run: () => (overlays.openFiles.value = true) },
+  )
   openMenu(e, items)
 }
 

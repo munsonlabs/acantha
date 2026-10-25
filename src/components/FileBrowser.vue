@@ -16,8 +16,24 @@ import type { MenuEntry } from '@/composables/useContextMenu'
 import Skeleton from './Skeleton.vue'
 
 const ws = useWorkspace()
-const { rev, list, folders, loading, filter, expanded, newFolders, renameOpen, forgetOpen, preview, load, browse, toggle, open, closePreview } =
-  ws.files
+const {
+  rev,
+  list,
+  folders,
+  loading,
+  filter,
+  expanded,
+  newFolders,
+  renameOpen,
+  forgetOpen,
+  preview,
+  revealTarget,
+  load,
+  browse,
+  toggle,
+  open,
+  closePreview,
+} = ws.files
 const { rows } = ws.repo
 const { status } = ws.status
 
@@ -115,6 +131,14 @@ function reveal(path: string, includeSelf = false) {
   expanded.value = next
 }
 
+// Asked from outside (a diff, the editor, a tab's menu) to show a path here.
+watch(revealTarget, async (target) => {
+  if (!target || rev.value !== null) return
+  reveal(target.path, true)
+  await nextTick()
+  document.querySelector(`.row[title="${CSS.escape(target.path)}"]`)?.scrollIntoView({ block: 'center' })
+})
+
 async function afterChange() {
   await load()
   void ws.status.refresh()
@@ -178,7 +202,8 @@ async function commitEdit() {
       editing.value = null
       await afterChange()
       reveal(target)
-      await open(target)
+      // Just named it: you're about to work in it.
+      await open(target, undefined, undefined, undefined, { pin: true })
     } else {
       await git.createFolder(repoRoot(), target)
       newFolders.value = new Set([...newFolders.value, target])
@@ -284,7 +309,7 @@ function rowMenu(e: MouseEvent, r: Row) {
     header,
     ...(working.value
       ? [
-          { label: 'Edit', icon: 'pencil' as const, run: () => open(r.path, 'edit') },
+          { label: 'Edit', icon: 'pencil' as const, run: () => open(r.path, 'edit', undefined, undefined, { pin: true }) },
           { label: 'Preview', icon: 'eye' as const, run: () => open(r.path, 'preview') },
           ...(isOn('markdown') && /\.(md|markdown|mdx)$/i.test(r.path)
             ? [{ label: 'Preview in Panel', icon: 'eye' as const, run: () => ws.panel.addMarkdown(r.path) }]
@@ -349,6 +374,7 @@ watch(status, (now, before) => {
           :style="{ paddingLeft: `${(r.kind === 'dir' ? 8 : 24) + r.depth * 14}px` }"
           :title="r.kind === 'new' ? undefined : r.path"
           @click="isEditing(r) || r.kind === 'new' ? undefined : r.kind === 'dir' ? toggle(r.path) : open(r.path)"
+          @dblclick="!isEditing(r) && r.kind === 'file' ? open(r.path, undefined, undefined, undefined, { pin: true }) : undefined"
           @contextmenu.prevent="r.kind !== 'new' && rowMenu($event, r)"
         >
           <Icon v-if="r.kind === 'dir'" name="chevron" :size="11" class="chev" :class="{ open: expanded.has(r.path) }" />

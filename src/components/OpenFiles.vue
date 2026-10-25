@@ -13,7 +13,8 @@ const open = overlays.openFiles
 const index = ref(0)
 const box = ref<HTMLElement>()
 
-const files = computed(() => active.value?.files.openFiles.value ?? [])
+const files = computed(() => active.value?.files.tabs.value ?? [])
+const isPreview = (f: OpenFile) => !!active.value && !active.value.files.isPinned(f)
 const preview = computed(() => active.value?.files.preview.value ?? null)
 const isCurrent = (f: OpenFile) => preview.value?.path === f.path && preview.value?.rev === f.rev
 /** Files with unsaved edits waiting, the one on screen included. */
@@ -27,6 +28,8 @@ watch(open, async (o) => {
   await nextTick()
   box.value?.focus()
 })
+
+const pin = (f: OpenFile) => active.value?.files.pin(f)
 
 async function choose(f: OpenFile | undefined) {
   const ws = active.value
@@ -48,6 +51,7 @@ function onKey(e: KeyboardEvent) {
   else if (e.key === 'ArrowUp') index.value = (index.value - 1 + n) % Math.max(n, 1)
   else if (e.key === 'Enter') void choose(files.value[index.value])
   else if (e.key === 'Backspace' || e.key === 'Delete') void (files.value[index.value] && close(files.value[index.value]))
+  else if (e.key === 'p') void (files.value[index.value] && pin(files.value[index.value]))
   else if (e.key === 'Escape' || (e.key === 'e' && e.metaKey)) open.value = false
   else return
   e.preventDefault()
@@ -61,7 +65,7 @@ function onKey(e: KeyboardEvent) {
       <div ref="box" class="modal open-files" role="dialog" aria-modal="true" aria-label="Open files" tabindex="-1" @keydown="onKey">
         <header>
           <span>Open files</span>
-          <span class="keys">↑↓ to move · ↵ to open · ⌫ to close</span>
+          <span class="keys">↑↓ to move · ↵ to open · ⌫ to close · p or 📌 to keep open</span>
         </header>
         <div class="results">
           <div
@@ -71,13 +75,15 @@ function onKey(e: KeyboardEvent) {
             :class="{ selected: i === index, current: isCurrent(f) }"
             @mousemove="index = i"
             @click="choose(f)"
+            @dblclick="pin(f)"
           >
             <FileIcon :path="f.path" />
-            <span class="label">{{ splitPath(f.path).name }}</span>
+            <span class="label" :class="{ preview: isPreview(f) }">{{ splitPath(f.path).name }}</span>
             <span v-if="hasDraft(f)" class="dirty" title="Unsaved changes" />
             <span class="detail">{{ splitPath(f.path).dir }}</span>
             <span v-if="f.rev" class="rev" title="At this commit">{{ shortHash(f.rev) }}</span>
-            <button class="ghost icon-btn" title="Close" @click.stop="close(f)"><Icon name="x" :size="12" /></button>
+            <button v-if="isPreview(f)" class="ghost icon-btn" title="Keep open (p)" @click.stop="pin(f)"><Icon name="pin" :size="12" /></button>
+            <button class="ghost icon-btn" title="Close (⌫)" @click.stop="close(f)"><Icon name="x" :size="12" /></button>
           </div>
           <p v-if="!files.length" class="none">No open files. Open one from the sidebar, a search or the palette.</p>
         </div>
@@ -137,6 +143,10 @@ header {
   font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.label.preview {
+  color: var(--fg-faint);
+  font-style: italic;
 }
 .detail {
   flex: 1;

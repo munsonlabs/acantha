@@ -64,7 +64,7 @@ function fileItem(path: string, line?: number): Item {
     file: path,
     run: () => {
       ws.browse(ws.files.rev.value)
-      return ws.files.open(path, undefined, undefined, line)
+      return ws.files.open(path, undefined, undefined, line, { pin: true })
     },
   }
 }

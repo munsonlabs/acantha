@@ -1,4 +1,4 @@
-import { ref, shallowRef, watch } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { filterPathspecs, parseFileFilter } from '@/lib/fileFilter'
 import { git, type SearchResults } from '@/lib/git'
 import { prefs } from './prefs'
@@ -32,16 +32,46 @@ export function createFiles({ repo }: Repo) {
   const preview = shallowRef<{ path: string; rev: string | null; view: PreviewView; line?: number } | null>(null)
   /** Whether the file in the editor has unsaved changes. */
   const dirty = ref(false)
+
+  const sameFile = (a: OpenFile, b: OpenFile) => a.path === b.path && a.rev === b.rev
+
+  /**
+   * The open tabs, in the order you opened them: kept until you close them. Just glancing at a file — clicking it in
+   * the sidebar, a search result, a diff, a definition — doesn't add one of these; it shows in `previewFile` instead,
+   * one at a time, replaced by the next glance. A file becomes a tab of its own once you edit it, or deliberately keep
+   * it open (double-click, or its "Keep Open"): the same split a real editor's "preview tab" makes, so a quick look
+   * through ten files doesn't leave ten tabs behind.
+   */
+  const openFiles = ref<OpenFile[]>([])
+  /** The one file being glanced at, if any: shown like a tab, but not yet one of them. */
+  const previewFile = ref<OpenFile | null>(null)
+  const isPinned = (file: OpenFile) => openFiles.value.some((f) => sameFile(f, file))
+
+  /** Makes a file one of the open tabs, staying there until it's closed. */
+  function pin(file: OpenFile) {
+    if (!isPinned(file)) openFiles.value = [...openFiles.value, file].slice(-40)
+    if (previewFile.value && sameFile(previewFile.value, file)) previewFile.value = null
+  }
+
+  /** The tabs as shown: the open ones, then the glanced-at file, if there is one and it isn't one of them already. */
+  function tabsList(): OpenFile[] {
+    return previewFile.value && !isPinned(previewFile.value) ? [...openFiles.value, previewFile.value] : openFiles.value
+  }
+  const tabs = computed(tabsList)
+
   /**
    * Unsaved edits per working-tree file: the editor's text, and the file as it was when the editing started. They're
-   * kept while you switch between files and come back with them; saving or discarding clears them.
+   * kept while you switch between files and come back with them; saving or discarding clears them. Editing a file
+   * that's only being glanced at pins it — you're clearly not just passing through.
    */
   const drafts = shallowRef(new Map<string, { text: string; base: string }>())
   function setDraft(path: string, draft: { text: string; base: string } | null) {
     if (!draft && !drafts.value.has(path)) return
     const next = new Map(drafts.value)
-    if (draft) next.set(path, draft)
-    else next.delete(path)
+    if (draft) {
+      next.set(path, draft)
+      if (previewFile.value?.path === path) pin(previewFile.value)
+    } else next.delete(path)
     drafts.value = next
   }
   let seq = 0
@@ -97,36 +127,54 @@ export function createFiles({ repo }: Repo) {
   const defaultView = (at: string | null): PreviewView => (prefs.editByDefault.value && at === null ? 'edit' : 'preview')
 
   /**
-   * The files open in this repository, in the order they were opened (⌘E lists them). Opening a file adds it;
-   * closing it (its ✕ there, or closing the preview) takes it out. The editor holds one at a time.
+   * Opens a file: in the working tree, or `at` a commit. By itself this is just a glance — it replaces whatever was
+   * only being glanced at before, without adding a tab — unless `opts.pin` says it's deliberate (or the file is
+   * already a tab, which keeps it one).
    */
-  const openFiles = ref<OpenFile[]>([])
-  const sameFile = (a: OpenFile, b: OpenFile) => a.path === b.path && a.rev === b.rev
-
-  async function open(path: string, view?: PreviewView, at: string | null = rev.value, line?: number) {
+  async function open(path: string, view?: PreviewView, at: string | null = rev.value, line?: number, opts?: { pin?: boolean }) {
     view ??= defaultView(at)
+    const file: OpenFile = { path, rev: at }
     // Unsaved edits stay behind as a draft, so switching never asks.
     preview.value = { path, rev: at, view, line }
-    if (!openFiles.value.some((f) => sameFile(f, { path, rev: at }))) openFiles.value = [...openFiles.value, { path, rev: at }].slice(-40)
+    if (opts?.pin) pin(file)
+    else if (!isPinned(file)) previewFile.value = file
   }
 
-  /** Closes one open file. Closing the one on screen shows the one next to it, or the graph when it was the last. */
-  async function closeFile(file: OpenFile) {
+  /**
+   * Closes several tabs at once (the glanced-at file among them, if it's one of `files`), asking once for any of their
+   * unsaved edits. Closing the one on screen shows the tab next to it, or the graph once none are left.
+   */
+  async function closeMany(files: OpenFile[]) {
+    const dirtyPaths = files.filter((f) => f.rev === null && drafts.value.has(f.path)).map((f) => f.path)
+    if (dirtyPaths.length && !(await discardDrafts(dirtyPaths))) return
+    const before = tabsList()
     const p = preview.value
-    const i = openFiles.value.findIndex((f) => sameFile(f, file))
-    const rest = openFiles.value.filter((f) => !sameFile(f, file))
-    if (file.rev === null && !(await discardDrafts([file.path]))) return
-    if (p && sameFile(p, file)) {
-      const next = rest[Math.min(Math.max(i, 0), rest.length - 1)]
+    const showingClosed = !!p && files.some((f) => sameFile(p, f))
+    const at = showingClosed ? before.findIndex((f) => sameFile(p!, f)) : -1
+    openFiles.value = openFiles.value.filter((f) => !files.some((x) => sameFile(x, f)))
+    if (previewFile.value && files.some((x) => sameFile(x, previewFile.value!))) previewFile.value = null
+    if (showingClosed) {
+      const rest = tabsList()
+      const next = rest[Math.min(Math.max(at, 0), rest.length - 1)]
       preview.value = next ? { path: next.path, rev: next.rev, view: defaultView(next.rev) } : null
     }
-    openFiles.value = rest
   }
+  const closeFile = (file: OpenFile) => closeMany([file])
+  /** Closes the file on screen: the tab next to it shows, or the graph when it was the last. */
+  const closePreview = () => (preview.value ? closeMany([{ path: preview.value.path, rev: preview.value.rev }]) : Promise.resolve())
+  /** Closes every tab but `keep`. */
+  const closeOthers = (keep: OpenFile) => closeMany(tabsList().filter((f) => !sameFile(f, keep)))
+  /** Closes every tab without unsaved edits. */
+  const closeSaved = () => closeMany(tabsList().filter((f) => f.rev !== null || !drafts.value.has(f.path)))
+  /** Closes every open tab. */
+  const closeAllTabs = () => closeMany(tabsList())
 
   /** Keeps the list right when files are renamed, moved or trashed from the sidebar. */
   const inside = (path: string, dir: string) => path === dir || path.startsWith(`${dir}/`)
   function renameOpen(from: string, to: string) {
-    openFiles.value = openFiles.value.map((f) => (f.rev === null && inside(f.path, from) ? { ...f, path: to + f.path.slice(from.length) } : f))
+    const moved = (f: OpenFile): OpenFile => (f.rev === null && inside(f.path, from) ? { ...f, path: to + f.path.slice(from.length) } : f)
+    openFiles.value = openFiles.value.map(moved)
+    if (previewFile.value) previewFile.value = moved(previewFile.value)
     // Drafts move with their files.
     const next = new Map<string, { text: string; base: string }>()
     for (const [p, d] of drafts.value) next.set(inside(p, from) ? to + p.slice(from.length) : p, d)
@@ -134,8 +182,13 @@ export function createFiles({ repo }: Repo) {
   }
   function forgetOpen(dir: string) {
     openFiles.value = openFiles.value.filter((f) => !(f.rev === null && inside(f.path, dir)))
+    if (previewFile.value?.rev === null && inside(previewFile.value.path, dir)) previewFile.value = null
     drafts.value = new Map([...drafts.value].filter(([p]) => !inside(p, dir)))
   }
+
+  /** Asked (from a diff, the editor, a tab) to show a path in the sidebar's file browser, expanded and scrolled to. */
+  const revealTarget = shallowRef<{ path: string } | null>(null)
+  const revealInSidebar = (path: string) => (revealTarget.value = { path })
 
   /** Searching the files' contents (and names), at the same commit as the browser. */
   const search = {
@@ -184,19 +237,12 @@ export function createFiles({ repo }: Repo) {
     searchTimer = setTimeout(runSearch, 250)
   })
 
-  /** Closes the file on screen (and takes it off the open files), back to the graph. */
-  async function closePreview() {
-    const p = preview.value
-    if (p?.rev === null && !(await discardDrafts([p.path]))) return
-    if (p) openFiles.value = openFiles.value.filter((f) => !sameFile(f, p))
-    preview.value = null
-  }
-
   watch(repo, () => {
     rev.value = null
     list.value = []
     preview.value = null
     openFiles.value = []
+    previewFile.value = null
     drafts.value = new Map()
     dirty.value = false
     expanded.value = new Set()
@@ -214,6 +260,10 @@ export function createFiles({ repo }: Repo) {
     newFolders,
     preview,
     openFiles,
+    previewFile,
+    tabs,
+    isPinned,
+    pin,
     dirty,
     drafts,
     setDraft,
@@ -224,10 +274,15 @@ export function createFiles({ repo }: Repo) {
     open,
     closePreview,
     closeFile,
+    closeOthers,
+    closeSaved,
+    closeAllTabs,
     renameOpen,
     forgetOpen,
     discardDrafts,
     runSearch,
+    revealTarget,
+    revealInSidebar,
   }
 }
 

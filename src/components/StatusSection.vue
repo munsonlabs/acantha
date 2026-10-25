@@ -52,7 +52,7 @@ function askText(f: StatusFile) {
 }
 
 /** Opens the file in the editor, as it is on disk, rather than its diff. */
-const editFile = (f: StatusFile) => void ws.files.open(f.path, 'edit', null)
+const editFile = (f: StatusFile) => void ws.files.open(f.path, 'edit', null, undefined, { pin: true })
 
 function menu(e: MouseEvent, f: StatusFile) {
   openMenu(e, [
@@ -63,6 +63,7 @@ function menu(e: MouseEvent, f: StatusFile) {
       run: () => openFile(f),
     },
     { label: 'Open File', icon: 'pencil', disabled: !editable(f), run: () => editFile(f) },
+    { label: 'Reveal in Sidebar', icon: 'folder', disabled: f.path.endsWith('/'), run: () => ws.revealFile(f.path) },
     ...(isOn('claude') ? [{ label: askLabel(), icon: 'bot' as const, run: () => ws.agents.askAgent(askText(f)) }] : []),
     'separator',
     props.mode === 'staged'

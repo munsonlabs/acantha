@@ -48,6 +48,12 @@ function createWorkspace(id: number, asleep: string | null = null) {
       ui.sidebarTab.value = 'files'
       prefs.sidebarOpen.value = true
     }
+    // A file, from a diff, the editor or a tab, shown in the sidebar's file browser: expanded to, and scrolled into view.
+    const revealFile = (path: string) => {
+      ui.sidebarTab.value = 'files'
+      prefs.sidebarOpen.value = true
+      files.revealInSidebar(path)
+    }
     const agents = createAgents(repo)
     const status = createStatus(repo)
     createWatcher(repo, async () => {
@@ -60,6 +66,7 @@ function createWorkspace(id: number, asleep: string | null = null) {
       ui,
       files,
       browse,
+      revealFile,
       details: createDetails(repo, reveal),
       search: createSearch(repo, reveal),
       diff,
