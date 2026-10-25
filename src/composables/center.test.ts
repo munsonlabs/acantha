@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ref } from 'vue'
-import { graphShowing, overGraph, toggleGraph } from './center'
+import { graphShowing, overGraph, pushFront, toggleGraph } from './center'
 import { prefs } from './prefs'
 import type { Workspace } from './workspace'
 
@@ -53,5 +53,26 @@ describe('the graph and what goes over it', () => {
     expect(overGraph(ws)).toBe('panel')
     w.panel.expanded.value = false
     expect(overGraph(ws)).toBe('file')
+  })
+})
+
+describe('pushFront', () => {
+  it('brings an already-open thing back in front, even though its own state never changed', () => {
+    const w = workspace()
+    const ws = w as unknown as Workspace
+    w.agents.expanded.value = true
+    w.agents.tabs.value = [{ id: 'a1' }]
+    w.ui.stack.value = ['agents']
+    expect(overGraph(ws)).toBe('agents')
+
+    // A file opens over it: agents are still expanded (nothing about them changed), but a file's now in front.
+    w.files.preview.value = { path: 'a.ts' }
+    w.ui.stack.value = ['agents', 'file']
+    expect(overGraph(ws)).toBe('file')
+
+    // Asking for the agents again (as showing one now does) brings them forward, with no change to `expanded` at all.
+    pushFront(w.ui.stack, 'agents')
+    expect(overGraph(ws)).toBe('agents')
+    expect(w.agents.expanded.value).toBe(true)
   })
 })

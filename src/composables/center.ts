@@ -1,3 +1,4 @@
+import type { Ref } from 'vue'
 import { isOn } from '@/features'
 import { prefs } from './prefs'
 import type { Workspace } from './workspace'
@@ -9,7 +10,9 @@ import type { Workspace } from './workspace'
  * empty: the stamp.
  */
 export type Over = 'file' | 'review' | 'agents' | 'panel'
-type Place = Over | 'graph'
+export type Place = Over | 'graph'
+/** The stack itself (`ui.stack`): what's been brought to the graph's place, latest last. */
+export type Stack = Ref<Place[]>
 
 /** What could be over the graph now. */
 export function whatsOpen(ws: Workspace): Record<Over, boolean> {
@@ -21,11 +24,14 @@ export function whatsOpen(ws: Workspace): Record<Over, boolean> {
   }
 }
 
-/** Puts something on top of the stack. */
-export function bringToFront(ws: Workspace, what: Place) {
-  const stack = ws.ui.stack.value
-  if (stack.at(-1) !== what) ws.ui.stack.value = [...stack.filter((s) => s !== what), what]
+/**
+ * Puts something on top of the stack: a stack ref directly (for a composable, like agents.ts, that doesn't have the
+ * whole workspace to hand), or a workspace, for everywhere else.
+ */
+export function pushFront(stack: Stack, what: Place) {
+  if (stack.value.at(-1) !== what) stack.value = [...stack.value.filter((s) => s !== what), what]
 }
+export const bringToFront = (ws: Workspace, what: Place) => pushFront(ws.ui.stack, what)
 
 /** What's over the graph, in front: null when the graph is (or nothing's open and it's collapsed). */
 export function overGraph(ws: Workspace): Over | null {

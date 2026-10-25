@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { git } from '@/lib/git'
 import { AGENT_NAMES, type AgentKind } from '@/lib/claudeView'
 import type { MenuItem } from './useContextMenu'
+import { pushFront, type Stack } from './center'
 import { closeConversation, conversations, forgetRepo } from './claude'
 import { forgetSeen } from './agentStatus'
 import { takeClaudeTabs } from './panel'
@@ -50,7 +51,7 @@ export function forgetAgents(repo: string) {
 /** A worktree folder for an agent's branch: next to the repository, named after it. */
 const agentWorktreePath = (repo: string, branch: string) => `${repo}-${branch.replace(/[^\w.-]+/g, '-')}`
 
-export function createAgents({ repo, reload }: Repo) {
+export function createAgents({ repo, reload }: Repo, stack: Stack) {
   const state = computed<AgentsState>(() => (repo.value && store.value[repo.value]) || { tabs: [], active: null })
   const tabs = computed(() => state.value.tabs)
   const active = computed(() => tabs.value.find((t) => t.id === state.value.active) ?? tabs.value[0] ?? null)
@@ -75,8 +76,11 @@ export function createAgents({ repo, reload }: Repo) {
     { immediate: true },
   )
 
-  /** Brings the panel into view, where it was: docked, or over the graph. */
-  const show = () => (prefs.agentsOpen.value = true)
+  /** Brings the panel into view, where it was: docked, or over the graph — in front of a file left showing there. */
+  const show = () => {
+    prefs.agentsOpen.value = true
+    pushFront(stack, 'agents')
+  }
 
   function activate(id: string) {
     update((s) => (s.active = id))

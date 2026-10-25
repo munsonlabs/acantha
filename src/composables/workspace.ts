@@ -54,7 +54,7 @@ function createWorkspace(id: number, asleep: string | null = null) {
       prefs.sidebarOpen.value = true
       files.revealInSidebar(path)
     }
-    const agents = createAgents(repo)
+    const agents = createAgents(repo, ui.stack)
     const status = createStatus(repo)
     createWatcher(repo, async () => {
       files.diskChanged.value++
