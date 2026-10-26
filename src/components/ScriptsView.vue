@@ -81,6 +81,13 @@ function run(s: Script) {
   const { dir, command } = scriptRun(d.tool, s)
   ws.terminals.add(dir ? `${repo.value}/${dir}` : undefined, { title: s.name, command, script: scriptKey(d.tool, s) })
 }
+
+/** Ends its terminal (and whatever's running in it) and starts it again fresh. */
+function rerun(s: Script) {
+  const open = terminalFor(s)
+  if (open) ws.terminals.close(open.key)
+  run(s)
+}
 </script>
 
 <template>
@@ -118,6 +125,9 @@ function run(s: Script) {
           <template v-if="terminalFor(r.script)">
             <button class="ghost icon-btn" title="Show its terminal" @click="ws.terminals.show(terminalFor(r.script)!.key)">
               <Icon name="terminal" :size="13" />
+            </button>
+            <button class="ghost icon-btn" title="Rerun: ends it and starts it again" @click="rerun(r.script)">
+              <Icon name="refresh" :size="12" />
             </button>
             <button class="ghost icon-btn" title="Stop and close its terminal" @click="ws.terminals.close(terminalFor(r.script)!.key)">
               <Icon name="stop" :size="12" />
