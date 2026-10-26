@@ -56,14 +56,3 @@ export function toggleGraph(ws: Workspace) {
   if (graphShowing(ws)) prefs.graphCollapsed.value = true
   else showGraph(ws)
 }
-
-/** Puts away what's in front over the graph: the file, a review, the agents or the panel. True when something was. */
-export function putAwayFront(ws: Workspace): boolean {
-  const front = overGraph(ws)
-  if (front === 'agents') ws.agents.expanded.value = false
-  else if (front === 'panel') ws.panel.expanded.value = false
-  else if (front === 'review') ws.ui.review.value = null
-  else if (front === 'file') void ws.files.closePreview()
-  else return false
-  return true
-}

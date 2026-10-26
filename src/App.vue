@@ -10,7 +10,7 @@ import { activateTabNumber, overlays, runCommand } from '@/composables/commands'
 import { prefs } from '@/composables/prefs'
 import { lastUsed, pathOf, useWorkspaces, type Workspace } from '@/composables/workspace'
 import { bringBackAll } from '@/composables/claudeWindow'
-import { putAwayFront } from '@/composables/center'
+import { overGraph } from '@/composables/center'
 import { closeDialog, confirmAction, useDialog } from '@/composables/useDialog'
 import { onMakeTodos, useContextMenu } from '@/composables/useContextMenu'
 import { pasteIntoPanel } from '@/composables/slackLinks'
@@ -77,6 +77,13 @@ const KEYS: Record<string, string> = {
   e: 'open-files',
 }
 
+/** ⌃ alone + key (by physical key) → command: ⌘` and ⌘⇥ are taken system-wide, so these use ⌃. */
+const CTRL_KEYS: Record<string, string> = {
+  Backquote: 'toggle-sidebar',
+  Tab: 'toggle-right-panels',
+  Escape: 'focus-center',
+}
+
 // OpenCode keeps every session; with Settings saying so, old ones go a minute after Acantha starts.
 setTimeout(() => {
   if (isOn('claude') && prefs.opencodePruneDays.value > 0) void invoke('opencode_prune', { days: prefs.opencodePruneDays.value }).catch(() => {})
@@ -99,6 +106,17 @@ watch(
   },
 )
 
+/** Puts away what's in front over the graph (see GraphPane): the file, a review, the agents or the panel. */
+function putAwayFront(ws: Workspace) {
+  const front = overGraph(ws)
+  if (front === 'agents') ws.agents.expanded.value = false
+  else if (front === 'panel') ws.panel.expanded.value = false
+  else if (front === 'review') ws.ui.review.value = null
+  else if (front === 'file') void ws.files.closePreview()
+  else return false
+  return true
+}
+
 function onKeydown(e: KeyboardEvent) {
   const ws = active.value
   const mod = e.metaKey || e.ctrlKey
@@ -111,16 +129,9 @@ function onKeydown(e: KeyboardEvent) {
   if (e.ctrlKey && e.shiftKey && e.code === 'Backquote') {
     e.preventDefault()
     runCommand('new-terminal')
-    // ⌃ alone, not ⌘: those are taken system-wide (app switching, cycling a window), so the only way to use them here.
-  } else if (e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.code === 'Backquote') {
+  } else if (e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && CTRL_KEYS[e.code]) {
     e.preventDefault()
-    runCommand('toggle-sidebar')
-  } else if (e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.key === 'Tab') {
-    e.preventDefault()
-    runCommand('toggle-right-panels')
-  } else if (e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.key === 'Escape') {
-    e.preventDefault()
-    runCommand('focus-graph')
+    runCommand(CTRL_KEYS[e.code])
   } else if (mod && (e.key === '=' || e.key === '+' || e.key === '-' || e.key === '0')) {
     // ⌘+ is ⌘⇧= on most layouts, so these are matched with or without Shift.
     e.preventDefault()

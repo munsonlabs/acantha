@@ -110,7 +110,8 @@ export function createTerminals({ repo }: Repo) {
   }
 
   function toggle() {
-    open.value = !open.value
+    // Shown means open *and* its column not hidden (⌃⇥): otherwise this would hide what you can't see.
+    open.value = !(open.value && prefs.rightPanelsOpen.value)
     prefs.terminalOpen.value = open.value
     if (open.value) {
       prefs.rightPanelsOpen.value = true

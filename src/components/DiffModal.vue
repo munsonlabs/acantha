@@ -80,17 +80,13 @@ function escapeHtml(s: string) {
 function onCopy(e: ClipboardEvent) {
   const sel = window.getSelection()
   const t = table.value
-  if (!sel || sel.isCollapsed || !sel.rangeCount || !t || !e.clipboardData) return
-  const rowOf = (node: Node | null) => (node instanceof Element ? node : node?.parentElement)?.closest('tr') ?? null
-  const rows = [...t.querySelectorAll('tr')]
-  let a = rows.indexOf(rowOf(sel.anchorNode)!)
-  let b = rows.indexOf(rowOf(sel.focusNode)!)
-  if (a === -1 || b === -1) return
-  if (a > b) [a, b] = [b, a]
+  if (!sel || sel.isCollapsed || !t || !e.clipboardData) return
+  const rows = [...t.querySelectorAll('tr')].filter((row) => sel.containsNode(row, true))
+  if (!rows.length) return
 
   const plain: string[] = []
   const html: string[] = []
-  for (const row of rows.slice(a, b + 1)) {
+  for (const row of rows) {
     const text = row.querySelector('.code, .hunk-text')?.textContent ?? ''
     const bg = row.classList.contains('add') || row.classList.contains('del') ? getComputedStyle(row).backgroundColor : 'transparent'
     plain.push(text)

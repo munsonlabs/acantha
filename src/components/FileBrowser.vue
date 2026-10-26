@@ -281,41 +281,20 @@ function onDragEnd() {
   dragging.value = null
   dropTarget.value = null
 }
-function onDragOverRow(e: DragEvent, r: Row) {
-  if (r.kind !== 'dir' || !canDropOn(r.path)) return
+/** Over a folder (by its path) or the tree's own background (''): only a place it can go takes the drop. */
+function onDragOver(e: DragEvent, dir: string) {
+  if (!canDropOn(dir)) return
   e.preventDefault()
-  e.stopPropagation()
-  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
-  dropTarget.value = r.path
-}
-function onDropRow(e: DragEvent, r: Row) {
-  if (r.kind !== 'dir' || !canDropOn(r.path)) return
-  e.preventDefault()
-  e.stopPropagation()
-  void dropOn(r.path)
-}
-/** The tree's own background, not bubbled up from a row: empty space below the rows, or around them. */
-function onDragOverTree(e: DragEvent) {
-  if (e.target !== e.currentTarget || !canDropOn('')) return
-  e.preventDefault()
-  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
-  dropTarget.value = ''
-}
-function onDropTree(e: DragEvent) {
-  if (e.target !== e.currentTarget || !canDropOn('')) return
-  e.preventDefault()
-  void dropOn('')
+  dropTarget.value = dir
 }
 
-async function dropOn(dir: string) {
+async function onDrop(e: DragEvent, dir: string) {
   const d = dragging.value
-  dragging.value = null
-  dropTarget.value = null
-  if (!d) return
-  const target = resolveName(dir, d.path.split('/').pop()!)
-  if (!target || target === d.path) return
+  if (!d || !canDropOn(dir)) return
+  e.preventDefault()
+  onDragEnd()
   try {
-    await moveTo(d.path, d.kind, target)
+    await moveTo(d.path, d.kind, resolveName(dir, d.path.split('/').pop()!))
   } catch (err) {
     showToast(String(err), 'error')
   }
@@ -430,9 +409,9 @@ watch(status, (now, before) => {
       class="tree"
       :class="{ 'drop-target': dropTarget === '' }"
       @contextmenu.self.prevent="rootMenu"
-      @dragover="onDragOverTree"
-      @drop="onDropTree"
-      @dragleave="(e) => e.target === e.currentTarget && (dropTarget = null)"
+      @dragover.self="onDragOver($event, '')"
+      @drop.self="onDrop($event, '')"
+      @dragleave.self="dropTarget = null"
     >
       <Skeleton v-if="loading && !list.length" :lines="10" />
       <p v-else-if="!visible.length" class="note">No files</p>
@@ -457,8 +436,8 @@ watch(status, (now, before) => {
           @contextmenu.prevent="r.kind !== 'new' && rowMenu($event, r)"
           @dragstart="onDragStart($event, r)"
           @dragend="onDragEnd"
-          @dragover="onDragOverRow($event, r)"
-          @drop="onDropRow($event, r)"
+          @dragover="r.kind === 'dir' && onDragOver($event, r.path)"
+          @drop="r.kind === 'dir' && onDrop($event, r.path)"
         >
           <Icon v-if="r.kind === 'dir'" name="chevron" :size="11" class="chev" :class="{ open: expanded.has(r.path) }" />
           <FileIcon

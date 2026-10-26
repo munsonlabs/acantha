@@ -2,14 +2,17 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch, type Ref, type WatchS
 
 /**
  * One highlight that slides to the active tab, as Terax does, instead of each tab switching its own background.
- * `track` should change whenever the active tab, the tab order or a tab's label does.
+ * `track` should change whenever the active tab or the tabs themselves (which, in what order) do; a tab changing size
+ * (a longer label, a badge coming or going) is picked up on its own.
  */
 export function useSlidingPill(container: Ref<HTMLElement | undefined>, track: WatchSource<unknown>) {
   const style = ref<Record<string, string>>({ opacity: '0' })
   let animate = false
+  const tabs = new ResizeObserver(() => void measure())
 
   async function measure() {
     await nextTick()
+    for (const child of container.value?.children ?? []) tabs.observe(child)
     const tab = container.value?.querySelector<HTMLElement>(':scope > .active')
     if (!tab) {
       style.value = { opacity: '0' }
@@ -33,7 +36,10 @@ export function useSlidingPill(container: Ref<HTMLElement | undefined>, track: W
     void measure()
     if (container.value) observer.observe(container.value)
   })
-  onBeforeUnmount(() => observer.disconnect())
+  onBeforeUnmount(() => {
+    observer.disconnect()
+    tabs.disconnect()
+  })
   watch(track, () => void measure(), { deep: true })
 
   return { style, measure }

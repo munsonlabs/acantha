@@ -184,12 +184,11 @@ export const commands: Command[] = [
     run: () => (prefs.rightPanelsOpen.value = !prefs.rightPanelsOpen.value),
   },
   {
-    id: 'focus-graph',
+    id: 'focus-center',
     label: 'Focus the Center',
     group: 'View',
     keys: '⌃Esc',
-    // Only the sidebar and the right column: whatever's in the middle - the graph, a file, an agent - stays exactly
-    // as it was, since that's the one thing this is for keeping in view.
+    // Only the sidebar and the right column: whatever's in the middle - the graph, a file, an agent - stays as it was.
     run: () => {
       prefs.sidebarOpen.value = false
       prefs.rightPanelsOpen.value = false

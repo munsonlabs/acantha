@@ -72,15 +72,7 @@ function agentsOf(ws: Workspace) {
   const state = mostPressing(ws.agents.tabs.value.map((t) => agentState(t.id)))
   return state === 'idle' || state === 'off' ? null : state
 }
-const pill = useSlidingPill(strip, () => [
-  activeId.value,
-  // Everything that comes and goes in a tab and so changes its width: the agent glyph, whether it's asleep, and how
-  // far behind its upstream it is - not just the label or branch, which were the only things re-measured before.
-  workspaces.value.map(
-    (w) =>
-      `${w.id}:${label(w)}:${w.repo.log.value?.headBranch ?? ''}:${agentsOf(w) ?? ''}:${w.sleeping.value ? 1 : 0}:${w.status.status.value?.behind ?? 0}`,
-  ),
-])
+const pill = useSlidingPill(strip, () => [activeId.value, workspaces.value.map((w) => w.id)])
 const { dragging, onPointerDown } = useTabDrag(strip, moveWorkspace)
 
 /** Too many tabs to see at once: the ▾ after them lists them all. */

@@ -21,7 +21,7 @@ const agentsFlag = computed(() => {
   const states = ws.agents.tabs.value.map((t) => agentState(t.id))
   return states.includes('waiting') ? 'waiting' : states.includes('done') ? 'done' : states.includes('working') ? 'working' : null
 })
-const pill = useSlidingPill(nav, () => [sidebarTab.value, files.value.length, isOn('claude')])
+const pill = useSlidingPill(nav, () => [sidebarTab.value, isOn('claude')])
 // Without an explicit callback Vue keeps the leaving tab a couple of frames, looking for a transition it doesn't have.
 const leaveAtOnce = (_el: Element, done: () => void) => done()
 </script>

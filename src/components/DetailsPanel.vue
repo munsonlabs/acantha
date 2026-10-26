@@ -71,23 +71,16 @@ type FileRow =
   | { kind: 'dir'; path: string; name: string; depth: number }
   | { kind: 'file'; path: string; name: string; depth: number; file: FileChange }
 
-const expanded = ref(new Set<string>())
-// Every folder a new commit's files are in starts open: there's rarely enough of them, for one commit, to want less.
+/** Folders closed by hand. Everything starts open, for each commit: there's rarely enough in one to want less. */
+const collapsed = ref(new Set<string>())
 watch(
   () => shown.value?.files,
-  (files) => {
-    const next = new Set<string>()
-    for (const f of files ?? []) {
-      const parts = f.path.split('/').slice(0, -1)
-      for (let i = 1; i <= parts.length; i++) next.add(parts.slice(0, i).join('/'))
-    }
-    expanded.value = next
-  },
+  () => (collapsed.value = new Set()),
 )
 function toggleFolder(path: string) {
-  const next = new Set(expanded.value)
+  const next = new Set(collapsed.value)
   if (!next.delete(path)) next.add(path)
-  expanded.value = next
+  collapsed.value = next
 }
 
 const fileRows = computed<FileRow[]>(() => {
@@ -107,7 +100,7 @@ const fileRows = computed<FileRow[]>(() => {
     for (const name of [...node.dirs.keys()].sort((a, b) => a.localeCompare(b))) {
       const path = prefix + name
       out.push({ kind: 'dir', path, name, depth })
-      if (expanded.value.has(path)) walk(node.dirs.get(name)!, `${path}/`, depth + 1)
+      if (!collapsed.value.has(path)) walk(node.dirs.get(name)!, `${path}/`, depth + 1)
     }
     for (const f of [...node.files].sort((a, b) => a.path.localeCompare(b.path)))
       out.push({ kind: 'file', path: f.path, name: f.path.slice(prefix.length), depth, file: f })
@@ -228,8 +221,8 @@ const fileMenu = (e: MouseEvent, f: FileChange) =>
                 @contextmenu.prevent="r.kind === 'file' && fileMenu($event, r.file)"
               >
                 <template v-if="r.kind === 'dir'">
-                  <Icon name="chevron" :size="11" class="chev open" />
-                  <FileIcon :path="r.path" folder open />
+                  <Icon name="chevron" :size="11" class="chev" :class="{ open: !collapsed.has(r.path) }" />
+                  <FileIcon :path="r.path" folder :open="!collapsed.has(r.path)" />
                   <span class="path">{{ r.name }}</span>
                 </template>
                 <template v-else>

@@ -94,7 +94,7 @@ function rerun(s: Script) {
 const once = ref('')
 function runOnce() {
   const cmd = once.value.trim()
-  if (!cmd || !repo.value) return
+  if (!cmd) return
   ws.terminals.add(undefined, { title: cmd, command: `${cmd} && exit` })
   once.value = ''
 }
