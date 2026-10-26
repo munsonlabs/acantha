@@ -64,6 +64,42 @@ async function act(action: 'stage' | 'unstage' | 'discard', lines: Set<number>) 
 }
 
 const count = computed(() => chosen.value.size)
+
+const table = ref<HTMLTableElement>()
+function escapeHtml(s: string) {
+  const d = document.createElement('div')
+  d.textContent = s
+  return d.innerHTML
+}
+
+/**
+ * Copying a selection of lines also puts a coloured HTML version on the clipboard - the add/del backgrounds as a
+ * plain-text paste can't carry - so pasting into Slack, Notion or a doc reads like the diff looked, not like a
+ * patch. A plain-text paste still gets just the code, as it always did.
+ */
+function onCopy(e: ClipboardEvent) {
+  const sel = window.getSelection()
+  const t = table.value
+  if (!sel || sel.isCollapsed || !sel.rangeCount || !t || !e.clipboardData) return
+  const rowOf = (node: Node | null) => (node instanceof Element ? node : node?.parentElement)?.closest('tr') ?? null
+  const rows = [...t.querySelectorAll('tr')]
+  let a = rows.indexOf(rowOf(sel.anchorNode)!)
+  let b = rows.indexOf(rowOf(sel.focusNode)!)
+  if (a === -1 || b === -1) return
+  if (a > b) [a, b] = [b, a]
+
+  const plain: string[] = []
+  const html: string[] = []
+  for (const row of rows.slice(a, b + 1)) {
+    const text = row.querySelector('.code, .hunk-text')?.textContent ?? ''
+    const bg = row.classList.contains('add') || row.classList.contains('del') ? getComputedStyle(row).backgroundColor : 'transparent'
+    plain.push(text)
+    html.push(`<div style="background:${bg};white-space:pre;">${escapeHtml(text) || '&nbsp;'}</div>`)
+  }
+  e.clipboardData.setData('text/plain', plain.join('\n'))
+  e.clipboardData.setData('text/html', `<div style="font-family:ui-monospace,monospace;font-size:12px;">${html.join('')}</div>`)
+  e.preventDefault()
+}
 </script>
 
 <template>
@@ -78,12 +114,12 @@ const count = computed(() => chosen.value.size)
           </h2>
           <button class="ghost icon-btn" title="Close (Esc)" @click="closeDiff"><Icon name="x" /></button>
         </header>
-        <div class="body">
+        <div class="body" @copy="onCopy">
           <p v-if="diff.error" class="note error">{{ diff.error }}</p>
           <p v-else-if="!diff.result" class="note">Loading…</p>
           <p v-else-if="diff.result.binary" class="note">Binary file, no text diff available.</p>
           <p v-else-if="!diff.result.lines.length" class="note">No content changes (mode or rename only).</p>
-          <table v-else>
+          <table v-else ref="table">
             <tbody>
               <tr v-for="(l, i) in diff.result.lines" :key="i" :class="[l.kind, { chosen: chosen.has(i) }]">
                 <template v-if="l.kind === 'hunk'">
