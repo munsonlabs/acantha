@@ -792,12 +792,10 @@ fn read_log(repo: &str, limit: usize, branches: Vec<String>, show_remotes: bool)
             Ok((remotes, url))
         });
         // Just counting, so it shouldn't take the index lock and get in the way of git run in a terminal meanwhile.
-        let uncommitted = s.spawn(|| {
-            git(repo, ["--no-optional-locks", "status", "--porcelain", "--untracked-files=all"]).map(|out| out.lines().count())
-        });
-        let stashes = s.spawn(|| {
-            parse_stashes(&git(repo, ["stash", "list", "--format=%H%x1f%P%x1f%gd%x1f%gs%x1f%an%x1f%ae%x1f%at"]).unwrap_or_default())
-        });
+        let uncommitted =
+            s.spawn(|| git(repo, ["--no-optional-locks", "status", "--porcelain", "--untracked-files=all"]).map(|out| out.lines().count()));
+        let stashes =
+            s.spawn(|| parse_stashes(&git(repo, ["stash", "list", "--format=%H%x1f%P%x1f%gd%x1f%gs%x1f%an%x1f%ae%x1f%at"]).unwrap_or_default()));
         let worktrees = s.spawn(|| {
             let here = Path::new(repo).canonicalize().unwrap_or_else(|_| PathBuf::from(repo));
             let mut worktrees = parse_worktrees(&git(repo, ["worktree", "list", "--porcelain"]).unwrap_or_default(), &here);
