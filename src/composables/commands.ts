@@ -37,6 +37,8 @@ export interface Command {
 export const enabledCommands = () => commands.filter((c) => !c.feature || isOn(c.feature))
 
 const { workspaces, active, activate, addWorkspace, closeWorkspace, stepWorkspace, pickRepo, sleepOtherWorkspaces } = useWorkspaces()
+/** What ⌃Esc last hid, to bring back on the next press. */
+let hidByFocus: { sidebar: boolean; right: boolean } | null = null
 
 function openPalette(mode: 'files' | 'commands' | 'branches') {
   overlays.paletteMode.value = mode
@@ -185,13 +187,21 @@ export const commands: Command[] = [
   },
   {
     id: 'focus-center',
-    label: 'Focus the Center',
+    label: 'Toggle Focus on the Center',
     group: 'View',
     keys: '⌃Esc',
     // Only the sidebar and the right column: whatever's in the middle - the graph, a file, an agent - stays as it was.
+    // Again, with both hidden, brings back whichever it hid (both, if it hid nothing).
     run: () => {
-      prefs.sidebarOpen.value = false
-      prefs.rightPanelsOpen.value = false
+      const { sidebarOpen, rightPanelsOpen } = prefs
+      if (sidebarOpen.value || rightPanelsOpen.value) {
+        hidByFocus = { sidebar: sidebarOpen.value, right: rightPanelsOpen.value }
+        sidebarOpen.value = rightPanelsOpen.value = false
+      } else {
+        sidebarOpen.value = hidByFocus?.sidebar ?? true
+        rightPanelsOpen.value = hidByFocus?.right ?? true
+        hidByFocus = null
+      }
     },
   },
   { id: 'new-terminal', label: 'New Terminal', group: 'View', keys: '⌃⇧`', run: withRepo((ws) => ws.terminals.add()) },
