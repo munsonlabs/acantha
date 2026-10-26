@@ -256,6 +256,71 @@ async function trash(r: Row) {
   }
 }
 
+/**
+ * Dragging a row onto a folder, or onto the tree's own background for the top level, moves it there. Only folders
+ * (and that background) are drop targets - dropping on a file wouldn't mean anything, there's nothing to put it in.
+ */
+const dragging = ref<{ path: string; kind: 'dir' | 'file' } | null>(null)
+/** The folder a drag is over, '' for the top level. */
+const dropTarget = ref<string | null>(null)
+
+function canDropOn(dir: string) {
+  const d = dragging.value
+  if (!d || !working.value) return false
+  if (dir === parentOf(d.path)) return false // already there
+  return !(d.kind === 'dir' && inside(dir, d.path)) // not into itself or its own folder
+}
+
+function onDragStart(e: DragEvent, r: Row) {
+  if (!working.value || r.kind === 'new') return e.preventDefault()
+  dragging.value = { path: r.path, kind: r.kind }
+  e.dataTransfer?.setData('text/plain', r.path)
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+}
+function onDragEnd() {
+  dragging.value = null
+  dropTarget.value = null
+}
+function onDragOverRow(e: DragEvent, r: Row) {
+  if (r.kind !== 'dir' || !canDropOn(r.path)) return
+  e.preventDefault()
+  e.stopPropagation()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  dropTarget.value = r.path
+}
+function onDropRow(e: DragEvent, r: Row) {
+  if (r.kind !== 'dir' || !canDropOn(r.path)) return
+  e.preventDefault()
+  e.stopPropagation()
+  void dropOn(r.path)
+}
+/** The tree's own background, not bubbled up from a row: empty space below the rows, or around them. */
+function onDragOverTree(e: DragEvent) {
+  if (e.target !== e.currentTarget || !canDropOn('')) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  dropTarget.value = ''
+}
+function onDropTree(e: DragEvent) {
+  if (e.target !== e.currentTarget || !canDropOn('')) return
+  e.preventDefault()
+  void dropOn('')
+}
+
+async function dropOn(dir: string) {
+  const d = dragging.value
+  dragging.value = null
+  dropTarget.value = null
+  if (!d) return
+  const target = resolveName(dir, d.path.split('/').pop()!)
+  if (!target || target === d.path) return
+  try {
+    await moveTo(d.path, d.kind, target)
+  } catch (err) {
+    showToast(String(err), 'error')
+  }
+}
+
 const createItems = (dir: string): MenuEntry[] => [
   { label: 'New File', icon: 'file', run: () => startCreate('file', dir) },
   { label: 'New Folder', icon: 'folder', run: () => startCreate('folder', dir) },
@@ -361,7 +426,14 @@ watch(status, (now, before) => {
       <Icon name="search" :size="12" />
       <input v-model="filter" type="text" placeholder="Filter files" spellcheck="false" autocomplete="off" />
     </div>
-    <div class="tree" @contextmenu.self.prevent="rootMenu">
+    <div
+      class="tree"
+      :class="{ 'drop-target': dropTarget === '' }"
+      @contextmenu.self.prevent="rootMenu"
+      @dragover="onDragOverTree"
+      @drop="onDropTree"
+      @dragleave="(e) => e.target === e.currentTarget && (dropTarget = null)"
+    >
       <Skeleton v-if="loading && !list.length" :lines="10" />
       <p v-else-if="!visible.length" class="note">No files</p>
       <template v-for="r in visible" :key="r.path">
@@ -369,13 +441,24 @@ watch(status, (now, before) => {
           class="row"
           :class="[
             r.kind,
-            { active: r.kind === 'file' && preview?.path === r.path && preview?.rev === rev, editing: isEditing(r), ignored: r.ignored },
+            {
+              active: r.kind === 'file' && preview?.path === r.path && preview?.rev === rev,
+              editing: isEditing(r),
+              ignored: r.ignored,
+              dragging: dragging?.path === r.path,
+              'drop-target': r.kind === 'dir' && dropTarget === r.path,
+            },
           ]"
           :style="{ paddingLeft: `${(r.kind === 'dir' ? 8 : 24) + r.depth * 14}px` }"
           :title="r.kind === 'new' ? undefined : r.path"
+          :draggable="working && r.kind !== 'new'"
           @click="isEditing(r) || r.kind === 'new' ? undefined : r.kind === 'dir' ? toggle(r.path) : open(r.path)"
           @dblclick="!isEditing(r) && r.kind === 'file' ? open(r.path, undefined, undefined, undefined, { pin: true }) : undefined"
           @contextmenu.prevent="r.kind !== 'new' && rowMenu($event, r)"
+          @dragstart="onDragStart($event, r)"
+          @dragend="onDragEnd"
+          @dragover="onDragOverRow($event, r)"
+          @drop="onDropRow($event, r)"
         >
           <Icon v-if="r.kind === 'dir'" name="chevron" :size="11" class="chev" :class="{ open: expanded.has(r.path) }" />
           <FileIcon
@@ -523,6 +606,18 @@ watch(status, (now, before) => {
 }
 .row.ignored {
   opacity: 0.5;
+}
+.row.dragging {
+  opacity: 0.4;
+}
+.row.drop-target {
+  background: var(--selected);
+  outline: 1.5px solid var(--ring);
+  outline-offset: -1.5px;
+}
+.tree.drop-target {
+  outline: 1.5px solid var(--ring);
+  outline-offset: -2px;
 }
 .icon-btn.on {
   color: var(--accent);
