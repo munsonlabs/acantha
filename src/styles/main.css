@@ -582,14 +582,22 @@ button:focus-visible {
   opacity: 0;
 }
 
-.slide-enter-active {
+.slide-enter-active,
+.slide-leave-active {
   transition:
     opacity 0.2s var(--ease-out),
     transform 0.22s var(--ease-out);
 }
-.slide-enter-from {
+.slide-enter-from,
+.slide-leave-to {
   opacity: 0;
   transform: translateX(14px);
+}
+/* Without this, what's behind (the graph) pops into view at once, the moment the leaving one's gone, rather than
+   the two crossing smoothly. */
+.slide-leave-active {
+  position: absolute;
+  inset: 0;
 }
 
 /* Respect "Reduce motion": everything still works, it just doesn't move. */
