@@ -62,6 +62,60 @@ function startResize(e: MouseEvent) {
 
 const open = (f: FileChange) => openDiff(f, shown.value!.from, shown.value!.to)
 
+/** The changed files as the folders they're in, like the file browser's, instead of one flat list. */
+interface DirNode {
+  dirs: Map<string, DirNode>
+  files: FileChange[]
+}
+type FileRow =
+  | { kind: 'dir'; path: string; name: string; depth: number }
+  | { kind: 'file'; path: string; name: string; depth: number; file: FileChange }
+
+const expanded = ref(new Set<string>())
+// Every folder a new commit's files are in starts open: there's rarely enough of them, for one commit, to want less.
+watch(
+  () => shown.value?.files,
+  (files) => {
+    const next = new Set<string>()
+    for (const f of files ?? []) {
+      const parts = f.path.split('/').slice(0, -1)
+      for (let i = 1; i <= parts.length; i++) next.add(parts.slice(0, i).join('/'))
+    }
+    expanded.value = next
+  },
+)
+function toggleFolder(path: string) {
+  const next = new Set(expanded.value)
+  if (!next.delete(path)) next.add(path)
+  expanded.value = next
+}
+
+const fileRows = computed<FileRow[]>(() => {
+  const files = shown.value?.files ?? []
+  const root: DirNode = { dirs: new Map(), files: [] }
+  for (const f of files) {
+    let dir = root
+    for (const part of f.path.split('/').slice(0, -1)) {
+      let next = dir.dirs.get(part)
+      if (!next) dir.dirs.set(part, (next = { dirs: new Map(), files: [] }))
+      dir = next
+    }
+    dir.files.push(f)
+  }
+  const out: FileRow[] = []
+  const walk = (node: DirNode, prefix: string, depth: number) => {
+    for (const name of [...node.dirs.keys()].sort((a, b) => a.localeCompare(b))) {
+      const path = prefix + name
+      out.push({ kind: 'dir', path, name, depth })
+      if (expanded.value.has(path)) walk(node.dirs.get(name)!, `${path}/`, depth + 1)
+    }
+    for (const f of [...node.files].sort((a, b) => a.path.localeCompare(b.path)))
+      out.push({ kind: 'file', path: f.path, name: f.path.slice(prefix.length), depth, file: f })
+  }
+  walk(root, '', 0)
+  return out
+})
+
 /** The working copy is what opens, so a file this commit deleted can't be. */
 const fileMenu = (e: MouseEvent, f: FileChange) =>
   openMenu(e, [
@@ -133,9 +187,17 @@ const fileMenu = (e: MouseEvent, f: FileChange) =>
               <span v-if="!shown.loading" class="stat"
                 ><span class="add">+{{ totals.add }}</span> <span class="del">−{{ totals.del }}</span></span
               >
+              <button
+                class="ghost icon-btn"
+                :class="{ on: prefs.detailsFilesTree.value }"
+                :title="prefs.detailsFilesTree.value ? 'Show as a flat list' : 'Show as the folders they\'re in'"
+                @click="prefs.detailsFilesTree.value = !prefs.detailsFilesTree.value"
+              >
+                <Icon :name="prefs.detailsFilesTree.value ? 'folder' : 'list'" :size="13" />
+              </button>
             </div>
             <Skeleton v-if="shown.loading" :lines="5" :gap="14" />
-            <ul>
+            <ul v-else-if="!prefs.detailsFilesTree.value">
               <li
                 v-for="f in shown.files"
                 :key="f.path"
@@ -153,6 +215,35 @@ const fileMenu = (e: MouseEvent, f: FileChange) =>
                 <span v-if="f.additions != null" class="stat"
                   ><span class="add">+{{ f.additions }}</span> <span class="del">−{{ f.deletions }}</span></span
                 >
+              </li>
+            </ul>
+            <ul v-else class="tree">
+              <li
+                v-for="r in fileRows"
+                :key="r.path"
+                :class="{ dir: r.kind === 'dir' }"
+                :style="{ paddingLeft: `${(r.kind === 'dir' ? 8 : 24) + r.depth * 14}px` }"
+                :title="r.kind === 'dir' ? r.path : (STATUS[r.file.status] ?? r.file.status)"
+                @click="r.kind === 'dir' ? toggleFolder(r.path) : open(r.file)"
+                @contextmenu.prevent="r.kind === 'file' && fileMenu($event, r.file)"
+              >
+                <template v-if="r.kind === 'dir'">
+                  <Icon name="chevron" :size="11" class="chev open" />
+                  <FileIcon :path="r.path" folder open />
+                  <span class="path">{{ r.name }}</span>
+                </template>
+                <template v-else>
+                  <span class="status" :class="`s-${r.file.status === '?' ? 'U' : r.file.status}`">{{
+                    r.file.status === '?' ? 'U' : r.file.status
+                  }}</span>
+                  <FileIcon :path="r.path" />
+                  <span class="path"
+                    >{{ r.name }}<span v-if="r.file.oldPath" class="muted"> ← {{ splitPath(r.file.oldPath).name }}</span></span
+                  >
+                  <span v-if="r.file.additions != null" class="stat"
+                    ><span class="add">+{{ r.file.additions }}</span> <span class="del">−{{ r.file.deletions }}</span></span
+                  >
+                </template>
               </li>
             </ul>
           </div>
@@ -253,10 +344,30 @@ dd a {
 }
 .files-head {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 6px;
   font-size: 12px;
   color: var(--fg-muted);
+}
+.files-head span:first-child {
+  flex: 1;
+}
+.files-head .icon-btn {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+.icon-btn.on {
+  color: var(--accent);
+}
+.chev {
+  flex: none;
+  color: var(--fg-faint);
+  transition: transform 0.12s;
+}
+.chev.open {
+  transform: rotate(90deg);
 }
 ul {
   margin: 0;

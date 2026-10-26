@@ -6,6 +6,8 @@ export const prefs = {
   showStashes: usePersisted('show-stashes', true),
   recents: usePersisted<string[]>('recents', []),
   detailsHeight: usePersisted('details-height', 280),
+  /** A commit's changed files, as the folders they're in rather than one flat list. */
+  detailsFilesTree: usePersisted('details-files-tree', true),
   terminalWidth: usePersisted('terminal-width', 0.42),
   terminalOpen: usePersisted('terminal-open', true),
   sidebarWidth: usePersisted('sidebar-width', 300),
