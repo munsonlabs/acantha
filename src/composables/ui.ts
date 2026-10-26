@@ -15,7 +15,7 @@ export function createUi() {
     /** A worktree agent's work under review, in place of the graph: by its id. */
     review: ref<string | null>(null),
     /** What's been brought to the graph's place, in order, the latest last (see composables/center.ts). */
-    stack: ref<('file' | 'review' | 'agents' | 'panel' | 'graph')[]>([]),
+    stack: ref<('review' | 'agents' | 'panel' | 'graph')[]>([]),
   }
 }
 

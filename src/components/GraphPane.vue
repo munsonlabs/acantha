@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { prefs } from '@/composables/prefs'
 import { isOn } from '@/features'
 import { useWorkspace } from '@/composables/workspace'
@@ -17,44 +17,70 @@ import GraphToolbar from './GraphToolbar.vue'
 const ws = useWorkspace()
 const { repo, log } = ws.repo
 const { preview } = ws.files
-const { tabs, expanded } = ws.panel
-/** What's over the graph, in front (see composables/center.ts). */
+/** What's over the graph, in front (see composables/center.ts). A file isn't one of these any more: it's always
+ * there in its own place below, rather than taking the graph's. */
 const front = computed(() => overGraph(ws))
 const open = computed(() => whatsOpen(ws))
 const reviewHere = computed(() => open.value.review)
 const agentsHere = computed(() => open.value.agents)
 const panelOver = computed(() => open.value.panel)
-/** Something's over the graph. */
+/** A review, the agents or the panel: takes the whole place, the graph and the file editor both covered. */
 const panelHere = computed(() => front.value !== null)
-// Bringing something there puts it in front: a file opened, a review started, the agents or the panel expanded.
 const bring = (what: Over) => (on: unknown) => on && bringToFront(ws, what)
-watch(preview, bring('file'))
 watch(reviewHere, bring('review'))
 watch(agentsHere, bring('agents'))
 watch(panelOver, bring('panel'))
+
+const hasFile = computed(() => !!preview.value)
+/** The graph's own row, collapsed by the Graph button: only while a file still has somewhere to go underneath it.
+ * With none open, the whole place swaps for the stamp instead (see WorkspaceView's `graphHidden`). */
+const graphRowHidden = computed(() => prefs.graphCollapsed.value && hasFile.value)
+
+/** Drags the bar between the graph (with its details) and the file editor; its share is kept as a fraction. */
+const column = ref<HTMLElement>()
+function startFileSplit(e: MouseEvent) {
+  const box = column.value!.getBoundingClientRect()
+  const move = (ev: MouseEvent) => (prefs.fileSplit.value = Math.min(Math.max((ev.clientY - box.top) / box.height, 0.15), 0.85))
+  const up = () => {
+    window.removeEventListener('mousemove', move)
+    window.removeEventListener('mouseup', up)
+    document.body.classList.remove('resizing-rows')
+  }
+  document.body.classList.add('resizing-rows')
+  window.addEventListener('mousemove', move)
+  window.addEventListener('mouseup', up)
+  e.preventDefault()
+}
 </script>
 
 <template>
-  <!-- The graph and the commit details are separate panes stacked in one column, like the panes either side. -->
-  <div class="graph-column" :class="{ 'dim-idle': prefs.dimIdleGraph.value && !panelHere }">
-    <section class="pane graph-pane">
+  <div ref="column" class="graph-column" :class="{ 'dim-idle': prefs.dimIdleGraph.value && !panelHere }">
+    <template v-if="panelHere">
       <Transition name="slide">
-        <FilePreview v-if="front === 'file'" class="graph-body" />
-        <AgentReview v-else-if="front === 'review'" class="graph-body" />
+        <AgentReview v-if="front === 'review'" class="graph-body" />
         <AgentsPanel v-else-if="front === 'agents'" class="graph-body" />
         <SidePanel v-else-if="front === 'panel'" class="graph-body" />
       </Transition>
-      <!-- The table stays mounted under a preview so its scroll position survives. -->
-      <template v-if="repo">
-        <GraphToolbar v-show="!panelHere" />
-        <div v-show="!panelHere" class="graph-body">
-          <CommitTable v-if="log" />
-          <Skeleton v-else :lines="16" :gap="15" />
-        </div>
+    </template>
+    <template v-else>
+      <div v-show="!graphRowHidden" class="graph-region" :style="hasFile ? { flex: `0 0 ${prefs.fileSplit.value * 100}%` } : undefined">
+        <section class="pane graph-pane">
+          <template v-if="repo">
+            <GraphToolbar />
+            <div class="graph-body">
+              <CommitTable v-if="log" />
+              <Skeleton v-else :lines="16" :gap="15" />
+            </div>
+          </template>
+          <div v-else class="graph-body"><EmptyState /></div>
+        </section>
+        <DetailsPanel v-if="repo" />
+      </div>
+      <template v-if="hasFile">
+        <div v-show="!graphRowHidden" class="row-resize" title="Drag to resize" @mousedown="startFileSplit" />
+        <FilePreview class="file-pane" />
       </template>
-      <div v-else-if="!panelHere" class="graph-body"><EmptyState /></div>
-    </section>
-    <DetailsPanel v-if="repo" v-show="!panelHere" />
+    </template>
   </div>
 </template>
 
@@ -71,6 +97,12 @@ watch(panelOver, bring('panel'))
 .graph-column.dim-idle:not(:hover):not(:focus-within) > * {
   opacity: 0.45;
 }
+.graph-region {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
 .graph-pane {
   display: flex;
   flex: 1;
@@ -80,5 +112,14 @@ watch(panelOver, bring('panel'))
 .graph-body {
   flex: 1;
   min-height: 0;
+}
+.file-pane {
+  flex: 1;
+  min-height: 120px;
+}
+.row-resize {
+  flex: none;
+  height: 10px;
+  cursor: row-resize;
 }
 </style>

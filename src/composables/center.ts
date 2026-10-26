@@ -4,12 +4,13 @@ import { prefs } from './prefs'
 import type { Workspace } from './workspace'
 
 /**
- * What shows in the graph's place, as a stack: a file, a worktree agent's work under review, the agents expanded, the
- * panel expanded, or the graph itself. Each is put on top when it's brought there; what shows is the topmost one that's
+ * What shows in the graph's place, as a stack: a worktree agent's work under review, the agents expanded, the panel
+ * expanded, or the graph itself. Each is put on top when it's brought there; what shows is the topmost one that's
  * still open, so closing one (or collapsing the graph) shows the one beneath. With none open, the graph's place is
- * empty: the stamp.
+ * empty: the stamp. A file no longer takes a turn here - it has its own place below the graph, always there, the two
+ * never swapping.
  */
-export type Over = 'file' | 'review' | 'agents' | 'panel'
+export type Over = 'review' | 'agents' | 'panel'
 export type Place = Over | 'graph'
 /** The stack itself (`ui.stack`): what's been brought to the graph's place, latest last. */
 export type Stack = Ref<Place[]>
@@ -17,7 +18,6 @@ export type Stack = Ref<Place[]>
 /** What could be over the graph now. */
 export function whatsOpen(ws: Workspace): Record<Over, boolean> {
   return {
-    file: !!ws.files.preview.value,
     review: !!ws.ui.review.value && ws.agents.tabs.value.some((t) => t.id === ws.ui.review.value),
     agents: isOn('claude') && prefs.agentsOpen.value && ws.agents.expanded.value && ws.agents.tabs.value.length > 0,
     panel: ws.panel.expanded.value && ws.panel.tabs.value.length > 0,
@@ -39,7 +39,7 @@ export function overGraph(ws: Workspace): Over | null {
   const isOpen = (p: Place) => (p === 'graph' ? !prefs.graphCollapsed.value : open[p])
   for (const p of [...ws.ui.stack.value].reverse()) if (isOpen(p)) return p === 'graph' ? null : p
   // Open without having been brought (as it was when Acantha started): in a fixed order.
-  return (['file', 'review', 'agents', 'panel'] as const).find((k) => open[k]) ?? null
+  return (['review', 'agents', 'panel'] as const).find((k) => open[k]) ?? null
 }
 
 /** The graph's what you're looking at: shown, and nothing in front of it. */
@@ -57,13 +57,12 @@ export function toggleGraph(ws: Workspace) {
   else showGraph(ws)
 }
 
-/** Puts away what's in front over the graph: the file, a review, the agents or the panel. True when something was. */
+/** Puts away what's in front over the graph: a review, the agents or the panel. True when something was. */
 export function putAwayFront(ws: Workspace): boolean {
   const front = overGraph(ws)
   if (front === 'agents') ws.agents.expanded.value = false
   else if (front === 'panel') ws.panel.expanded.value = false
   else if (front === 'review') ws.ui.review.value = null
-  else if (front === 'file') void ws.files.closePreview()
   else return false
   return true
 }
