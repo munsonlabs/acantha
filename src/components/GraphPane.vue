@@ -72,7 +72,6 @@ watch(panelOver, bring('panel'))
   opacity: 0.45;
 }
 .graph-pane {
-  position: relative;
   display: flex;
   flex: 1;
   flex-direction: column;
