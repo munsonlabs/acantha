@@ -68,6 +68,7 @@ onBeforeUnmount(() => {
       @contextmenu.prevent
       @keydown="onKey"
       @mouseleave="active = -1"
+      @mousedown.prevent
     >
       <template v-for="(entry, i) in menu.items" :key="i">
         <div v-if="entry === 'separator'" class="separator" />

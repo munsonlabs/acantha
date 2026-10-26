@@ -60,6 +60,13 @@ function todoItem(selection: string): MenuEntry[] {
 }
 
 export function replaceNativeMenu() {
+  // A right-click outside a text field would otherwise collapse a selection before the 'contextmenu' handler below
+  // gets to read it (there'd be nothing to offer Copy for) - keep it, there's nothing else a right mousedown here
+  // needs to do.
+  window.addEventListener('mousedown', (e) => {
+    if (e.button === 2 && !(e.target as Element).closest('input, textarea, [contenteditable]') && window.getSelection()?.toString())
+      e.preventDefault()
+  })
   window.addEventListener('contextmenu', (e) => {
     if (e.defaultPrevented) return
     e.preventDefault()
@@ -87,7 +94,9 @@ function readMenu(target: Element): MenuEntry[] {
   }
   if (selection.trim()) {
     if (items.length) items.push('separator')
-    items.push({ label: 'Copy', shortcut: '⌘C', run: () => navigator.clipboard.writeText(selection) }, ...todoItem(selection))
+    // The real copy command, not just writing the selected text - so a diff's own listener still gets to put its
+    // coloured HTML on the clipboard too, the way pressing ⌘C does.
+    items.push({ label: 'Copy', shortcut: '⌘C', run: () => document.execCommand('copy') }, ...todoItem(selection))
   }
   // Text you can select (messages, canvases, previews) gets Select All for that block.
   const block = target.closest<HTMLElement>('.canvas, .markdown, .code') ?? target.closest<HTMLElement>('.slack-view .text')
