@@ -114,6 +114,12 @@ export function createTerminals({ repo }: Repo) {
     if (open.value && !sessions.value.length) add()
   }
 
+  /** Closes the terminal column outright, unlike `toggle`, which flips it either way. */
+  function hide() {
+    open.value = false
+    prefs.terminalOpen.value = false
+  }
+
   /** Brings a terminal tab into view. */
   function show(key: number) {
     activeKey.value = key
@@ -171,7 +177,7 @@ export function createTerminals({ repo }: Repo) {
     return Object.values(found)
   }
 
-  return { sessions, tabs, partnerOf, checkRunning, activeKey, open, add, split, close, closeActive, step, move, toggle, show, restoreOrAdd }
+  return { sessions, tabs, partnerOf, checkRunning, activeKey, open, add, split, close, closeActive, step, move, toggle, hide, show, restoreOrAdd }
 }
 
 export type Terminals = ReturnType<typeof createTerminals>

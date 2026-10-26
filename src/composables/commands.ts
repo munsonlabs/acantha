@@ -5,7 +5,7 @@ import { prefs } from './prefs'
 import { showToast } from './useToast'
 import { ask } from './useDialog'
 import { isPoppedOut, popOut } from './claudeWindow'
-import { graphShowing, toggleGraph } from './center'
+import { graphShowing, putAwayFront, toggleGraph } from './center'
 import { promptSlackLink, togglePanel } from './slackLinks'
 import { useWorkspaces } from './workspace'
 
@@ -168,8 +168,25 @@ export const commands: Command[] = [
   { id: 'next-tab', label: 'Next Tab', group: 'Tabs', keys: '⇧⌘]', run: () => stepWorkspace(1) },
   { id: 'prev-tab', label: 'Previous Tab', group: 'Tabs', keys: '⇧⌘[', run: () => stepWorkspace(-1) },
 
-  { id: 'toggle-sidebar', label: 'Toggle Sidebar', group: 'View', keys: '⌘B', run: () => (prefs.sidebarOpen.value = !prefs.sidebarOpen.value) },
-  { id: 'toggle-terminal', label: 'Toggle Terminal', group: 'View', keys: '⌘J', run: withRepo((ws) => ws.terminals.toggle()) },
+  {
+    id: 'toggle-sidebar',
+    label: 'Toggle Sidebar',
+    group: 'View',
+    keys: '⌘B · ⌃`',
+    run: () => (prefs.sidebarOpen.value = !prefs.sidebarOpen.value),
+  },
+  { id: 'toggle-terminal', label: 'Toggle Terminal', group: 'View', keys: '⌘J · ⌃⇥', run: withRepo((ws) => ws.terminals.toggle()) },
+  {
+    id: 'focus-graph',
+    label: 'Focus the Graph',
+    group: 'View',
+    keys: '⌃Esc',
+    run: withRepo((ws) => {
+      prefs.sidebarOpen.value = false
+      ws.terminals.hide()
+      putAwayFront(ws)
+    }),
+  },
   { id: 'new-terminal', label: 'New Terminal', group: 'View', keys: '⌃⇧`', run: withRepo((ws) => ws.terminals.add()) },
   { id: 'split-terminal', label: 'Split Terminal', group: 'View', keys: '⌘D', run: withRepo((ws) => ws.terminals.split()) },
   { id: 'toggle-hover-cards', label: 'Toggle Commit Hover Cards', group: 'View', run: () => (prefs.hoverCards.value = !prefs.hoverCards.value) },
