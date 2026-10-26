@@ -5,7 +5,7 @@ import { prefs } from './prefs'
 import { showToast } from './useToast'
 import { ask } from './useDialog'
 import { isPoppedOut, popOut } from './claudeWindow'
-import { graphShowing, putAwayFront, toggleGraph } from './center'
+import { graphShowing, toggleGraph } from './center'
 import { promptSlackLink, togglePanel } from './slackLinks'
 import { useWorkspaces } from './workspace'
 
@@ -185,14 +185,15 @@ export const commands: Command[] = [
   },
   {
     id: 'focus-graph',
-    label: 'Focus the Graph',
+    label: 'Focus the Center',
     group: 'View',
     keys: '⌃Esc',
-    run: withRepo((ws) => {
+    // Only the sidebar and the right column: whatever's in the middle - the graph, a file, an agent - stays exactly
+    // as it was, since that's the one thing this is for keeping in view.
+    run: () => {
       prefs.sidebarOpen.value = false
       prefs.rightPanelsOpen.value = false
-      putAwayFront(ws)
-    }),
+    },
   },
   { id: 'new-terminal', label: 'New Terminal', group: 'View', keys: '⌃⇧`', run: withRepo((ws) => ws.terminals.add()) },
   { id: 'split-terminal', label: 'Split Terminal', group: 'View', keys: '⌘D', run: withRepo((ws) => ws.terminals.split()) },
