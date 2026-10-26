@@ -26,6 +26,11 @@ const agentsHere = computed(() => open.value.agents)
 const panelOver = computed(() => open.value.panel)
 /** Something's over the graph. */
 const panelHere = computed(() => front.value !== null)
+/**
+ * The graph itself shows: nothing over it, and not collapsed. Collapsed, with the last thing over it gone, this whole
+ * pane fades out for the stamp (WorkspaceView), and the graph mustn't show in it while it does.
+ */
+const graphHere = computed(() => !panelHere.value && !prefs.graphCollapsed.value)
 // Bringing something there puts it in front: a file opened, a review started, the agents or the panel expanded.
 const bring = (what: Over) => (on: unknown) => on && bringToFront(ws, what)
 watch(preview, bring('file'))
@@ -50,15 +55,15 @@ const leaveAtOnce = (_el: Element, done: () => void) => done()
       </Transition>
       <!-- The table stays mounted under a preview so its scroll position survives. -->
       <template v-if="repo">
-        <GraphToolbar v-show="!panelHere" />
-        <div v-show="!panelHere" class="graph-body">
+        <GraphToolbar v-show="graphHere" />
+        <div v-show="graphHere" class="graph-body">
           <CommitTable v-if="log" />
           <Skeleton v-else :lines="16" :gap="15" />
         </div>
       </template>
       <div v-else-if="!panelHere" class="graph-body"><EmptyState /></div>
     </section>
-    <DetailsPanel v-if="repo" v-show="!panelHere" />
+    <DetailsPanel v-if="repo" v-show="graphHere" />
   </div>
 </template>
 
