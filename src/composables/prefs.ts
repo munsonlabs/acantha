@@ -12,6 +12,8 @@ export const prefs = {
   terminalOpen: usePersisted('terminal-open', true),
   sidebarWidth: usePersisted('sidebar-width', 300),
   sidebarOpen: usePersisted('sidebar-open', true),
+  /** The whole right-hand column: the terminal, and whatever of the panel or agents is docked under it. */
+  rightPanelsOpen: usePersisted('right-panels-open', true),
   workspaces: usePersisted<string[]>('workspaces', []),
   /** The tab that was showing, the only one woken at launch; the others sleep until clicked. */
   activeWorkspace: usePersisted<string | null>('active-workspace', null),

@@ -55,6 +55,7 @@ export function createTerminals({ repo }: Repo) {
     sessions.value.push(session)
     activeKey.value = session.key
     open.value = true
+    prefs.rightPanelsOpen.value = true
   }
 
   /** Splits a tab: a new terminal beside its own, in the same folder. One split a tab. */
@@ -111,19 +112,17 @@ export function createTerminals({ repo }: Repo) {
   function toggle() {
     open.value = !open.value
     prefs.terminalOpen.value = open.value
-    if (open.value && !sessions.value.length) add()
-  }
-
-  /** Closes the terminal column outright, unlike `toggle`, which flips it either way. */
-  function hide() {
-    open.value = false
-    prefs.terminalOpen.value = false
+    if (open.value) {
+      prefs.rightPanelsOpen.value = true
+      if (!sessions.value.length) add()
+    }
   }
 
   /** Brings a terminal tab into view. */
   function show(key: number) {
     activeKey.value = key
     open.value = true
+    prefs.rightPanelsOpen.value = true
   }
 
   /**
@@ -177,7 +176,7 @@ export function createTerminals({ repo }: Repo) {
     return Object.values(found)
   }
 
-  return { sessions, tabs, partnerOf, checkRunning, activeKey, open, add, split, close, closeActive, step, move, toggle, hide, show, restoreOrAdd }
+  return { sessions, tabs, partnerOf, checkRunning, activeKey, open, add, split, close, closeActive, step, move, toggle, show, restoreOrAdd }
 }
 
 export type Terminals = ReturnType<typeof createTerminals>

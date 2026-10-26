@@ -95,7 +95,9 @@ watch(sidebarOpen, () => (sliding.value = 'sidebar'), { flush: 'sync' })
 const panelDocked = computed(() => prefs.panelOpen.value && !(panelExpanded.value && panelTabs.value.length))
 /** The Agents panel, docked under the terminal (beside the panel, when both are): while it has agents to show. */
 const agentsDocked = computed(() => isOn('claude') && prefs.agentsOpen.value && agentTabs.value.length > 0 && !agentsExpanded.value)
-const rightOpen = computed(() => (open.value && sessions.value.length > 0) || panelDocked.value || agentsDocked.value)
+const rightOpen = computed(
+  () => prefs.rightPanelsOpen.value && ((open.value && sessions.value.length > 0) || panelDocked.value || agentsDocked.value),
+)
 /** What a closed column has to show when peeked at. */
 const rightPeekable = computed(
   () => sessions.value.length > 0 || (panelTabs.value.length > 0 && !panelExpanded.value) || (agentTabs.value.length > 0 && !agentsExpanded.value),

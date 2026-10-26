@@ -175,7 +175,14 @@ export const commands: Command[] = [
     keys: '⌘B · ⌃`',
     run: () => (prefs.sidebarOpen.value = !prefs.sidebarOpen.value),
   },
-  { id: 'toggle-terminal', label: 'Toggle Terminal', group: 'View', keys: '⌘J · ⌃⇥', run: withRepo((ws) => ws.terminals.toggle()) },
+  { id: 'toggle-terminal', label: 'Toggle Terminal', group: 'View', keys: '⌘J', run: withRepo((ws) => ws.terminals.toggle()) },
+  {
+    id: 'toggle-right-panels',
+    label: 'Toggle Terminal & Panels',
+    group: 'View',
+    keys: '⌃⇥',
+    run: () => (prefs.rightPanelsOpen.value = !prefs.rightPanelsOpen.value),
+  },
   {
     id: 'focus-graph',
     label: 'Focus the Graph',
@@ -183,7 +190,7 @@ export const commands: Command[] = [
     keys: '⌃Esc',
     run: withRepo((ws) => {
       prefs.sidebarOpen.value = false
-      ws.terminals.hide()
+      prefs.rightPanelsOpen.value = false
       putAwayFront(ws)
     }),
   },

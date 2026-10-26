@@ -117,7 +117,7 @@ function onKeydown(e: KeyboardEvent) {
     runCommand('toggle-sidebar')
   } else if (e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.key === 'Tab') {
     e.preventDefault()
-    runCommand('toggle-terminal')
+    runCommand('toggle-right-panels')
   } else if (e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.key === 'Escape') {
     e.preventDefault()
     runCommand('focus-graph')
