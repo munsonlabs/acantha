@@ -32,13 +32,17 @@ watch(preview, bring('file'))
 watch(reviewHere, bring('review'))
 watch(agentsHere, bring('agents'))
 watch(panelOver, bring('panel'))
+
+// Only coming in slides; going is at once. Without this, Vue keeps the leaving pane a couple of frames to look for a
+// transition, beside the graph that's already showing again: a flash of both.
+const leaveAtOnce = (_el: Element, done: () => void) => done()
 </script>
 
 <template>
   <!-- The graph and the commit details are separate panes stacked in one column, like the panes either side. -->
   <div class="graph-column" :class="{ 'dim-idle': prefs.dimIdleGraph.value && !panelHere }">
     <section class="pane graph-pane">
-      <Transition name="slide">
+      <Transition name="slide" @leave="leaveAtOnce">
         <FilePreview v-if="front === 'file'" class="graph-body" />
         <AgentReview v-else-if="front === 'review'" class="graph-body" />
         <AgentsPanel v-else-if="front === 'agents'" class="graph-body" />

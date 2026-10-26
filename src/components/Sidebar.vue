@@ -22,13 +22,15 @@ const agentsFlag = computed(() => {
   return states.includes('waiting') ? 'waiting' : states.includes('done') ? 'done' : states.includes('working') ? 'working' : null
 })
 const pill = useSlidingPill(nav, () => [sidebarTab.value, files.value.length, isOn('claude')])
+// Without an explicit callback Vue keeps the leaving tab a couple of frames, looking for a transition it doesn't have.
+const leaveAtOnce = (_el: Element, done: () => void) => done()
 </script>
 
 <template>
   <section class="pane sidebar-pane">
     <!-- The old tab goes at once and only the new one fades in: fading both (out, then in) could leave the previous
          tab's text showing when switching quickly, or as a WebKit repaint leftover. -->
-    <Transition name="tab-in">
+    <Transition name="tab-in" @leave="leaveAtOnce">
       <FileBrowser v-if="sidebarTab === 'files'" class="content" />
       <SearchPanel v-else-if="sidebarTab === 'search'" class="content" />
       <AgentsSidebar v-else-if="sidebarTab === 'agents' && isOn('claude')" class="content" />
