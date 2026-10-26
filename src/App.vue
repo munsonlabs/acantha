@@ -168,7 +168,6 @@ function onKeydown(e: KeyboardEvent) {
     // Whatever's in front over the graph goes first; then the rest, in turn.
     // Only what's in front: with the graph brought forward, what's open behind it stays.
     else if (!typing && ws && putAwayFront(ws)) closed = true
-    else if (!typing && ws?.files.preview.value) void ws.files.closePreview()
     else if (!typing && ws?.details.details.value) ws.details.closeDetails()
     else closed = false
     if (closed) e.preventDefault()

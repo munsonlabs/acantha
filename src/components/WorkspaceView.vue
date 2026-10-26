@@ -46,12 +46,11 @@ const agentsHere = computed(() => isOn('claude') && prefs.agentsOpen.value && ag
 watch(agentsHere, (on) => on && (panelExpanded.value = false))
 watch(panelExpanded, (on) => on && agentsHere.value && (agentsExpanded.value = false))
 /**
- * Collapsing folds away the graph, not the space it's in: the expanded panel shows there whatever the graph's doing,
- * and closing it brings back the graph, or the stamp, as you left it. An open file keeps its own place below the
- * graph regardless (GraphPane collapses just the graph's row then, not this whole one). Only with a repository open:
+ * Collapsing folds away the graph, not the space it's in: an open file or the expanded panel shows there whatever
+ * the graph's doing, and closing it brings back the graph, or the stamp, as you left it. Only with a repository open:
  * an empty tab always shows its start screen there.
  */
-const graphHidden = computed(() => prefs.graphCollapsed.value && !!repo.value && overGraph(props.ws) === null && !props.ws.files.preview.value)
+const graphHidden = computed(() => prefs.graphCollapsed.value && !!repo.value && overGraph(props.ws) === null)
 const el = ref<HTMLElement>()
 const width = prefs.terminalWidth
 const sidebarWidth = prefs.sidebarWidth

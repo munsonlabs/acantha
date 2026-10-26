@@ -26,13 +26,6 @@ const { repo, rows } = ws.repo
 const { select } = ws.details
 const { openDiff } = ws.diff
 
-/**
- * What's shown: holds on to the last file while closing it slides away, so there's still something there to fade
- * out instead of the pane going blank the instant it's gone.
- */
-const shown = shallowRef(preview.value)
-watch(preview, (p) => p && (shown.value = p))
-
 const content = shallowRef<FileContent | null>(null)
 const tokens = shallowRef<Token[][] | null>(null)
 const blame = shallowRef<Blame | null>(null)
@@ -85,8 +78,8 @@ let seq = 0
 
 const EDITORS = ['', 'Visual Studio Code', 'Cursor', 'Zed', 'Sublime Text', 'TextEdit']
 
-const isMarkdown = computed(() => /\.(md|markdown|mdx)$/i.test(shown.value?.path ?? ''))
-const crumbs = computed(() => splitPath(shown.value?.path ?? ''))
+const isMarkdown = computed(() => /\.(md|markdown|mdx)$/i.test(preview.value?.path ?? ''))
+const crumbs = computed(() => splitPath(preview.value?.path ?? ''))
 const text = computed(() => (content.value?.kind === 'text' ? content.value.text : ''))
 /** What the editor starts with: the file, or your unsaved draft of it. */
 const editorText = ref('')
@@ -128,8 +121,7 @@ async function load() {
 }
 
 watch(
-  // `shown`, not `preview`: closing never counts as a switch, so the content it's showing stays put to fade out.
-  () => shown.value && `${shown.value.path}|${shown.value.rev}|${shown.value.view}`,
+  () => preview.value && `${preview.value.path}|${preview.value.rev}|${preview.value.view}`,
   () => {
     content.value = null
     tokens.value = null
@@ -196,7 +188,7 @@ function chooseEditor(at: { clientX: number; clientY: number }) {
 }
 
 /** Editing a text file: Save shows, and the menu has the editor's own things. */
-const editingText = computed(() => shown.value?.view === 'edit' && content.value?.kind === 'text')
+const editingText = computed(() => preview.value?.view === 'edit' && content.value?.kind === 'text')
 
 /** Everything but the view switcher, Save and Close, kept out of the way: from ⋯, or right-clicking the toolbar. */
 function moreMenu(e: MouseEvent) {
@@ -262,21 +254,21 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
 </script>
 
 <template>
-  <div v-if="shown" class="preview">
+  <div v-if="preview" class="preview">
     <!-- Just the file, how to view it, Save and Close; everything else is in ⋯, also on right-click. -->
     <header class="pane-header" :class="{ editing: editingText }" @contextmenu.prevent="moreMenu">
-      <FileIcon :path="shown.path" />
-      <span class="path" :title="shown.path">
+      <FileIcon :path="preview.path" />
+      <span class="path" :title="preview.path">
         <span class="dir">{{ crumbs.dir }}</span
         ><span class="name">{{ crumbs.name }}</span>
         <span v-if="dirty" class="dirty" title="Unsaved changes">●</span>
       </span>
-      <span v-if="shown.rev" class="rev" title="At this commit">{{ shortHash(shown.rev) }}</span>
+      <span v-if="preview.rev" class="rev" title="At this commit">{{ shortHash(preview.rev) }}</span>
       <div class="segmented">
-        <button :class="{ on: shown.view === 'preview' }" title="Preview" @click="setView('preview')"><Icon name="eye" :size="13" /></button>
-        <button :class="{ on: shown.view === 'blame' }" title="Blame" @click="setView('blame')"><Icon name="user" :size="13" /></button>
-        <button :class="{ on: shown.view === 'history' }" title="History" @click="setView('history')"><Icon name="history" :size="13" /></button>
-        <button v-if="shown.rev === null" :class="{ on: shown.view === 'edit' }" title="Edit" @click="setView('edit')">
+        <button :class="{ on: preview.view === 'preview' }" title="Preview" @click="setView('preview')"><Icon name="eye" :size="13" /></button>
+        <button :class="{ on: preview.view === 'blame' }" title="Blame" @click="setView('blame')"><Icon name="user" :size="13" /></button>
+        <button :class="{ on: preview.view === 'history' }" title="History" @click="setView('history')"><Icon name="history" :size="13" /></button>
+        <button v-if="preview.rev === null" :class="{ on: preview.view === 'edit' }" title="Edit" @click="setView('edit')">
           <Icon name="pencil" :size="13" />
         </button>
       </div>
@@ -286,7 +278,7 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
     </header>
 
     <div class="body">
-      <div v-if="diskText !== null && shown.view === 'edit'" class="disk-bar">
+      <div v-if="diskText !== null && preview.view === 'edit'" class="disk-bar">
         <Icon name="warning" :size="13" />
         <span>This file changed on disk while you were editing it.</span>
         <button class="ghost" @click="reloadFromDisk">Reload</button>
@@ -294,7 +286,7 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
       </div>
       <p v-if="error" class="note error">{{ error }}</p>
 
-      <template v-else-if="shown.view === 'history'">
+      <template v-else-if="preview.view === 'history'">
         <Skeleton v-if="!history" :lines="6" :gap="18" />
         <p v-else-if="!history.length" class="note">No commits touch this file.</p>
         <ul v-else class="history">
@@ -303,7 +295,7 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
             <span class="subject">{{ c.subject }}</span>
             <span class="author">{{ c.author }}</span>
             <span class="date" :title="formatDate(c.date)">{{ displayDate(c.date) }}</span>
-            <button class="ghost icon-btn" title="View the file at this commit" @click.stop="open(shown.path, 'preview', c.hash)">
+            <button class="ghost icon-btn" title="View the file at this commit" @click.stop="open(preview.path, 'preview', c.hash)">
               <Icon name="eye" :size="13" />
             </button>
           </li>
@@ -311,35 +303,35 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
       </template>
 
       <Skeleton v-else-if="!content" :lines="14" />
-      <p v-else-if="shown.view === 'edit' && content.kind !== 'text'" class="note">
+      <p v-else-if="preview.view === 'edit' && content.kind !== 'text'" class="note">
         Only text files can be edited here. Use Open to edit it elsewhere.
       </p>
       <CodeEditor
-        v-else-if="shown.view === 'edit'"
+        v-else-if="preview.view === 'edit'"
         ref="editor"
-        :key="shown.path"
-        :path="shown.path"
+        :key="preview.path"
+        :path="preview.path"
         :text="editorText"
-        :line="shown.line"
+        :line="preview.line"
         @change="onEdit"
         @save="save()"
       />
       <div v-else-if="content.kind === 'image'" class="image">
-        <img :src="`data:${content.mime};base64,${content.data}`" :alt="shown.path" />
+        <img :src="`data:${content.mime};base64,${content.data}`" :alt="preview.path" />
         <span class="meta">{{ size(content.size) }}</span>
       </div>
       <p v-else-if="content.kind === 'binary'" class="note">Binary file, {{ size(content.size) }}.</p>
       <p v-else-if="content.kind === 'tooLarge'" class="note">This file is too large to preview ({{ size(content.size) }}).</p>
       <MarkdownView
-        v-else-if="isMarkdown && rendered && shown.view === 'preview'"
+        v-else-if="isMarkdown && rendered && preview.view === 'preview'"
         :source="text"
-        :path="shown.path"
+        :path="preview.path"
         :repo="repo!"
-        :rev="shown.rev"
-        @open="(path) => open(path, 'preview', shown!.rev)"
+        :rev="preview.rev"
+        @open="(path) => open(path, 'preview', preview!.rev)"
       />
       <Skeleton v-else-if="!tokens" :lines="14" />
-      <CodeView v-else :lines="tokens" :blame="shown.view === 'blame' ? blameCells : undefined" :focus="shown.line" @commit="showCommit" />
+      <CodeView v-else :lines="tokens" :blame="preview.view === 'blame' ? blameCells : undefined" :focus="preview.line" @commit="showCommit" />
     </div>
   </div>
 </template>

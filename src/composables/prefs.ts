@@ -6,8 +6,6 @@ export const prefs = {
   showStashes: usePersisted('show-stashes', true),
   recents: usePersisted<string[]>('recents', []),
   detailsHeight: usePersisted('details-height', 280),
-  /** The graph's share of its column's height while a file's open below it (always, now - they no longer swap). */
-  fileSplit: usePersisted('file-split', 0.5),
   /** A commit's changed files, as the folders they're in rather than one flat list. */
   detailsFilesTree: usePersisted('details-files-tree', true),
   terminalWidth: usePersisted('terminal-width', 0.42),
