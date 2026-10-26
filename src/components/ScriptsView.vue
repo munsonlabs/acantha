@@ -88,6 +88,16 @@ function rerun(s: Script) {
   if (open) ws.terminals.close(open.key)
   run(s)
 }
+
+/** A one-off shell command, not one of the scripts above: runs in its own terminal tab, which closes itself once the
+ * command's done - there to see if it fails, gone on its own once it doesn't. */
+const once = ref('')
+function runOnce() {
+  const cmd = once.value.trim()
+  if (!cmd || !repo.value) return
+  ws.terminals.add(undefined, { title: cmd, command: `${cmd} && exit` })
+  once.value = ''
+}
 </script>
 
 <template>
@@ -99,6 +109,15 @@ function rerun(s: Script) {
         <input v-model="filter" type="text" placeholder="Filter" spellcheck="false" autocomplete="off" />
       </label>
       <button class="ghost icon-btn" title="Refresh" :disabled="loading" @click="load(true)"><Icon name="refresh" /></button>
+    </div>
+    <div class="bar once">
+      <label class="filter">
+        <Icon name="terminal" :size="12" />
+        <input v-model="once" type="text" placeholder="Run a one-off command…" spellcheck="false" autocomplete="off" @keydown.enter="runOnce" />
+      </label>
+      <button class="ghost icon-btn" title="Run once: closes on its own when it's done" :disabled="!once.trim()" @click="runOnce">
+        <Icon name="play" :size="12" />
+      </button>
     </div>
 
     <div class="list">
@@ -152,6 +171,10 @@ function rerun(s: Script) {
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
+}
+.bar.once {
+  padding-top: 0;
+  padding-bottom: 8px;
 }
 .tool {
   color: var(--fg-muted);
