@@ -259,10 +259,17 @@ async function trash(r: Row) {
 /**
  * Dragging a row onto a folder, or onto the tree's own background for the top level, moves it there. Only folders
  * (and that background) are drop targets - dropping on a file wouldn't mean anything, there's nothing to put it in.
+ * Done with pointer events: the webview's own drag and drop never reaches the page, since the window takes drops
+ * itself (a folder dropped from Finder opens as a tab).
  */
 const dragging = ref<{ path: string; kind: 'dir' | 'file' } | null>(null)
 /** The folder a drag is over, '' for the top level. */
 const dropTarget = ref<string | null>(null)
+/** Where the pointer is while dragging, for the name that follows it. */
+const dragAt = ref({ x: 0, y: 0 })
+const treeEl = ref<HTMLElement>()
+/** How far the pointer goes before a press becomes a drag, so a click with a wobble is still a click. */
+const DRAG_FROM = 4
 
 function canDropOn(dir: string) {
   const d = dragging.value
@@ -271,28 +278,55 @@ function canDropOn(dir: string) {
   return !(d.kind === 'dir' && inside(dir, d.path)) // not into itself or its own folder
 }
 
-function onDragStart(e: DragEvent, r: Row) {
-  if (!working.value || r.kind === 'new') return e.preventDefault()
-  dragging.value = { path: r.path, kind: r.kind }
-  e.dataTransfer?.setData('text/plain', r.path)
-  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
-}
-function onDragEnd() {
-  dragging.value = null
-  dropTarget.value = null
-}
-/** Over a folder (by its path) or the tree's own background (''): only a place it can go takes the drop. */
-function onDragOver(e: DragEvent, dir: string) {
-  if (!canDropOn(dir)) return
-  e.preventDefault()
-  dropTarget.value = dir
+/** The folder under the pointer that can take the drop: a folder row, or the tree's background for the top level. */
+function dropAt(x: number, y: number) {
+  const el = document.elementFromPoint(x, y)
+  if (!el || !treeEl.value?.contains(el)) return null
+  const row = el.closest<HTMLElement>('.row')
+  const dir = row ? row.dataset.dir : ''
+  return dir !== undefined && canDropOn(dir) ? dir : null
 }
 
-async function onDrop(e: DragEvent, dir: string) {
-  const d = dragging.value
-  if (!d || !canDropOn(dir)) return
-  e.preventDefault()
-  onDragEnd()
+function onRowDown(e: PointerEvent, r: Row) {
+  if (e.button !== 0 || !working.value || r.kind === 'new' || isEditing(r)) return
+  const start = { x: e.clientX, y: e.clientY }
+  const move = (m: PointerEvent) => {
+    if (!dragging.value) {
+      if (Math.hypot(m.clientX - start.x, m.clientY - start.y) < DRAG_FROM) return
+      dragging.value = { path: r.path, kind: r.kind as 'dir' | 'file' }
+    }
+    dragAt.value = { x: m.clientX, y: m.clientY }
+    dropTarget.value = dropAt(m.clientX, m.clientY)
+  }
+  const stop = (drop: boolean) => {
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', up)
+    window.removeEventListener('keydown', key, true)
+    const d = dragging.value
+    const dir = dropTarget.value
+    dragging.value = null
+    dropTarget.value = null
+    if (!d) return
+    // The press ended a drag, not a click: the row it ends on mustn't open or fold.
+    // (It comes straight after pointerup, if at all: released off the row, there's none, so this doesn't wait for it.)
+    window.addEventListener('click', swallow, true)
+    setTimeout(() => window.removeEventListener('click', swallow, true))
+    if (drop && dir !== null) void moveInto(d, dir)
+  }
+  const swallow = (c: MouseEvent) => c.stopPropagation()
+  const up = () => stop(true)
+  const key = (k: KeyboardEvent) => {
+    if (k.key !== 'Escape') return
+    k.preventDefault()
+    k.stopPropagation()
+    stop(false)
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', up)
+  window.addEventListener('keydown', key, true)
+}
+
+async function moveInto(d: { path: string; kind: 'dir' | 'file' }, dir: string) {
   try {
     await moveTo(d.path, d.kind, resolveName(dir, d.path.split('/').pop()!))
   } catch (err) {
@@ -405,14 +439,7 @@ watch(status, (now, before) => {
       <Icon name="search" :size="12" />
       <input v-model="filter" type="text" placeholder="Filter files" spellcheck="false" autocomplete="off" />
     </div>
-    <div
-      class="tree"
-      :class="{ 'drop-target': dropTarget === '' }"
-      @contextmenu.self.prevent="rootMenu"
-      @dragover.self="onDragOver($event, '')"
-      @drop.self="onDrop($event, '')"
-      @dragleave.self="dropTarget = null"
-    >
+    <div ref="treeEl" class="tree" :class="{ 'drop-target': dropTarget === '', 'drag-on': dragging }" @contextmenu.self.prevent="rootMenu">
       <Skeleton v-if="loading && !list.length" :lines="10" />
       <p v-else-if="!visible.length" class="note">No files</p>
       <template v-for="r in visible" :key="r.path">
@@ -430,14 +457,11 @@ watch(status, (now, before) => {
           ]"
           :style="{ paddingLeft: `${(r.kind === 'dir' ? 8 : 24) + r.depth * 14}px` }"
           :title="r.kind === 'new' ? undefined : r.path"
-          :draggable="working && r.kind !== 'new'"
+          :data-dir="r.kind === 'dir' ? r.path : undefined"
           @click="isEditing(r) || r.kind === 'new' ? undefined : r.kind === 'dir' ? toggle(r.path) : open(r.path)"
           @dblclick="!isEditing(r) && r.kind === 'file' ? open(r.path, undefined, undefined, undefined, { pin: true }) : undefined"
           @contextmenu.prevent="r.kind !== 'new' && rowMenu($event, r)"
-          @dragstart="onDragStart($event, r)"
-          @dragend="onDragEnd"
-          @dragover="r.kind === 'dir' && onDragOver($event, r.path)"
-          @drop="r.kind === 'dir' && onDrop($event, r.path)"
+          @pointerdown="onRowDown($event, r)"
         >
           <Icon v-if="r.kind === 'dir'" name="chevron" :size="11" class="chev" :class="{ open: expanded.has(r.path) }" />
           <FileIcon
@@ -465,6 +489,10 @@ watch(status, (now, before) => {
         </div>
         <p v-if="isEditing(r) && editing?.error" class="edit-error" :style="{ paddingLeft: `${24 + r.depth * 14}px` }">{{ editing.error }}</p>
       </template>
+    </div>
+    <div v-if="dragging" class="drag-label" :style="{ left: `${dragAt.x}px`, top: `${dragAt.y}px` }">
+      <FileIcon :path="dragging.path" :folder="dragging.kind === 'dir'" />
+      {{ dragging.path.split('/').pop() }}
     </div>
   </div>
 </template>
@@ -593,6 +621,25 @@ watch(status, (now, before) => {
   background: var(--selected);
   outline: 1.5px solid var(--ring);
   outline-offset: -1.5px;
+}
+.tree.drag-on,
+.tree.drag-on .row {
+  cursor: grabbing;
+}
+.drag-label {
+  position: fixed;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--popover);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  pointer-events: none;
+  transform: translate(12px, 8px);
 }
 .tree.drop-target {
   outline: 1.5px solid var(--ring);
