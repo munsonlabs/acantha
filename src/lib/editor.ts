@@ -3,7 +3,7 @@
  * Colours come from the app's CSS variables, so the editor follows the light and dark themes on its own.
  */
 import { basicSetup } from 'codemirror'
-import { completeAnyWord, startCompletion, type Completion, type CompletionContext } from '@codemirror/autocomplete'
+import { completeAnyWord, startCompletion, type Completion, type CompletionContext, type CompletionSource } from '@codemirror/autocomplete'
 import { importCandidates, pathBeingTyped } from './importPaths'
 import { BIG_FILE, TYPED } from './typed'
 import { typeAware, typeCompletions, type TypeService } from './types'
@@ -129,6 +129,15 @@ function filePaths(path: string, files: () => string[]) {
   }
 }
 
+/**
+ * Adds a source of suggestions, alongside the language's own. The very same one each time it's looked up: CodeMirror
+ * matches a source's answer to the source that asked, so one made afresh each time has its answers thrown away.
+ */
+function suggests(source: CompletionSource) {
+  const data = [{ autocomplete: source }]
+  return EditorState.languageData.of(() => data)
+}
+
 /** Completes words found in the other open files. Words also in this file come up once: the duplicates merge. */
 function otherWords(words: () => readonly string[]) {
   let from: readonly string[] = []
@@ -204,17 +213,11 @@ export function createEditor(
         // Alongside each language's own suggestions: TypeScript's, where it knows the file; otherwise any word already
         // in this file or the other open ones. And file paths.
         ...(typed
-          ? [
-              EditorState.languageData.of(() => [{ autocomplete: typeCompletions(types!.file, types!.service) }]),
-              typeAware(types!.file, types!.service),
-            ]
+          ? [suggests(typeCompletions(types!.file, types!.service)), typeAware(types!.file, types!.service)]
           : big
             ? []
-            : [
-                EditorState.languageData.of(() => [{ autocomplete: completeAnyWord }]),
-                ...(words ? [EditorState.languageData.of(() => [{ autocomplete: otherWords(words) }])] : []),
-              ]),
-        ...(files && !big ? [EditorState.languageData.of(() => [{ autocomplete: filePaths(path, files) }])] : []),
+            : [suggests(completeAnyWord), ...(words ? [suggests(otherWords(words))] : [])]),
+        ...(files && !big ? [suggests(filePaths(path, files))] : []),
         theme,
         syntaxHighlighting(highlight),
         ...(changeMarkers && !big ? [changeGutter()] : []),
