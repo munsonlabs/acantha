@@ -4,7 +4,7 @@
  */
 import { basicSetup } from 'codemirror'
 import { completeAnyWord, startCompletion, type Completion, type CompletionContext } from '@codemirror/autocomplete'
-import { importCandidates } from './importPaths'
+import { importCandidates, pathBeingTyped } from './importPaths'
 import { BIG_FILE, TYPED } from './typed'
 import { typeAware, typeCompletions, type TypeService } from './types'
 import { changeGutter, setChangeBase } from './changeGutter'
@@ -85,7 +85,7 @@ const highlight = HighlightStyle.define([
 export interface EditorOptions {
   doc: string
   path: string
-  /** The repository's files, for completing import paths. */
+  /** The repository's files, for completing paths. */
   files?: () => string[]
   /** Words from the other open files, suggested alongside the ones in this file. */
   words?: () => readonly string[]
@@ -101,21 +101,22 @@ export interface EditorOptions {
   onSave: () => void
 }
 
-/** Files whose imports name other files by path. */
+/** Files whose imports name other files by path, leaving script extensions off. */
 const SCRIPT = /\.(m?[jt]sx?|cjs|cts|mts|vue|svelte|astro)$/
 
 /**
- * Completes the path in an import (`from './…'`, `import('../…')`, `require('./…')`) from the repository's files.
- * Picking a folder opens its contents straight away.
+ * Completes a path being typed, from the repository's files: in an import (`from './…'`, `import('../…')`,
+ * `require('@/…')`), and in any other string or `url(…)` that starts `./`, `../` or `@/`. Picking a folder opens its
+ * contents straight away.
  */
-function importPaths(path: string, files: () => string[]) {
+function filePaths(path: string, files: () => string[]) {
   return (ctx: CompletionContext) => {
     const line = ctx.state.doc.lineAt(ctx.pos)
-    const m = line.text.slice(0, ctx.pos - line.from).match(/(?:\bfrom|\bimport|\brequire\s*\()\s*\(?\s*['"](\.{1,2}\/[^'"]*)$/)
-    if (!m) return null
-    const typed = m[1]
+    const found = pathBeingTyped(line.text.slice(0, ctx.pos - line.from))
+    if (!found) return null
+    const { typed, isImport } = found
     const cut = typed.lastIndexOf('/') + 1
-    const options: Completion[] = importCandidates(path, typed.slice(0, cut), files()).map((c) => ({
+    const options: Completion[] = importCandidates(path, typed.slice(0, cut), files(), isImport && SCRIPT.test(path)).map((c) => ({
       label: c.label,
       type: c.folder ? 'namespace' : 'variable',
       boost: c.folder ? 1 : 0,
@@ -201,7 +202,7 @@ export function createEditor(
         ]),
         language.of([]),
         // Alongside each language's own suggestions: TypeScript's, where it knows the file; otherwise any word already
-        // in this file or the other open ones. And import paths.
+        // in this file or the other open ones. And file paths.
         ...(typed
           ? [
               EditorState.languageData.of(() => [{ autocomplete: typeCompletions(types!.file, types!.service) }]),
@@ -213,7 +214,7 @@ export function createEditor(
                 EditorState.languageData.of(() => [{ autocomplete: completeAnyWord }]),
                 ...(words ? [EditorState.languageData.of(() => [{ autocomplete: otherWords(words) }])] : []),
               ]),
-        ...(files && !big && SCRIPT.test(path) ? [EditorState.languageData.of(() => [{ autocomplete: importPaths(path, files) }])] : []),
+        ...(files && !big ? [EditorState.languageData.of(() => [{ autocomplete: filePaths(path, files) }])] : []),
         theme,
         syntaxHighlighting(highlight),
         ...(changeMarkers && !big ? [changeGutter()] : []),
