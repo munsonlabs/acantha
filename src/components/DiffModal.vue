@@ -65,6 +65,29 @@ async function act(action: 'stage' | 'unstage' | 'discard', lines: Set<number>) 
 
 const count = computed(() => chosen.value.size)
 
+/**
+ * Whether the file is on disk to edit: a changed file from the source control panel that wasn't deleted, or any
+ * other file the working tree has.
+ */
+const editable = computed(() => {
+  const d = diff.value
+  if (!d) return false
+  if (d.status) {
+    const f = d.status.file
+    return !f.path.endsWith('/') && f.worktree !== 'D' && !(f.index === 'D' && f.worktree === '.')
+  }
+  return ws.files.rev.value === null && ws.files.known.value.has(d.file.path)
+})
+
+/** Leaves the diff for the editor: at `line`, or at the first change. */
+function edit(line?: number | null) {
+  const d = diff.value
+  if (!d || !editable.value) return
+  line ??= d.result?.lines.find((l) => l.kind === 'add' || l.kind === 'del')?.newNo ?? undefined
+  closeDiff()
+  void ws.files.open(d.file.path, 'edit', null, line ?? undefined, { pin: true })
+}
+
 const table = ref<HTMLTableElement>()
 function escapeHtml(s: string) {
   const d = document.createElement('div')
@@ -108,6 +131,9 @@ function onCopy(e: ClipboardEvent) {
             {{ diff.file.path }}<span v-if="diff.file.oldPath" class="muted"> ← {{ diff.file.oldPath }}</span>
             <span v-if="diff.label" class="label">{{ diff.label }}</span>
           </h2>
+          <button v-if="editable" class="ghost icon-btn" title="Open in Editor (or double-click a line)" @click="edit()">
+            <Icon name="pencil" />
+          </button>
           <button class="ghost icon-btn" title="Close (Esc)" @click="closeDiff"><Icon name="x" /></button>
         </header>
         <div class="body" @copy="onCopy">
@@ -137,7 +163,7 @@ function onCopy(e: ClipboardEvent) {
                 <template v-else>
                   <td class="no" :class="{ pickable: side && isChange(i) }" @click="choose(i, $event)">{{ l.oldNo }}</td>
                   <td class="no" :class="{ pickable: side && isChange(i) }" @click="choose(i, $event)">{{ l.newNo }}</td>
-                  <td class="code">{{ l.text || ' ' }}</td>
+                  <td class="code" @dblclick="editable && edit(l.newNo ?? l.oldNo)">{{ l.text || ' ' }}</td>
                 </template>
               </tr>
             </tbody>
