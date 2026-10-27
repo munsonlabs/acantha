@@ -38,6 +38,8 @@ export const prefs = {
   opencodeModel: usePersisted('opencode-model', ''),
   /** The model that plans repository tours: Haiku by default, which plans a good one quickly and lightly. */
   tourModel: usePersisted('tour-model', 'haiku'),
+  /** The model ⌘I in the editor asks to change code, or about it. */
+  editAskModel: usePersisted('edit-ask-model', 'sonnet'),
   /** Agents' tool calls shown one by one; off, each reply folds them into a line of steps, opened one reply at a time. */
   agentSteps: usePersisted('agent-steps', true),
   /** How much a popped-out Claude dims the screen behind it while you're in it: 0 to leave it be. */

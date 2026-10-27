@@ -15,7 +15,7 @@ function wordsOfDraft(draft: { text: string }) {
 </script>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import type { Editor } from '@/lib/editor'
 import { git } from '@/lib/git'
 import { prefs } from '@/composables/prefs'
@@ -27,6 +27,7 @@ import { BIG_FILE, TYPED } from '@/lib/typed'
 import { symbolsOf, type Symbol, type TsDiagnostic, type TypeService } from '@/lib/types'
 import { holdTypes } from '@/composables/typesInUse'
 import SymbolPicker from './SymbolPicker.vue'
+import EditAsk from './EditAsk.vue'
 
 const props = defineProps<{ path: string; text: string; line?: number }>()
 const emit = defineEmits<{ change: [doc: string]; save: [] }>()
@@ -40,7 +41,10 @@ const wantsWords = !big && !typed
 const el = ref<HTMLElement>()
 const ws = useWorkspace()
 const loading = ref(true)
+/** Shallow: CodeMirror's view mustn't be made reactive. */
+const editorRef = shallowRef<Editor | null>(null)
 let editor: Editor | null = null
+const asker = ref<InstanceType<typeof EditAsk>>()
 /** Lets the repository's TypeScript go, when this editor was using it. */
 let releaseTypes = () => {}
 let disposed = false
@@ -135,9 +139,11 @@ onMounted(async () => {
     changeMarkers: isOn('changeMarkers'),
     types: root && typed ? { file: `${root}/${props.path}`, service: typeService(root, `${root}/${props.path}`) } : undefined,
     onJumpToSymbol: typed ? openSymbolPicker : undefined,
+    onAsk: isOn('claude') ? () => void asker.value?.start() : undefined,
     onChange: (doc) => emit('change', doc),
     onSave: () => emit('save'),
   })
+  editorRef.value = editor
   if (root && typed) releaseTypes = holdTypes(root)
   loading.value = false
   void loadBase()
@@ -191,6 +197,7 @@ defineExpose({
   <div class="code-editor">
     <p v-if="loading" class="note">Loading editor…</p>
     <div ref="el" class="host" />
+    <EditAsk ref="asker" :editor="editorRef" :path="path" :host="el" />
     <SymbolPicker v-model:open="showSymbols" :symbols="symbols" @choose="chooseSymbol" />
   </div>
 </template>

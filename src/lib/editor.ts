@@ -8,8 +8,8 @@ import { importCandidates } from './importPaths'
 import { BIG_FILE, TYPED } from './typed'
 import { typeAware, typeCompletions, type TypeService } from './types'
 import { changeGutter, setChangeBase } from './changeGutter'
-import { EditorView, keymap } from '@codemirror/view'
-import { Compartment, EditorState } from '@codemirror/state'
+import { Decoration, EditorView, keymap } from '@codemirror/view'
+import { Compartment, EditorState, Prec, StateEffect, StateField } from '@codemirror/state'
 import { indentWithTab } from '@codemirror/commands'
 import { HighlightStyle, LanguageDescription, syntaxHighlighting } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
@@ -46,6 +46,21 @@ const theme = EditorView.theme({
   },
   '.cm-tooltip': { backgroundColor: 'var(--popover)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--fg)' },
   '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--pill)', color: 'var(--fg)' },
+  '.cm-proposal': { backgroundColor: 'color-mix(in oklab, var(--add) 16%, transparent)' },
+})
+
+/** A change ⌘I made, highlighted until it's kept or undone: from and to, following the edits around it. */
+const setProposal = StateEffect.define<{ from: number; to: number } | null>()
+const proposal = StateField.define<{ from: number; to: number } | null>({
+  create: () => null,
+  update(range, tr) {
+    for (const e of tr.effects) if (e.is(setProposal)) return e.value
+    return range && tr.docChanged ? { from: tr.changes.mapPos(range.from, 1), to: tr.changes.mapPos(range.to, -1) } : range
+  },
+  provide: (f) =>
+    EditorView.decorations.from(f, (range) =>
+      range && range.to > range.from ? Decoration.set(Decoration.mark({ class: 'cm-proposal' }).range(range.from, range.to)) : Decoration.none,
+    ),
 })
 
 /** Token colours from the terminal palette, so code reads the same in the editor, terminal and preview. */
@@ -80,6 +95,8 @@ export interface EditorOptions {
   types?: { file: string; service: TypeService }
   /** ⇧⌘O, for a file TypeScript understands: a list of this file's symbols to jump to. */
   onJumpToSymbol?: () => void
+  /** ⌘I: ask Claude to change the selected code, or about it. */
+  onAsk?: () => void
   onChange: (doc: string) => void
   onSave: () => void
 }
@@ -129,7 +146,7 @@ function otherWords(words: () => readonly string[]) {
 
 export function createEditor(
   parent: HTMLElement,
-  { doc, path, files, words, changeMarkers, types, onJumpToSymbol, onChange, onSave }: EditorOptions,
+  { doc, path, files, words, changeMarkers, types, onJumpToSymbol, onAsk, onChange, onSave }: EditorOptions,
 ) {
   const big = doc.length > BIG_FILE
   const typed = !big && !!types && TYPED.test(path)
@@ -141,6 +158,24 @@ export function createEditor(
       doc,
       extensions: [
         basicSetup,
+        // Ahead of the default ⌘I (select the enclosing syntax).
+        ...(onAsk
+          ? [
+              Prec.high(
+                keymap.of([
+                  {
+                    key: 'Mod-i',
+                    preventDefault: true,
+                    run: () => {
+                      onAsk()
+                      return true
+                    },
+                  },
+                ]),
+              ),
+            ]
+          : []),
+        proposal,
         keymap.of([
           {
             key: 'Mod-s',
@@ -221,6 +256,27 @@ export function createEditor(
       const l = doc.line(Math.min(Math.max(line, 1), doc.lines))
       const at = Math.min(l.from + Math.max(col - 1, 0), l.to)
       view.dispatch({ selection: { anchor: at }, effects: EditorView.scrollIntoView(at, { y: 'center' }) })
+    },
+    /** The selection (the main one), and where its start is on screen. */
+    selection: () => {
+      const { from, to } = view.state.selection.main
+      return { from, to, at: view.coordsAtPos(from) }
+    },
+    /** Puts `text` in place of from…to, highlighted as ⌘I's proposal until `settle`. Returns what was there. */
+    propose: (from: number, to: number, text: string) => {
+      const old = view.state.sliceDoc(from, to)
+      view.dispatch({
+        changes: { from, to, insert: text },
+        effects: setProposal.of({ from, to: from + text.length }),
+        selection: { anchor: from + text.length },
+        scrollIntoView: true,
+      })
+      return old
+    },
+    /** Keeps the proposal, or puts back `old` where it is now. */
+    settle: (old: string | null) => {
+      const range = view.state.field(proposal)
+      view.dispatch({ ...(range && old !== null ? { changes: { ...range, insert: old } } : {}), effects: setProposal.of(null) })
     },
     focus: () => view.focus(),
     destroy: () => view.destroy(),

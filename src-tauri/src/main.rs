@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod ask;
 mod claude;
 mod files;
 mod git;
@@ -92,6 +93,7 @@ fn main() {
             opencode::opencode_models,
             opencode::opencode_history,
             tour::tour_plan,
+            ask::edit_ask,
             sessions::agent_storage,
             sessions::claude_set_cleanup_days,
             sessions::opencode_delete_session,
