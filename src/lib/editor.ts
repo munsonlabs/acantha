@@ -104,6 +104,18 @@ export interface EditorOptions {
 /** Files whose imports name other files by path, leaving script extensions off. */
 const SCRIPT = /\.(m?[jt]sx?|cjs|cts|mts|vue|svelte|astro)$/
 
+/** The path being typed at the cursor, if it's in one (see `pathBeingTyped`). */
+function pathAt(ctx: CompletionContext) {
+  const line = ctx.state.doc.lineAt(ctx.pos)
+  return pathBeingTyped(line.text.slice(0, ctx.pos - line.from))
+}
+
+/** Words aren't suggested in a path: only the files and folders it can go on to are. */
+const notInPaths =
+  (source: CompletionSource): CompletionSource =>
+  (ctx) =>
+    pathAt(ctx) ? null : source(ctx)
+
 /**
  * Completes a path being typed, from the repository's files: in an import (`from './…'`, `import('../…')`,
  * `require('@/…')`), and in any other string or `url(…)` that starts `./`, `../` or `@/`. Picking a folder opens its
@@ -111,8 +123,7 @@ const SCRIPT = /\.(m?[jt]sx?|cjs|cts|mts|vue|svelte|astro)$/
  */
 function filePaths(path: string, files: () => string[]) {
   return (ctx: CompletionContext) => {
-    const line = ctx.state.doc.lineAt(ctx.pos)
-    const found = pathBeingTyped(line.text.slice(0, ctx.pos - line.from))
+    const found = pathAt(ctx)
     if (!found) return null
     const { typed, isImport } = found
     const cut = typed.lastIndexOf('/') + 1
@@ -216,7 +227,7 @@ export function createEditor(
           ? [suggests(typeCompletions(types!.file, types!.service)), typeAware(types!.file, types!.service)]
           : big
             ? []
-            : [suggests(completeAnyWord), ...(words ? [suggests(otherWords(words))] : [])]),
+            : [suggests(notInPaths(completeAnyWord)), ...(words ? [suggests(notInPaths(otherWords(words)))] : [])]),
         ...(files && !big ? [suggests(filePaths(path, files))] : []),
         theme,
         syntaxHighlighting(highlight),
