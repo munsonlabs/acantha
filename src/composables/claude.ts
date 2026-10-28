@@ -113,6 +113,7 @@ export function useClaudeConversation(id: string, root: string, cwd = root, kind
   const chat = reactive(newChat())
   const mode = ref<ClaudeMode>(prefs.claudeMode.value)
   const model = ref<string>(modelPref.value)
+  const chrome = ref(prefs.claudeChrome.value)
   const name = root.split('/').pop() ?? root
   const fresh = (): SavedConversation => ({ repo: root, ...(cwd !== root ? { cwd } : {}), ...(oc ? { kind } : {}), updated: Date.now() })
   if (!conversations.value[id]) save(id, fresh())
@@ -164,7 +165,7 @@ export function useClaudeConversation(id: string, root: string, cwd = root, kind
     save(id, { updated: Date.now() })
     try {
       if (oc) await invoke('opencode_send', { id, cwd, text: message, mode: mode.value, model: model.value || null })
-      else await invoke('claude_send', { id, repo: cwd, text: message, mode: mode.value, model: model.value || null })
+      else await invoke('claude_send', { id, repo: cwd, text: message, mode: mode.value, model: model.value || null, chrome: chrome.value })
     } catch (e) {
       chat.entries.push({ kind: 'notice', text: String(e), error: true })
     }
@@ -215,10 +216,35 @@ export function useClaudeConversation(id: string, root: string, cwd = root, kind
     model.value = modelPref.value = m
     if (!chat.working && !oc) await invoke('claude_stop', { id })
   }
+  /** Claude in Chrome on or off: like a new model, from the next message. */
+  async function setChrome(on: boolean) {
+    chrome.value = prefs.claudeChrome.value = on
+    if (!chat.working && !oc) await invoke('claude_stop', { id })
+  }
 
   const status = computed(() => (chat.approvals.length ? 'waiting' : chat.working ? 'working' : 'idle'))
 
-  return { id, root, cwd, kind, name, chat, mode, model, status, commands, send, answer, interrupt, clear, resume, setMode, setModel }
+  return {
+    id,
+    root,
+    cwd,
+    kind,
+    name,
+    chat,
+    mode,
+    model,
+    chrome,
+    status,
+    commands,
+    send,
+    answer,
+    interrupt,
+    clear,
+    resume,
+    setMode,
+    setModel,
+    setChrome,
+  }
 }
 
 let openCodeModels: Promise<{ id: string; label: string }[]> | null = null
@@ -241,5 +267,6 @@ export async function sendToAgent(a: { id: string; root: string; cwd?: string; k
     save(a.id, { repo: a.root, ...(cwd !== a.root ? { cwd } : {}), ...(a.kind === 'opencode' ? { kind: a.kind } : {}), updated: Date.now() })
   const mode = prefs.claudeMode.value
   if (a.kind === 'opencode') await invoke('opencode_send', { id: a.id, cwd, text: a.text, mode, model: prefs.opencodeModel.value || null })
-  else await invoke('claude_send', { id: a.id, repo: cwd, text: a.text, mode, model: prefs.claudeModel.value || null })
+  else
+    await invoke('claude_send', { id: a.id, repo: cwd, text: a.text, mode, model: prefs.claudeModel.value || null, chrome: prefs.claudeChrome.value })
 }

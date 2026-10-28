@@ -318,6 +318,19 @@ defineExpose({ focus: () => input.value?.focus(), claude })
           >
             <Icon name="files" :size="12" />
           </button>
+          <button
+            v-if="claude.kind === 'claude'"
+            class="ghost steps-toggle"
+            :class="{ on: claude.chrome.value }"
+            :title="
+              claude.chrome.value
+                ? 'Claude in Chrome is on: Claude can use your browser. Click to turn it off'
+                : 'Let Claude use your browser (Claude in Chrome)'
+            "
+            @click="claude.setChrome(!claude.chrome.value)"
+          >
+            <Icon name="globe" :size="12" />
+          </button>
           <div class="spacer" />
           <button v-if="chat.working" class="ghost stop" title="Interrupt (Esc)" @click="claude.interrupt()"><Icon name="stop" :size="11" /></button>
           <button class="send" :disabled="!draft.trim()" title="Send (↵)" @click="send()"><Icon name="push" :size="13" /></button>

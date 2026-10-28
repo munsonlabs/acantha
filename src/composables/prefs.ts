@@ -34,6 +34,8 @@ export const prefs = {
   claudeRect: usePersisted<{ x: number; y: number; w: number; h: number } | null>('claude-rect', null),
   claudeMode: usePersisted<'auto' | 'plan' | 'default' | 'acceptEdits'>('claude-mode', 'auto'),
   claudeModel: usePersisted('claude-model', ''),
+  /** Whether Claude Code agents start with Claude in Chrome (`--chrome`), to drive the browser. */
+  claudeChrome: usePersisted('claude-chrome', false),
   /** The model OpenCode agents use (`provider/model`), or its own default when empty. */
   opencodeModel: usePersisted('opencode-model', ''),
   /** The model that plans repository tours: Haiku by default, which plans a good one quickly and lightly. */

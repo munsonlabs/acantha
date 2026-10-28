@@ -219,8 +219,9 @@ fn model_ok(model: &str) -> bool {
 }
 
 /// The arguments for a headless session: messages in and out as JSON lines, text as it's written, and every
-/// permission question sent here (`--permission-prompt-tool stdio`) rather than refused.
-fn args(mode: &str, resume: Option<&str>, model: Option<&str>) -> Vec<String> {
+/// permission question sent here (`--permission-prompt-tool stdio`) rather than refused. `chrome` gives it Claude in
+/// Chrome's tools, to drive the browser.
+fn args(mode: &str, resume: Option<&str>, model: Option<&str>, chrome: bool) -> Vec<String> {
     let mut a: Vec<String> = [
         "-p",
         "--input-format",
@@ -244,6 +245,9 @@ fn args(mode: &str, resume: Option<&str>, model: Option<&str>) -> Vec<String> {
     if let Some(m) = model {
         a.extend(["--model".into(), m.into()]);
     }
+    if chrome {
+        a.push("--chrome".into());
+    }
     a
 }
 
@@ -265,9 +269,17 @@ pub(crate) fn cli_path() -> String {
 }
 
 /// Starts `claude` for a conversation (`id`), in `repo`, reading what it says on its own thread.
-fn spawn<R: Runtime>(app: &AppHandle<R>, id: &str, repo: &str, mode: &str, model: Option<&str>, resume: Option<&str>) -> Result<Run, String> {
+fn spawn<R: Runtime>(
+    app: &AppHandle<R>,
+    id: &str,
+    repo: &str,
+    mode: &str,
+    model: Option<&str>,
+    resume: Option<&str>,
+    chrome: bool,
+) -> Result<Run, String> {
     let mut child = Command::new("claude")
-        .args(args(mode, resume, model))
+        .args(args(mode, resume, model, chrome))
         .current_dir(repo)
         .env("PATH", cli_path())
         .stdin(Stdio::piped())
@@ -466,6 +478,7 @@ pub fn claude_interrupt(state: State<'_, Claudes>, id: String) -> Result<(), Str
 
 /// Sends Claude a message, starting it (resuming its session, if it has one) if it isn't running.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn claude_send<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, Claudes>,
@@ -474,6 +487,7 @@ pub fn claude_send<R: Runtime>(
     text: String,
     mode: String,
     model: Option<String>,
+    chrome: Option<bool>,
 ) -> Result<(), String> {
     if !MODES.contains(&mode.as_str()) {
         return Err(format!("Unknown permission mode {mode}"));
@@ -486,7 +500,15 @@ pub fn claude_send<R: Runtime>(
     let c = all.entry(id.clone()).or_default();
     if c.run.is_none() {
         let resume = c.session_id.clone().filter(|s| session_id_ok(s));
-        c.run = Some(spawn(&app, &id, &repo, &mode, model.as_deref(), resume.as_deref())?);
+        c.run = Some(spawn(
+            &app,
+            &id,
+            &repo,
+            &mode,
+            model.as_deref(),
+            resume.as_deref(),
+            chrome.unwrap_or(false),
+        )?);
     }
     let line = json!({ "type": "user", "message": { "role": "user", "content": text } }).to_string();
     let run = c.run.as_mut().ok_or("Claude isn't running")?;
@@ -796,10 +818,12 @@ mod tests {
         assert!(!session_id_ok(""));
         assert!(model_ok("sonnet") && model_ok("claude-opus-5-5") && model_ok("opus[1m]"));
         assert!(!model_ok("x; rm -rf /") && !model_ok("--flag"));
-        let a = args("plan", Some("abc-123"), Some("haiku"));
+        let a = args("plan", Some("abc-123"), Some("haiku"), false);
         assert!(a.windows(2).any(|w| w == ["--permission-mode", "plan"]));
         assert!(a.windows(2).any(|w| w == ["--resume", "abc-123"]));
         assert!(a.windows(2).any(|w| w == ["--permission-prompt-tool", "stdio"]));
+        assert!(!a.contains(&"--chrome".to_string()));
+        assert!(args("auto", None, None, true).contains(&"--chrome".to_string()));
     }
 
     #[test]
