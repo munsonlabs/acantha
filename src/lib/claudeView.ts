@@ -48,10 +48,37 @@ export function editDiff(input: Record<string, unknown>) {
 
 /** What an approval is asking, in words. */
 export function asking(a: Approval) {
+  const questions = questionsOf(a)
+  if (questions) return questions.length > 1 ? 'Some questions for you' : 'A question for you'
   if (a.tool === 'Bash') return 'Run this command?'
   if (a.tool === 'Edit' || a.tool === 'MultiEdit') return 'Edit this file?'
   if (a.tool === 'Write') return 'Write this file?'
   return `Use ${a.tool}?`
+}
+
+/** A question Claude asks with its AskUserQuestion tool: pick one of the options (or several), or write your own. */
+export interface AgentQuestion {
+  question: string
+  header?: string
+  options: { label: string; description?: string }[]
+  multiSelect?: boolean
+}
+
+/** The questions in an AskUserQuestion request, or null when it's some other tool. */
+export function questionsOf(a: Approval): AgentQuestion[] | null {
+  const qs = a.input.questions
+  if (!Array.isArray(qs) || !qs.length) return null
+  const valid = qs.every((q) => typeof q?.question === 'string' && Array.isArray(q.options))
+  return valid ? (qs as AgentQuestion[]) : null
+}
+
+/**
+ * The tool's input with the answers added, as Claude Code reads them back: each question's text to the chosen
+ * labels, several joined with ", ".
+ */
+export function withAnswers(a: Approval, picked: string[][]): Record<string, unknown> {
+  const qs = questionsOf(a) ?? []
+  return { ...a.input, answers: Object.fromEntries(qs.map((q, i) => [q.question, (picked[i] ?? []).join(', ')])) }
 }
 
 /** A conversation's state in a couple of words. */

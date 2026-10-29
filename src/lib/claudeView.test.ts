@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { prune, type SavedConversation } from './claudeView'
+import { prune, questionsOf, withAnswers, type SavedConversation } from './claudeView'
 
 const day = 86_400_000
 const now = 100 * day
@@ -26,5 +26,26 @@ describe('prune', () => {
     expect(Object.keys(kept)).toHaveLength(21)
     expect(kept.c19).toBeDefined()
     expect(kept.c20).toBeUndefined()
+  })
+})
+
+describe('AskUserQuestion', () => {
+  const ask = (input: Record<string, unknown>) => ({ requestId: 'r', tool: 'AskUserQuestion', input })
+  const questions = [
+    { question: 'Which colour?', options: [{ label: 'Red' }, { label: 'Blue' }] },
+    { question: 'Which sizes?', options: [{ label: 'S' }, { label: 'M' }], multiSelect: true },
+  ]
+
+  it('finds the questions, and only in a request with them', () => {
+    expect(questionsOf(ask({ questions }))).toHaveLength(2)
+    expect(questionsOf(ask({ command: 'ls' }))).toBeNull()
+    expect(questionsOf(ask({ questions: [{ question: 'x' }] }))).toBeNull()
+  })
+
+  it('answers each question by its text, several picks joined', () => {
+    expect(withAnswers(ask({ questions }), [['Blue'], ['S', 'M']])).toEqual({
+      questions,
+      answers: { 'Which colour?': 'Blue', 'Which sizes?': 'S, M' },
+    })
   })
 })

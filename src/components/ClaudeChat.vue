@@ -5,7 +5,22 @@ import { deleteConversation, loadOpenCodeModels, pastConversations, useClaudeCon
 import { prefs } from '@/composables/prefs'
 import Icon from './Icon.vue'
 import MarkdownView from './MarkdownView.vue'
-import { AGENT_NAMES, MODES, MODELS, SUGGESTIONS, TOOL_ICONS, asking, costText, editDiff, statusWords, when, type AgentKind } from '@/lib/claudeView'
+import AgentQuestions from './AgentQuestions.vue'
+import {
+  AGENT_NAMES,
+  MODES,
+  MODELS,
+  SUGGESTIONS,
+  TOOL_ICONS,
+  asking,
+  costText,
+  editDiff,
+  questionsOf,
+  statusWords,
+  when,
+  withAnswers,
+  type AgentKind,
+} from '@/lib/claudeView'
 
 /**
  * A repository's Claude conversation: replies as they're written, tool calls as cards (edits as diffs), permission
@@ -266,7 +281,13 @@ defineExpose({ focus: () => input.value?.focus(), claude })
           <div v-for="(l, k) in editDiff(a.input)" :key="k" :class="l.sign === '+' ? 'add' : 'del'">{{ l.sign }} {{ l.text }}</div>
         </div>
         <p v-if="a.description && typeof a.input.command === 'string'" class="why">{{ a.description }}</p>
-        <div class="answer">
+        <AgentQuestions
+          v-if="questionsOf(a)"
+          :questions="questionsOf(a)!"
+          @answer="claude.answer(a, true, withAnswers(a, $event))"
+          @skip="claude.answer(a, false)"
+        />
+        <div v-else class="answer">
           <button class="ghost" @click="claude.answer(a, false)">Deny</button>
           <button class="primary" @click="claude.answer(a, true)">Allow</button>
         </div>

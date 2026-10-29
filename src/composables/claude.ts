@@ -171,8 +171,9 @@ export function useClaudeConversation(id: string, root: string, cwd = root, kind
     }
   }
 
-  const answer = (a: Approval, allow: boolean) =>
-    invoke(oc ? 'opencode_answer' : 'claude_answer', { id, requestId: a.requestId, allow, input: a.input }).catch((e) =>
+  /** Allows or denies what Claude asked to do; `input` replaces what it asked with, as answering its questions does. */
+  const answer = (a: Approval, allow: boolean, input = a.input) =>
+    invoke(oc ? 'opencode_answer' : 'claude_answer', { id, requestId: a.requestId, allow, input }).catch((e) =>
       chat.entries.push({ kind: 'notice', text: String(e), error: true }),
     )
 
