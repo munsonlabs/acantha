@@ -16,6 +16,7 @@ mod sessions;
 mod slack;
 mod tour;
 mod tsserver;
+mod usage;
 mod watch;
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -92,6 +93,8 @@ fn main() {
             opencode::opencode_interrupt,
             opencode::opencode_models,
             opencode::opencode_history,
+            usage::claude_usage,
+            usage::opencode_usage,
             tour::tour_plan,
             ask::edit_ask,
             sessions::agent_storage,

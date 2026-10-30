@@ -105,3 +105,38 @@ describe('toolSummary', () => {
     expect(toolSummary('mcp__thing', {}, rel)).toBe('mcp__thing')
   })
 })
+
+describe('/usage', () => {
+  it('shows its limits as an entry of their own', () => {
+    const s = newChat()
+    applyEvent(s, {
+      type: 'assistant',
+      message: { id: 'u1', model: '<synthetic>', content: [{ type: 'text', text: 'Current session: 20% used' }] },
+      usage_report: {
+        rate_limits: {
+          limits: [
+            { kind: 'session', group: 'session', percent: 20, resets_at: '2026-10-30T17:49:59Z', severity: 'normal' },
+            {
+              kind: 'weekly_scoped',
+              group: 'weekly',
+              percent: 95,
+              resets_at: null,
+              scope: { model: { display_name: 'Fable' } },
+              severity: 'warning',
+            },
+          ],
+        },
+      },
+    })
+    expect(s.entries).toEqual([
+      {
+        kind: 'usage',
+        limits: [
+          { label: 'Current session', percent: 20, resetsAt: '2026-10-30T17:49:59Z', warn: false },
+          { label: 'This week (Fable)', percent: 95, resetsAt: null, warn: true },
+        ],
+        text: 'Current session: 20% used',
+      },
+    ])
+  })
+})

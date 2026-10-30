@@ -11,6 +11,8 @@ import { useWorkspace, useWorkspaces, type Workspace } from '@/composables/works
 import AgentGlyph from './AgentGlyph.vue'
 import AgentMark from './AgentMark.vue'
 import Icon from './Icon.vue'
+import UsageBars from './UsageBars.vue'
+import { claudeUsage, openCodeUsage, refreshUsage } from '@/composables/usage'
 
 /**
  * The sidebar's Agents tab: this repository's agents grouped by where they work (this folder on its branch, then each
@@ -26,6 +28,18 @@ const activity = useAgentActivity()
 const now = ref(Date.now())
 const tick = setInterval(() => (now.value = Date.now()), 30_000)
 onBeforeUnmount(() => clearInterval(tick))
+
+/** The plans' limits, at the foot: asked for as this shows, and every few minutes while it does. */
+const usageOpen = usePersisted('agents-usage-open', true)
+void refreshUsage()
+const usageTick = setInterval(() => usageOpen.value && void refreshUsage(), 5 * 60_000)
+onBeforeUnmount(() => clearInterval(usageTick))
+const refreshing = ref(false)
+async function refreshNow() {
+  refreshing.value = true
+  await refreshUsage(true)
+  refreshing.value = false
+}
 
 const root = computed(() => ws.repo.repo.value!)
 const ORDER: AgentState[] = ['waiting', 'working', 'done', 'idle', 'off']
@@ -221,6 +235,32 @@ const toggleFold = (p: Place) => (folded.value = folded.value.includes(p.cwd) ? 
         </button>
       </section>
     </div>
+    <footer class="plan-usage">
+      <div class="section-head" @click="usageOpen = !usageOpen">
+        <Icon name="chevron" :size="11" class="chevron" :class="{ open: usageOpen }" />
+        <span class="place-name">Usage</span>
+        <div class="spacer" />
+        <button class="ghost icon-btn" title="Check again" :disabled="refreshing" @click.stop="refreshNow">
+          <Icon name="refresh" :size="11" :class="{ spinning: refreshing }" />
+        </button>
+      </div>
+      <div v-if="usageOpen" class="usage-body">
+        <h3>Claude Code</h3>
+        <p v-if="!claudeUsage" class="quiet-line">Checking…</p>
+        <p v-else-if="'error' in claudeUsage" class="quiet-line">{{ claudeUsage.error }}</p>
+        <UsageBars v-else-if="claudeUsage.limits.length" :limits="claudeUsage.limits" />
+        <p v-else class="quiet-line">No plan limits: Claude Code is using an API key.</p>
+        <template v-if="openCodeUsage && 'stats' in openCodeUsage">
+          <h3>
+            OpenCode <span class="muted">· last {{ openCodeUsage.stats.days }} days</span>
+          </h3>
+          <p class="quiet-line">
+            {{ openCodeUsage.stats.sessions || 0 }} sessions · {{ openCodeUsage.stats.input || 0 }} in · {{ openCodeUsage.stats.output || 0 }} out
+            <template v-if="openCodeUsage.stats.cost"> · {{ openCodeUsage.stats.cost }}</template>
+          </p>
+        </template>
+      </div>
+    </footer>
   </div>
 </template>
 
@@ -234,6 +274,38 @@ const toggleFold = (p: Place) => (folded.value = folded.value.includes(p.cwd) ? 
   min-height: 0;
   overflow: auto;
   padding: 6px;
+}
+.plan-usage {
+  flex: none;
+  padding: 4px 6px 8px;
+  border-top: 1px solid var(--border);
+}
+.plan-usage .section-head .icon-btn {
+  width: 20px;
+  height: 20px;
+}
+.usage-body {
+  padding: 2px 8px 0 20px;
+}
+.usage-body h3 {
+  margin: 8px 0 6px;
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-weight: 550;
+}
+.usage-body h3:first-child {
+  margin-top: 2px;
+}
+.usage-body .quiet-line {
+  margin: 0;
+}
+.spinning {
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .none {
   margin: 14px 8px;

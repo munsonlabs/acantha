@@ -6,6 +6,7 @@ import { prefs } from '@/composables/prefs'
 import Icon from './Icon.vue'
 import MarkdownView from './MarkdownView.vue'
 import AgentQuestions from './AgentQuestions.vue'
+import UsageBars from './UsageBars.vue'
 import {
   AGENT_NAMES,
   MODES,
@@ -226,6 +227,13 @@ defineExpose({ focus: () => input.value?.focus(), claude })
       <template v-for="(e, i) in visible" :key="hidden + i">
         <div v-if="e.kind === 'user'" class="user">{{ e.text }}</div>
         <p v-else-if="e.kind === 'notice'" class="notice" :class="{ error: e.error }">{{ e.text }}</p>
+        <div v-else-if="e.kind === 'usage'" class="usage-card">
+          <UsageBars v-if="e.limits.length" :limits="e.limits" />
+          <details v-if="e.text">
+            <summary>{{ e.limits.length ? 'More from /usage' : '/usage' }}</summary>
+            <pre>{{ e.text }}</pre>
+          </details>
+        </div>
         <div v-else class="assistant">
           <span class="avatar small" :class="claude.kind">{{ mark }}</span>
           <div class="said">
@@ -625,6 +633,27 @@ defineExpose({ focus: () => input.value?.focus(), claude })
   font-style: normal;
   text-align: left;
   white-space: pre-wrap;
+}
+.usage-card {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--popover);
+}
+.usage-card details {
+  margin-top: 10px;
+  color: var(--fg-muted);
+  font-size: 11.5px;
+}
+.usage-card summary {
+  cursor: pointer;
+}
+.usage-card pre {
+  margin: 6px 0 0;
+  font: 11px/1.5 var(--mono);
+  white-space: pre-wrap;
+  user-select: text;
 }
 .approval {
   margin: 12px 0;

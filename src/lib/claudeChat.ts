@@ -5,6 +5,8 @@
  * of a conversation replays the same lines, so they all agree. `applyEvent` takes one line at a time.
  */
 
+import { planLimits, type PlanLimit } from './usage'
+
 export type Block =
   | { kind: 'text'; text: string }
   | { kind: 'thinking' }
@@ -23,6 +25,8 @@ export type Entry =
   | { kind: 'user'; text: string }
   | { kind: 'assistant'; id: string; blocks: Block[] }
   | { kind: 'notice'; text: string; error?: boolean }
+  /** What `/usage` said: its limits, for bars, and the rest as it wrote it. */
+  | { kind: 'usage'; limits: PlanLimit[]; text: string }
 
 /** Claude asking before it uses a tool: answered with `approvalResponse`. */
 export interface Approval {
@@ -156,6 +160,11 @@ export function applyEvent(state: ChatState, e: any): Approval | null {
       // The whole message: fills in what streaming missed (or everything, if nothing streamed).
       const msg = e.message
       if (!msg?.id) return null
+      if (e.usage_report?.rate_limits) {
+        const text = (msg.content ?? []).map((c: { text?: string }) => c.text ?? '').join('')
+        state.entries.push({ kind: 'usage', limits: planLimits(e.usage_report.rate_limits), text: text.replace(/<\/?local-command-stdout>/g, '') })
+        return null
+      }
       const entry = assistant(state, msg.id)
       for (const content of msg.content ?? []) {
         if (content.type === 'tool_use') {
