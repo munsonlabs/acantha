@@ -87,3 +87,16 @@ describe('closing tabs', () => {
     expect(files.preview.value).toBeNull()
   })
 })
+
+describe('moving tabs', () => {
+  it('reorders the tabs, keeping a glanced-at file open once it’s dragged', () => {
+    const files = createFiles(repo())
+    for (const p of ['a.ts', 'b.ts']) void files.open(p, undefined, null, undefined, { pin: true })
+    void files.open('c.ts')
+    files.moveTab(2, 0)
+    expect(files.tabs.value.map((f) => f.path)).toEqual(['c.ts', 'a.ts', 'b.ts'])
+    expect(files.isPinned({ path: 'c.ts', rev: null })).toBe(true)
+    files.moveTab(0, 2)
+    expect(files.tabs.value.map((f) => f.path)).toEqual(['a.ts', 'b.ts', 'c.ts'])
+  })
+})

@@ -15,6 +15,7 @@ import { useWorkspace } from '@/composables/workspace'
 import CodeEditor from './CodeEditor.vue'
 import CodeView, { type BlameCell } from './CodeView.vue'
 import FileIcon from './FileIcon.vue'
+import FileTabs from './FileTabs.vue'
 import Icon from './Icon.vue'
 import MarkdownView from './MarkdownView.vue'
 import Skeleton from './Skeleton.vue'
@@ -255,6 +256,7 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024)
 
 <template>
   <div v-if="preview" class="preview">
+    <FileTabs />
     <!-- Just the file, how to view it, Save and Close; everything else is in ⋯, also on right-click. -->
     <header class="pane-header" :class="{ editing: editingText }" @contextmenu.prevent="moreMenu">
       <FileIcon :path="preview.path" />

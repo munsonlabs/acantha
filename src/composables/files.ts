@@ -171,6 +171,19 @@ export function createFiles({ repo }: Repo) {
   /** Closes every open tab. */
   const closeAllTabs = () => closeMany(tabsList())
 
+  /** Moves a tab, by its place among the tabs shown; dragging the glanced-at file keeps it open. */
+  function moveTab(from: number, to: number) {
+    const shown = tabsList()
+    const [a, b] = [shown[from], shown[to]]
+    if (!a || !b) return
+    pin(a)
+    const list = [...openFiles.value]
+    const i = list.findIndex((f) => sameFile(f, a))
+    const j = list.findIndex((f) => sameFile(f, b))
+    list.splice(j === -1 ? list.length - 1 : j, 0, ...list.splice(i, 1))
+    openFiles.value = list
+  }
+
   /** Keeps the list right when files are renamed, moved or trashed from the sidebar. */
   const inside = (path: string, dir: string) => path === dir || path.startsWith(`${dir}/`)
   function renameOpen(from: string, to: string) {
@@ -280,6 +293,7 @@ export function createFiles({ repo }: Repo) {
     closeOthers,
     closeSaved,
     closeAllTabs,
+    moveTab,
     renameOpen,
     forgetOpen,
     discardDrafts,
