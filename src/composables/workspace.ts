@@ -1,5 +1,6 @@
 import { computed, effectScope, inject, provide, shallowRef, watch, type InjectionKey } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { open } from '@tauri-apps/plugin-dialog'
 import { createDetails } from './details'
 import { createFiles } from './files'
@@ -137,16 +138,19 @@ let nextId = 1
 
 const active = computed(() => workspaces.value.find((w) => w.id === activeId.value) ?? null)
 
+/** Acantha's first window. Only its tabs are remembered for next launch; other windows start empty. */
+export const isMainWindow = getCurrentWindow().label === 'main'
+
 // Remember which repositories were open, and which was showing, so the tabs come back on the next launch.
 watch(
   () => workspaces.value.map((w) => pathOf(w)),
   (paths) => {
-    prefs.workspaces.value = paths.filter((p): p is string => !!p)
+    if (isMainWindow) prefs.workspaces.value = paths.filter((p): p is string => !!p)
   },
 )
 watch(active, (ws) => {
   const path = ws && pathOf(ws)
-  if (path) prefs.activeWorkspace.value = path
+  if (path && isMainWindow) prefs.activeWorkspace.value = path
 })
 
 /** When each tab was last showing, for the tab list's order and for putting unused tabs to sleep. */
@@ -253,6 +257,12 @@ async function closeWorkspace(id: number) {
   }
 }
 
+/** Stops every tab (their terminals, agents and watchers) as this window closes, leaving its conversations remembered. */
+function closeAllWorkspaces() {
+  for (const w of workspaces.value) w.scope.stop()
+  workspaces.value = []
+}
+
 /** Puts every tab but this one to sleep, asking once if any terminals will close. */
 async function sleepOtherWorkspaces(id: number) {
   const others = workspaces.value.filter((w) => w.id !== id && w.repo.repo.value && w.id !== activeId.value)
@@ -335,6 +345,7 @@ export function useWorkspaces() {
     sleepWorkspace,
     sleepOtherWorkspaces,
     closeWorkspace,
+    closeAllWorkspaces,
     closeOtherWorkspaces,
     moveWorkspace,
     stepWorkspace,

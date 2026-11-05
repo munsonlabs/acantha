@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { emitTo, listen } from '@tauri-apps/api/event'
+import { emitTo } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { conversations } from './claude'
@@ -13,6 +13,9 @@ import { pathOf, useWorkspaces } from './workspace'
 
 /** A conversation's window label (the backend closes it by this when the conversation ends). Ids are tab ids, letters and digits. */
 const label = (id: string) => `claude-${id}`
+
+/** In a popped-out window: the Acantha window it came from, which keeps track of it. */
+const owner = new URLSearchParams(location.search).get('owner') ?? 'main'
 
 /** The conversations in their own windows now, by window label. */
 const poppedOut = reactive(new Map<string, string>())
@@ -51,7 +54,7 @@ export async function popOut(id: string, repo: string, rect?: Rect) {
     }
   const win = new WebviewWindow(key, {
     // An agent in a worktree works there (its conversation knows where).
-    url: `index.html?window=claude&conv=${encodeURIComponent(id)}&repo=${encodeURIComponent(repo)}&cwd=${encodeURIComponent(conversations.value[id]?.cwd ?? repo)}`,
+    url: `index.html?window=claude&conv=${encodeURIComponent(id)}&repo=${encodeURIComponent(repo)}&cwd=${encodeURIComponent(conversations.value[id]?.cwd ?? repo)}&owner=${getCurrentWindow().label}`,
     title: `Claude · ${repo.split('/').pop()}`,
     width: r.w,
     height: r.h,
@@ -103,6 +106,8 @@ export async function bringBack(id: string) {
  */
 export function connectClaudeWindows() {
   const { workspaces, activate } = useWorkspaces()
+  // This window's own: the global listen() also hears what's sent to other windows.
+  const listen = getCurrentWindow().listen.bind(getCurrentWindow())
   const openRepos = () => [...new Set(workspaces.value.map((w) => w.repo.repo.value).filter((p): p is string => !!p))]
   void listen<string>('claude:docked', ({ payload }) => void poppedOut.delete(payload))
   void listen<string>('claude:repos', ({ payload }) => void emitTo(payload, 'claude:repos', openRepos()))
@@ -126,7 +131,7 @@ export function connectClaudeWindows() {
 }
 
 /** From a popped-out window: open a file in the main window. */
-export const openInMain = (repo: string, path: string) => emitTo('main', 'claude:open-file', { repo, path })
+export const openInMain = (repo: string, path: string) => emitTo(owner, 'claude:open-file', { repo, path })
 
 /** From a popped-out window: the repositories open in Acantha, to start a conversation in. */
 export async function askOpenRepos(self: string) {
@@ -140,10 +145,10 @@ export async function askOpenRepos(self: string) {
         resolve(payload)
       })
       .then((u) => (done = u))
-    void emitTo('main', 'claude:repos', self)
+    void emitTo(owner, 'claude:repos', self)
   })
 }
 
 /** From a popped-out window: show another conversation in its place, or start a new one in `repo`. */
-export const switchTo = (from: string, to: string, repo: string, rect: Rect) => emitTo('main', 'claude:switch', { from, to, repo, rect })
-export const startIn = (from: string, repo: string, rect: Rect) => emitTo('main', 'claude:new', { from, repo, rect })
+export const switchTo = (from: string, to: string, repo: string, rect: Rect) => emitTo(owner, 'claude:switch', { from, to, repo, rect })
+export const startIn = (from: string, repo: string, rect: Rect) => emitTo(owner, 'claude:new', { from, repo, rect })

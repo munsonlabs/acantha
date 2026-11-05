@@ -1,5 +1,5 @@
 use tauri::menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::{AppHandle, Emitter, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 /// One entry in a submenu: an item that runs a command (by id), one of macOS's own, or a separator.
 enum Entry<R: Runtime> {
@@ -73,6 +73,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>, hidden: &[String]) -> tauri::Result
         "File",
         vec![
             C(item("new-tab", "New Tab", Some("CmdOrCtrl+T"))?),
+            C(item("new-window", "New Window", Some("CmdOrCtrl+Shift+N"))?),
             C(item("open-repo", "Open Repository…", Some("CmdOrCtrl+O"))?),
             Sep,
             C(item("new-terminal", "New Terminal", None)?),
@@ -168,6 +169,16 @@ pub fn set_hidden_menu_items<R: Runtime>(app: AppHandle<R>, ids: Vec<String>) ->
     app.set_menu(menu).map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// Sends a menu command to the Acantha window in front, or the first one when a Claude window is.
 pub fn forward<R: Runtime>(app: &AppHandle<R>, id: &str) {
-    let _ = app.emit("menu", id);
+    let focused = app.webview_windows().into_iter().find(|(label, w)| !label.starts_with("claude") && w.is_focused().unwrap_or(false));
+    let _ = app.emit_to(focused.map_or_else(|| "main".to_string(), |(label, _)| label), "menu", id);
+}
+
+/// Opens another Acantha window, set up like the first.
+#[tauri::command]
+pub async fn new_window<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
+    let mut config = app.config().app.windows[0].clone();
+    config.label = format!("main-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|e| e.to_string())?.as_millis());
+    tauri::WebviewWindowBuilder::from_config(&app, &config).and_then(|b| b.build()).map(|_| ()).map_err(|e| e.to_string())
 }

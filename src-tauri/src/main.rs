@@ -39,7 +39,7 @@ fn should_quit(app: &tauri::AppHandle) -> bool {
     if now.saturating_sub(QUIT_ASKED_AT.swap(now, Ordering::SeqCst)) < 2000 {
         return true;
     }
-    let _ = app.emit("quit-requested", ());
+    let _ = app.emit_to("main", "quit-requested", ());
     false
 }
 
@@ -65,6 +65,7 @@ fn main() {
         .on_menu_event(|app, event| menu::forward(app, event.id().as_ref()))
         .invoke_handler(tauri::generate_handler![
             quit_app,
+            menu::new_window,
             git::initial_repo,
             git::resolve_repo,
             git::get_log,
@@ -155,7 +156,7 @@ fn main() {
                     api.prevent_exit();
                 }
             }
-            // Closing the main window quits (asking first about unsaved files).
+            // Closing the first window quits (asking first about unsaved files); another just closes, its page seeing to that.
             tauri::RunEvent::WindowEvent {
                 label,
                 event: tauri::WindowEvent::CloseRequested { api, .. },
@@ -164,9 +165,9 @@ fn main() {
                 // A popped-out Claude window just closes, which docks Claude back in the main window's panel; the
                 // screen it dimmed lifts.
                 if label.starts_with("claude") {
-                    let _ = app.emit_to("main", "claude:docked", label.clone());
+                    let _ = app.emit("claude:docked", label.clone());
                     claude::undim_closed(app, &label);
-                } else if !should_quit(app) {
+                } else if label == "main" && !should_quit(app) {
                     api.prevent_close();
                 }
             }

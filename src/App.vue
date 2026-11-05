@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
-import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import type { UnlistenFn } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { git } from '@/lib/git'
 import { basename } from '@/lib/format'
 import { activateTabNumber, overlays, runCommand } from '@/composables/commands'
 import { prefs } from '@/composables/prefs'
-import { lastUsed, pathOf, useWorkspaces, type Workspace } from '@/composables/workspace'
+import { isMainWindow, lastUsed, pathOf, useWorkspaces, type Workspace } from '@/composables/workspace'
 import { bringBackAll } from '@/composables/claudeWindow'
 import { overGraph } from '@/composables/center'
 import { closeDialog, confirmAction, useDialog } from '@/composables/useDialog'
@@ -41,7 +41,7 @@ watch(
 
 connectClaudeWindows()
 
-const { workspaces, activeId, active, activate, addWorkspace, closeWorkspace, openInWorkspace, sleepWorkspace } = useWorkspaces()
+const { workspaces, activeId, active, activate, addWorkspace, closeWorkspace, closeAllWorkspaces, openInWorkspace, sleepWorkspace } = useWorkspaces()
 const { current: dialog } = useDialog()
 const { menu, closeMenu } = useContextMenu()
 const appWindow = getCurrentWindow()
@@ -190,11 +190,49 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 /** Quitting asks first when any file has unsaved edits (see `should_quit` in main.rs). */
+/** Each window's count of unsaved files, kept where ⌘Q in the first window can add them all up. */
+const DRAFTS = 'acantha:drafts:'
+const ownDrafts = () => workspaces.value.reduce((n, ws) => n + ws.files.drafts.value.size, 0)
+const storeDrafts = (n: number | null) => {
+  try {
+    if (n == null) localStorage.removeItem(DRAFTS + appWindow.label)
+    else localStorage.setItem(DRAFTS + appWindow.label, String(n))
+  } catch {}
+}
+// The first window starts with no others open, so counts left by them (a crash) are stale.
+if (isMainWindow)
+  try {
+    for (const key of Object.keys(localStorage)) if (key.startsWith(DRAFTS)) localStorage.removeItem(key)
+  } catch {}
+watch(ownDrafts, storeDrafts, { immediate: true })
+
+function allDrafts() {
+  try {
+    return Object.keys(localStorage)
+      .filter((key) => key.startsWith(DRAFTS) && key !== DRAFTS + appWindow.label)
+      .reduce((n, key) => n + (Number(localStorage.getItem(key)) || 0), ownDrafts())
+  } catch {
+    return ownDrafts()
+  }
+}
+
+const filesWord = (n: number) => (n === 1 ? '1 file' : `${n} files`)
+
 async function onQuitRequested() {
-  const unsaved = workspaces.value.reduce((n, ws) => n + ws.files.drafts.value.size, 0)
-  const what = unsaved === 1 ? '1 file' : `${unsaved} files`
-  if (!unsaved || (await confirmAction('Quit Acantha?', `You have unsaved changes in ${what}. Quit and lose them?`, 'Quit', true)))
+  const unsaved = allDrafts()
+  if (!unsaved || (await confirmAction('Quit Acantha?', `You have unsaved changes in ${filesWord(unsaved)}. Quit and lose them?`, 'Quit', true)))
     await invoke('quit_app')
+}
+
+/** Another window closing (not the first, which quits): its terminals and agents stop with it. */
+async function onCloseWindow() {
+  const unsaved = ownDrafts()
+  if (unsaved && !(await confirmAction('Close Window?', `You have unsaved changes in ${filesWord(unsaved)}. Close and lose them?`, 'Close', true)))
+    return
+  closeAllWorkspaces()
+  storeDrafts(null)
+  await nextTick()
+  await appWindow.destroy()
 }
 
 // Right-click → Make To-do List on selected text.
@@ -286,12 +324,23 @@ onMounted(async () => {
       }
     }),
     // Clicks and shortcuts from the native menu bar.
-    await listen<string>('menu', ({ payload }) => runCommand(payload)),
-    await listen('quit-requested', () => void onQuitRequested()),
+    // This window's own: the global listen() also hears events sent to other windows.
+    await appWindow.listen<string>('menu', ({ payload }) => runCommand(payload)),
+    await appWindow.listen('quit-requested', () => void onQuitRequested()),
     await appWindow.onDragDropEvent(({ payload }) => {
       if (payload.type === 'drop' && payload.paths[0]) void openInWorkspace(payload.paths[0])
     }),
   )
+
+  if (!isMainWindow) {
+    unlisten.push(
+      await appWindow.onCloseRequested((e) => {
+        e.preventDefault()
+        void onCloseWindow()
+      }),
+    )
+    return void addWorkspace()
+  }
 
   // Bring back the tabs from last time, then the repo passed on the command line. Only the tab that was showing opens
   // its repository; the others sleep until they're clicked, so many tabs start as fast as one.

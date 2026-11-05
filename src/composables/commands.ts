@@ -150,6 +150,7 @@ export const commands: Command[] = [
   { id: 'shortcuts', label: 'Keyboard Shortcuts', group: 'General', keys: '⌘/', run: () => (overlays.shortcuts.value = true) },
 
   { id: 'new-tab', label: 'New Tab', group: 'Tabs', keys: '⌘T', run: () => addWorkspace() },
+  { id: 'new-window', label: 'New Window', group: 'Tabs', keys: '⇧⌘N', run: () => void invoke('new_window') },
   { id: 'open-repo', label: 'Open Repository…', group: 'Tabs', keys: '⌘O', run: () => pickRepo() },
   {
     id: 'close',
