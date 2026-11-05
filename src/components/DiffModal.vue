@@ -194,6 +194,11 @@ function onCopy(e: ClipboardEvent) {
   flex-direction: column;
   width: min(1200px, calc(100vw - 48px));
   height: calc(100vh - 64px);
+  min-width: 420px;
+  min-height: 240px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  resize: both;
 }
 header {
   display: flex;
