@@ -171,7 +171,10 @@ pub fn set_hidden_menu_items<R: Runtime>(app: AppHandle<R>, ids: Vec<String>) ->
 
 /// Sends a menu command to the Acantha window in front, or the first one when a Claude window is.
 pub fn forward<R: Runtime>(app: &AppHandle<R>, id: &str) {
-    let focused = app.webview_windows().into_iter().find(|(label, w)| !label.starts_with("claude") && w.is_focused().unwrap_or(false));
+    let focused = app
+        .webview_windows()
+        .into_iter()
+        .find(|(label, w)| !label.starts_with("claude") && w.is_focused().unwrap_or(false));
     let _ = app.emit_to(focused.map_or_else(|| "main".to_string(), |(label, _)| label), "menu", id);
 }
 
@@ -179,6 +182,15 @@ pub fn forward<R: Runtime>(app: &AppHandle<R>, id: &str) {
 #[tauri::command]
 pub async fn new_window<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
     let mut config = app.config().app.windows[0].clone();
-    config.label = format!("main-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|e| e.to_string())?.as_millis());
-    tauri::WebviewWindowBuilder::from_config(&app, &config).and_then(|b| b.build()).map(|_| ()).map_err(|e| e.to_string())
+    config.label = format!(
+        "main-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| e.to_string())?
+            .as_millis()
+    );
+    tauri::WebviewWindowBuilder::from_config(&app, &config)
+        .and_then(|b| b.build())
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }

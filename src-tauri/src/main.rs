@@ -151,11 +151,7 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("error while building Acantha")
         .run(|app, event| match event {
-            tauri::RunEvent::ExitRequested { api, code: None, .. } => {
-                if !should_quit(app) {
-                    api.prevent_exit();
-                }
-            }
+            tauri::RunEvent::ExitRequested { api, code: None, .. } if !should_quit(app) => api.prevent_exit(),
             // Closing the first window quits (asking first about unsaved files); another just closes, its page seeing to that.
             tauri::RunEvent::WindowEvent {
                 label,
