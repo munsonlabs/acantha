@@ -43,11 +43,6 @@ interface Kept {
 }
 const storage = ref<{ claude: Kept; opencode: Kept } | null>(null)
 const lookAtStorage = async () => (storage.value = await invoke<{ claude: Kept; opencode: Kept }>('agent_storage').catch(() => null))
-watch(
-  () => open.value && tab.value === 'claude',
-  (showing) => showing && void lookAtStorage(),
-  { immediate: true },
-)
 /** Claude Code's own period, set in its settings (only this value changes there). */
 async function setClaudeCleanup(days: number) {
   try {
@@ -90,6 +85,11 @@ const tab = computed({
   get: () => (TABS.value.some((t) => t.id === lastTab.value) ? lastTab.value : 'appearance'),
   set: (t: Tab) => (lastTab.value = t),
 })
+watch(
+  () => open.value && tab.value === 'claude',
+  (showing) => showing && void lookAtStorage(),
+  { immediate: true },
+)
 
 const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRemotes(on) : (prefs.showRemotes.value = on))
 </script>
@@ -148,6 +148,17 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
                   <button :class="{ on: prefs.dateStyle.value === 'relative' }" @click="prefs.dateStyle.value = 'relative'">Relative</button>
                   <button :class="{ on: prefs.dateStyle.value === 'absolute' }" @click="prefs.dateStyle.value = 'absolute'">Absolute</button>
                 </div>
+              </div>
+              <div class="row">
+                <div>
+                  <span class="label">Glass</span>
+                  <span class="hint">Makes the window see-through, so the windows behind it show.</span>
+                </div>
+                <span class="number">
+                  <input v-model.number="prefs.windowOpacity.value" type="range" min="0.3" max="1" step="0.05" />
+                  <span class="value">{{ Math.round(prefs.windowOpacity.value * 100) }}%</span>
+                  <button class="ghost reset" :disabled="prefs.windowOpacity.value === 1" @click="prefs.windowOpacity.value = 1">Reset</button>
+                </span>
               </div>
               <label class="row">
                 <div>

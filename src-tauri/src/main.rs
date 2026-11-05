@@ -104,6 +104,7 @@ fn main() {
             tsserver::ts_request,
             tsserver::ts_stop,
             claude::claude_window_pin,
+            claude::window_opacity,
             claude::claude_dim,
             claude::claude_delete_session,
             menu::set_hidden_menu_items,

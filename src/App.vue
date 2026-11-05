@@ -264,6 +264,8 @@ const autoSleep = setInterval(async () => {
   }
 }, 60_000)
 
+watch(prefs.windowOpacity, (alpha) => void invoke('window_opacity', { alpha }), { immediate: true })
+
 // A safety net: the file watcher reports changes instantly, but if it can't run (some network drives), this still catches them.
 const poll = setInterval(() => {
   if (document.hasFocus() && !document.hidden) void active.value?.status.refresh()

@@ -600,6 +600,24 @@ pub fn claude_window_pin<R: Runtime>(window: tauri::WebviewWindow<R>, on: bool) 
     Ok(())
 }
 
+/// Makes the whole window see-through, contents and all, so what's behind it shows (like VS Code's GlassIt).
+#[tauri::command]
+pub fn window_opacity<R: Runtime>(window: tauri::WebviewWindow<R>, alpha: f64) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let ptr = ns_window(&window)?;
+        window
+            .run_on_main_thread(move || {
+                // SAFETY: the pointer is the live NSWindow of this webview window, used on the main thread.
+                unsafe { &*(ptr as *const objc2_app_kit::NSWindow) }.setAlphaValue(alpha.clamp(0.3, 1.0));
+            })
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (window, alpha);
+    Ok(())
+}
+
 /// The screen dimmed behind popped-out Claude windows: a plain AppKit window each (by Claude's window's label), black
 /// and see-through, kept for when it's next wanted. Clicking it collapses its Claude (the click goes no further), like
 /// clicking outside a dialog. AppKit's, so all on the main thread.

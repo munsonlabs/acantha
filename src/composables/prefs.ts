@@ -21,6 +21,8 @@ export const prefs = {
   autoSleepMinutes: usePersisted('auto-sleep-minutes', 0),
   /** Opening a working-tree file goes straight to the editor (text files; others still preview). */
   editByDefault: usePersisted('edit-by-default', true),
+  /** The main window's opacity: below 1, the windows behind it show through. */
+  windowOpacity: usePersisted('window-opacity', 1),
   /** The card with a commit's details that appears when hovering a row in the graph. */
   hoverCards: usePersisted('hover-cards', true),
   /** Fade the graph while you're working elsewhere (pointer away, nothing in it focused). */
