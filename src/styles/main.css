@@ -33,7 +33,8 @@
   --diff-hunk: rgb(255 255 255 / 4%);
   --shadow: 0 12px 32px rgb(0 0 0 / 45%);
   --pane-shadow: 0 0 0 1px rgb(255 255 255 / 5%), 0 12px 32px rgb(0 0 0 / 35%), inset 0 1px 0 rgb(255 255 255 / 4%);
-  --term-selection: rgb(255 255 255 / 18%);
+  /* Hex: xterm drops any other format with alpha and falls back to a white that vanishes on light backgrounds. */
+  --term-selection: #ffffff2e;
 
   --ansi-black: #3f3f3f;
   --ansi-red: #e35d5d;
@@ -89,7 +90,7 @@
     --diff-hunk: rgb(0 0 0 / 3%);
     --shadow: 0 12px 32px rgb(0 0 0 / 14%);
     --pane-shadow: 0 0 0 1px rgb(0 0 0 / 5%), 0 8px 24px rgb(0 0 0 / 6%);
-    --term-selection: rgb(0 0 0 / 12%);
+    --term-selection: #0000001f;
 
     --ansi-black: #111111;
     --ansi-red: #c0392f;
