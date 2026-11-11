@@ -230,6 +230,8 @@ onMounted(async () => {
   if (el.value && el.value.offsetWidth > 0 && el.value.offsetHeight > 0) fit?.fit()
 
   term.attachCustomKeyEventHandler((e) => {
+    // ⌃⇧O is Go to File: left for the app rather than sent to the shell.
+    if (e.ctrlKey && e.shiftKey && e.code === 'KeyO') return false
     if (!e.metaKey || e.type !== 'keydown') return true
     if (e.key === 'k') {
       term!.clear()

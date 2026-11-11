@@ -19,6 +19,7 @@ import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import type { Editor } from '@/lib/editor'
 import { git } from '@/lib/git'
 import { prefs } from '@/composables/prefs'
+import { relativeDate } from '@/composables/dates'
 import { useWorkspace } from '@/composables/workspace'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
@@ -147,6 +148,7 @@ onMounted(async () => {
   if (root && typed) releaseTypes = holdTypes(root)
   loading.value = false
   void loadBase()
+  void loadBlame()
   if (props.line) editor.goTo(props.line)
   editor.focus()
   void gatherWords()
@@ -165,6 +167,19 @@ async function loadBase() {
   const file = await git.readFile(root, '', props.path).catch(() => null)
   editor?.setBase(file?.kind === 'text' ? file.text : null)
 }
+/** Who last changed each line of the file on disk, for the note on the cursor's line. */
+async function loadBlame() {
+  const root = ws.repo.repo.value
+  if (!editor || !root || big) return
+  const b = await git.blame(root, null, props.path).catch(() => null)
+  editor?.setBlame(
+    b?.lines.map((l) => {
+      const c = b.commits[l.hash]
+      const label = !c || /^0+$/.test(l.hash) ? 'Not committed yet' : `${c.author}, ${relativeDate(c.date)} · ${c.summary}`
+      return { text: l.text.replace(/\r$/, ''), label }
+    }) ?? null,
+  )
+}
 // Staging, unstaging and commits change the index: looked at again only when this file's state, or the commit, does.
 watch(
   () => {
@@ -172,7 +187,10 @@ watch(
     const f = s?.files.find((x) => x.path === props.path)
     return `${s?.oid}|${f?.index ?? ''}|${f?.worktree ?? ''}`
   },
-  () => void loadBase(),
+  () => {
+    void loadBase()
+    void loadBlame()
+  },
 )
 // Opening the same file again at another line, from a search result or a path in the terminal.
 watch(
@@ -190,6 +208,7 @@ onBeforeUnmount(() => {
 defineExpose({
   getDoc: () => editor?.getDoc() ?? props.text,
   setDoc: (text: string) => editor?.setDoc(text),
+  loadBlame,
 })
 </script>
 

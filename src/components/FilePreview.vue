@@ -166,6 +166,7 @@ async function save(stageAfter = false) {
     saved.value = doc
     dirty.value = false
     setDraft(p.path, null)
+    void editor.value.loadBlame()
     if (stageAfter) await stage([{ path: p.path, oldPath: null, index: '.', worktree: 'M', kind: 'changed', nestedRepo: false }])
     else void refresh()
     showToast(stageAfter ? `Saved and staged ${name}` : `Saved ${name}`)

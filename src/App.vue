@@ -129,6 +129,10 @@ function onKeydown(e: KeyboardEvent) {
   if (e.ctrlKey && e.shiftKey && e.code === 'Backquote') {
     e.preventDefault()
     runCommand('new-terminal')
+  } else if (mod && e.shiftKey && !e.altKey && e.code === 'KeyO' && !e.defaultPrevented) {
+    // Unless the editor took ⇧⌘O for its symbol list.
+    e.preventDefault()
+    runCommand('go-to-file')
   } else if (e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && CTRL_KEYS[e.code]) {
     e.preventDefault()
     runCommand(CTRL_KEYS[e.code])

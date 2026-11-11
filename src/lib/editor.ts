@@ -8,7 +8,7 @@ import { importCandidates, pathBeingTyped } from './importPaths'
 import { BIG_FILE, TYPED } from './typed'
 import { typeAware, typeCompletions, type TypeService } from './types'
 import { changeGutter, setChangeBase } from './changeGutter'
-import { Decoration, EditorView, keymap } from '@codemirror/view'
+import { Decoration, EditorView, WidgetType, keymap } from '@codemirror/view'
 import { Compartment, EditorState, Prec, StateEffect, StateField } from '@codemirror/state'
 import { indentWithTab } from '@codemirror/commands'
 import { HighlightStyle, LanguageDescription, syntaxHighlighting } from '@codemirror/language'
@@ -46,6 +46,7 @@ const theme = EditorView.theme({
   },
   '.cm-tooltip': { backgroundColor: 'var(--popover)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--fg)' },
   '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--pill)', color: 'var(--fg)' },
+  '.cm-blame': { marginLeft: '3em', color: 'var(--fg-faint)', fontStyle: 'italic', pointerEvents: 'none' },
   '.cm-proposal': { backgroundColor: 'color-mix(in oklab, var(--add) 16%, transparent)' },
 })
 
@@ -61,6 +62,42 @@ const proposal = StateField.define<{ from: number; to: number } | null>({
     EditorView.decorations.from(f, (range) =>
       range && range.to > range.from ? Decoration.set(Decoration.mark({ class: 'cm-proposal' }).range(range.from, range.to)) : Decoration.none,
     ),
+})
+
+/** One per line of the file on disk: the line's text, and who last changed it. */
+export type BlameLine = { text: string; label: string }
+
+class BlameNote extends WidgetType {
+  constructor(readonly label: string) {
+    super()
+  }
+  eq(other: BlameNote) {
+    return other.label === this.label
+  }
+  toDOM() {
+    const el = document.createElement('span')
+    el.className = 'cm-blame'
+    el.textContent = this.label
+    return el
+  }
+}
+
+/** The commit that last changed the cursor's line, faint at its end, as GitLens does. */
+const setBlame = StateEffect.define<BlameLine[] | null>()
+const blame = StateField.define<BlameLine[] | null>({
+  create: () => null,
+  update(value, tr) {
+    for (const e of tr.effects) if (e.is(setBlame)) return e.value
+    return value
+  },
+})
+const blameNote = EditorView.decorations.compute([blame, 'selection', 'doc'], (state) => {
+  const line = state.doc.lineAt(state.selection.main.head)
+  const at = state.field(blame)?.[line.number - 1]
+  // shortcut: unsaved edits aren't blamed, so a line shows nothing unless it still matches the blamed text at its
+  // number; blame the buffer (git blame --contents) if notes on shifted lines are wanted.
+  if (!at || at.text !== line.text) return Decoration.none
+  return Decoration.set(Decoration.widget({ widget: new BlameNote(at.label), side: 1 }).range(line.to))
 })
 
 /** Token colours from the terminal palette, so code reads the same in the editor, terminal and preview. */
@@ -197,6 +234,8 @@ export function createEditor(
             ]
           : []),
         proposal,
+        blame,
+        blameNote,
         keymap.of([
           {
             key: 'Mod-s',
@@ -265,6 +304,7 @@ export function createEditor(
     },
     /** The file as git has it, for the change markers; null clears them. */
     setBase: (text: string | null) => changeMarkers && setChangeBase(view, text),
+    setBlame: (lines: BlameLine[] | null) => view.dispatch({ effects: setBlame.of(lines) }),
     /** Puts the cursor at the start of a line (1-based, and a column if given) and scrolls it to the middle. */
     goTo: (line: number, col = 1) => {
       const doc = view.state.doc

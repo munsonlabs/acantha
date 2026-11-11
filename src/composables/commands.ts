@@ -142,7 +142,7 @@ export const commands: Command[] = [
       prefs.sidebarOpen.value = true
     }),
   },
-  { id: 'go-to-file', label: 'Go to File', group: 'General', keys: '⌘P', run: () => openPalette('files') },
+  { id: 'go-to-file', label: 'Go to File', group: 'General', keys: '⌘P · ⌃⇧O · ⇧⌘O', run: () => openPalette('files') },
   { id: 'palette', label: 'Command Palette', group: 'General', keys: '⇧⌘P', run: () => openPalette('commands') },
   { id: 'checkout-branch', label: 'Check Out Branch…', group: 'Repository', run: withRepo(() => openPalette('branches')) },
   { id: 'clean-up-branches', label: 'Clean Up Branches…', group: 'Repository', run: withRepo((ws) => (ws.ui.branchCleanup.value = true)) },
