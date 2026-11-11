@@ -23,6 +23,8 @@ export const prefs = {
   editByDefault: usePersisted('edit-by-default', true),
   /** The main window's opacity: below 1, the windows behind it show through. */
   windowOpacity: usePersisted('window-opacity', 1),
+  /** Which of the logos (see logo.ts) shows on the start screen and in the Dock. */
+  appLogo: usePersisted('app-logo', 'green'),
   /** The card with a commit's details that appears when hovering a row in the graph. */
   hoverCards: usePersisted('hover-cards', true),
   /** Fade the graph while you're working elsewhere (pointer away, nothing in it focused). */

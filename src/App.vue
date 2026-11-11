@@ -8,6 +8,7 @@ import { git } from '@/lib/git'
 import { basename } from '@/lib/format'
 import { activateTabNumber, overlays, runCommand } from '@/composables/commands'
 import { prefs } from '@/composables/prefs'
+import { showDockIcon } from '@/composables/logo'
 import { isMainWindow, lastUsed, pathOf, useWorkspaces, type Workspace } from '@/composables/workspace'
 import { bringBackAll } from '@/composables/claudeWindow'
 import { overGraph } from '@/composables/center'
@@ -307,6 +308,7 @@ const autoSleep = setInterval(async () => {
 }, 60_000)
 
 watch(prefs.windowOpacity, (alpha) => void invoke('window_opacity', { alpha }), { immediate: true })
+watch(prefs.appLogo, () => void showDockIcon().catch(() => {}), { immediate: true })
 
 // A safety net: the file watcher reports changes instantly, but if it can't run (some network drives), this still catches them.
 const poll = setInterval(() => {

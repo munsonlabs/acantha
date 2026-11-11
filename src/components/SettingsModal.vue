@@ -15,6 +15,7 @@ import { showToast } from '@/composables/useToast'
 import { when } from '@/lib/claudeView'
 import { overlays, ZOOM_MAX, ZOOM_MIN } from '@/composables/commands'
 import { prefs } from '@/composables/prefs'
+import { LOGOS } from '@/composables/logo'
 import { useWorkspaces } from '@/composables/workspace'
 import { FEATURES, isOn, setFeature } from '@/features'
 import Icon from './Icon.vue'
@@ -159,6 +160,25 @@ const setRemotes = (on: boolean) => (active.value ? active.value.repo.setShowRem
                   <span class="value">{{ Math.round(prefs.windowOpacity.value * 100) }}%</span>
                   <button class="ghost reset" :disabled="prefs.windowOpacity.value === 1" @click="prefs.windowOpacity.value = 1">Reset</button>
                 </span>
+              </div>
+              <div class="row">
+                <div>
+                  <span class="label">App logo</span>
+                  <span class="hint">On the start screen, and in the Dock while Acantha is running.</span>
+                </div>
+                <div class="logos">
+                  <button
+                    v-for="l in LOGOS"
+                    :key="l.id"
+                    :class="{ on: prefs.appLogo.value === l.id }"
+                    :title="l.label"
+                    :aria-label="`${l.label} logo`"
+                    :aria-pressed="prefs.appLogo.value === l.id"
+                    @click="prefs.appLogo.value = l.id"
+                  >
+                    <img :src="l.url" alt="" draggable="false" />
+                  </button>
+                </div>
               </div>
               <label class="row">
                 <div>
@@ -660,6 +680,24 @@ h4 {
   background: var(--pill);
   box-shadow: inset 0 0 0 1px var(--hover);
   color: var(--fg);
+}
+.logos {
+  display: flex;
+  gap: 6px;
+}
+.logos button {
+  padding: 3px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+}
+.logos button.on {
+  box-shadow: inset 0 0 0 2px var(--fg-muted);
+}
+.logos img {
+  display: block;
+  width: 30px;
+  height: 30px;
 }
 /* A plain checkbox drawn as a switch. */
 .switch {

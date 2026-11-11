@@ -50,6 +50,26 @@ fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+/// Shows `png` as the Dock icon, until the app quits.
+#[tauri::command]
+fn set_dock_icon(app: tauri::AppHandle, png: Vec<u8>) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    app.run_on_main_thread(move || {
+        use objc2::{AllocAnyThread, MainThreadMarker};
+        use objc2_app_kit::{NSApplication, NSImage};
+        let Some(mtm) = MainThreadMarker::new() else { return };
+        let data = objc2_foundation::NSData::with_bytes(&png);
+        if let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) {
+            // SAFETY: on the main thread, with an image AppKit decoded itself.
+            unsafe { NSApplication::sharedApplication(mtm).setApplicationIconImage(Some(&image)) };
+        }
+    })
+    .map_err(|e| e.to_string())?;
+    #[cfg(not(target_os = "macos"))]
+    let _ = (app, png);
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -65,6 +85,7 @@ fn main() {
         .on_menu_event(|app, event| menu::forward(app, event.id().as_ref()))
         .invoke_handler(tauri::generate_handler![
             quit_app,
+            set_dock_icon,
             menu::new_window,
             git::initial_repo,
             git::resolve_repo,

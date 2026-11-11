@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { defineAsyncComponent, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import logo from '@/assets/logo.svg'
+import { logo } from '@/composables/logo'
 import { basename, compactDate } from '@/lib/format'
 import { git, type RepoSummary } from '@/lib/git'
 import { prefs } from '@/composables/prefs'
