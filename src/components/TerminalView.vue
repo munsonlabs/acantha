@@ -229,6 +229,23 @@ onMounted(async () => {
   // Straight away, not on the next frame: the shell starts at this size.
   if (el.value && el.value.offsetWidth > 0 && el.value.offsetHeight > 0) fit?.fit()
 
+  // xterm moves the prompt cursor on ⌥-click; a plain click on the line being typed counts as one too.
+  el.value!.addEventListener(
+    'mouseup',
+    (e) => {
+      const screen = el.value?.querySelector('.xterm-screen')?.getBoundingClientRect()
+      if (!term || !screen || e.button !== 0 || e.altKey || e.shiftKey || e.metaKey || e.ctrlKey) return
+      const buf = term.buffer.active
+      const row = buf.viewportY + Math.floor((e.clientY - screen.top) / (screen.height / term.rows))
+      let first = buf.baseY + buf.cursorY
+      let last = first
+      while (buf.getLine(first)?.isWrapped) first--
+      while (buf.getLine(last + 1)?.isWrapped) last++
+      if (row >= first && row <= last) Object.defineProperty(e, 'altKey', { value: true })
+    },
+    true,
+  )
+
   term.attachCustomKeyEventHandler((e) => {
     // ⌃⇧O is Go to File: left for the app rather than sent to the shell.
     if (e.ctrlKey && e.shiftKey && e.code === 'KeyO') return false
