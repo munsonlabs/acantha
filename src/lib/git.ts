@@ -257,7 +257,7 @@ export const git = {
   unwatch: (id: number) => invoke<void>('unwatch_repo', { id }),
   statusDiff: (repo: string, file: StatusFile, staged: boolean) =>
     invoke<string>('get_status_diff', { repo, path: file.path, oldPath: file.oldPath, staged, untracked: file.kind === 'untracked' }),
-  listFiles: (repo: string, rev: string | null) => invoke<string[]>('list_files', { repo, rev }),
+  listFiles: (repo: string, rev: string | null, ignored: boolean) => invoke<string[]>('list_files', { repo, rev, ignored }),
   /** New folders in the working tree, empty ones included. */
   listNewFolders: (repo: string) => invoke<string[]>('list_new_folders', { repo }),
   /** What .gitignore leaves out; an ignored folder is one entry ending in a slash. */
@@ -265,8 +265,8 @@ export const git = {
   /** One folder's names, folders ending in a slash. */
   listDir: (repo: string, dir: string) => invoke<string[]>('list_dir', { repo, dir }),
   readFile: (repo: string, rev: string | null, path: string) => invoke<FileContent>('read_file', { repo, rev, path }),
-  searchFiles: (repo: string, rev: string | null, query: string, regex: boolean, caseSensitive: boolean, paths: string[]) =>
-    invoke<SearchResults>('search_files', { repo, rev, query, regex, caseSensitive, paths }),
+  searchFiles: (repo: string, rev: string | null, query: string, regex: boolean, caseSensitive: boolean, paths: string[], ignored: boolean) =>
+    invoke<SearchResults>('search_files', { repo, rev, query, regex, caseSensitive, paths, ignored }),
   writeFile: (repo: string, path: string, contents: string) => invoke<void>('write_file', { repo, path, contents }),
   createFile: (repo: string, path: string) => invoke<void>('create_file', { repo, path }),
   createFolder: (repo: string, path: string) => invoke<void>('create_folder', { repo, path }),

@@ -428,7 +428,11 @@ watch(status, (now, before) => {
         v-if="working"
         class="ghost icon-btn"
         :class="{ on: prefs.showIgnored.value }"
-        :title="prefs.showIgnored.value ? 'Hide ignored files' : 'Show ignored files (node_modules, build output…)'"
+        :title="
+          prefs.showIgnored.value
+            ? 'Hide ignored files, and leave them out of search'
+            : 'Show ignored files (node_modules, build output…), and search them too'
+        "
         @click="prefs.showIgnored.value = !prefs.showIgnored.value"
       >
         <Icon name="eye" />

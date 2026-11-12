@@ -189,7 +189,7 @@ mod tests {
         assert!(
             matches!(block_on(read_file(repo.clone(), Some("HEAD~1".into()), "a.txt".into())).unwrap(), FileContent::Text { ref text, .. } if text == "one\n")
         );
-        assert_eq!(block_on(list_files(repo.clone(), Some("HEAD".into()))).unwrap(), ["a.txt"]);
+        assert_eq!(block_on(list_files(repo.clone(), Some("HEAD".into()), false)).unwrap(), ["a.txt"]);
 
         std::fs::write(std::path::Path::new(&repo).join("a.txt"), "stashed\n").unwrap();
         sh(&repo, &["stash", "push", "-q", "-m", "wip"]);

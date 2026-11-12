@@ -84,7 +84,7 @@ export function createFiles({ repo }: Repo) {
     loading.value = true
     try {
       const [files, dirs] = await Promise.all([
-        git.listFiles(repo.value, rev.value),
+        git.listFiles(repo.value, rev.value, prefs.showIgnored.value),
         rev.value === null ? git.listNewFolders(repo.value).catch(() => []) : [],
       ])
       if (id === seq) {
@@ -233,7 +233,7 @@ export function createFiles({ repo }: Repo) {
     search.searching.value = true
     try {
       const paths = filterPathspecs(parseFileFilter(search.include.value))
-      const found = await git.searchFiles(repo.value, rev.value, q, search.regex.value, search.caseSensitive.value, paths)
+      const found = await git.searchFiles(repo.value, rev.value, q, search.regex.value, search.caseSensitive.value, paths, prefs.showIgnored.value)
       if (id !== searchSeq) return
       search.results.value = found
       search.error.value = null
@@ -252,6 +252,8 @@ export function createFiles({ repo }: Repo) {
     searchTimer = setTimeout(runSearch, 250)
   })
 
+  // Ignored files join (or leave) the list and the search.
+  watch(prefs.showIgnored, () => list.value.length && void load())
   watch(repo, () => {
     rev.value = null
     list.value = []

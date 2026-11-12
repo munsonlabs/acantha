@@ -64,7 +64,7 @@ export const prefs = {
   /** Optional features switched off in Settings (see src/features); everything else is on. */
   disabledFeatures: usePersisted<string[]>('disabled-features', []),
   /** The file browser also lists what .gitignore leaves out (node_modules, build output), dimmed. */
-  showIgnored: usePersisted('show-ignored', false),
+  showIgnored: usePersisted('show-ignored', true),
   /** The best Commit Snake score, from the game where the collapsed graph was. */
   gameBest: usePersisted('game-best', 0),
   /** Commit Snake's mode: edges that wrap round, or classic, where they end the game; each has its own best. */

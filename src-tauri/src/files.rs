@@ -88,9 +88,47 @@ fn classify(path: &str, bytes: Vec<u8>) -> FileContent {
     }
 }
 
-/// Every file in the repository at `rev`, or in the working tree (tracked and untracked, not ignored).
+/// How many files one ignored folder adds to the listing.
+// shortcut: a flat cap, so a huge one (node_modules) is cut short rather than listed whole; read them a level at a
+// time, as the file browser does, if that cap gets in the way.
+const MAX_IGNORED: usize = 1000;
+
+/// What's ignored, outermost entries only, folders with a trailing slash.
+fn ignored_entries(repo: &str) -> Vec<String> {
+    let out = git(repo, ["ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory"]).unwrap_or_default();
+    let mut entries: Vec<String> = Vec::new();
+    for p in out.split('\0').filter(|p| !p.is_empty() && !p.ends_with(".DS_Store")) {
+        // git also reports ignored folders inside one it has already reported.
+        if !entries.iter().any(|e| e.ends_with('/') && p.starts_with(e.as_str())) {
+            entries.push(p.into());
+        }
+    }
+    entries
+}
+
+/// The files under `dir`, up to `left` of them. Not through symlinks, nor into another repository or worktree.
+fn walk(root: &Path, dir: &str, out: &mut Vec<String>, left: &mut usize) {
+    let Ok(entries) = std::fs::read_dir(root.join(dir)) else { return };
+    for entry in entries.filter_map(Result::ok) {
+        if *left == 0 {
+            return;
+        }
+        let path = format!("{dir}/{}", entry.file_name().to_string_lossy());
+        match entry.file_type() {
+            Ok(t) if t.is_dir() && !root.join(&path).join(".git").exists() => walk(root, &path, out, left),
+            Ok(t) if t.is_file() && !path.ends_with(".DS_Store") => {
+                out.push(path);
+                *left -= 1;
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Every file in the repository at `rev`, or in the working tree: tracked and untracked, and with `ignored` what
+/// .gitignore leaves out too (so much of each folder: see `MAX_IGNORED`).
 #[tauri::command]
-pub async fn list_files(repo: String, rev: Option<String>) -> Result<Vec<String>, String> {
+pub async fn list_files(repo: String, rev: Option<String>, ignored: bool) -> Result<Vec<String>, String> {
     let out = match &rev {
         Some(rev) => git(&repo, ["ls-tree", "-r", "-z", "--name-only", "--full-tree", rev.as_str()])?,
         None => git(&repo, ["ls-files", "-z", "--cached", "--others", "--exclude-standard"])?,
@@ -104,6 +142,14 @@ pub async fn list_files(repo: String, rev: Option<String>) -> Result<Vec<String>
         .map(String::from)
         .collect();
     files.dedup();
+    if rev.is_none() && ignored {
+        for entry in ignored_entries(&repo) {
+            match entry.strip_suffix('/') {
+                Some(dir) => walk(root, dir, &mut files, &mut { MAX_IGNORED }),
+                None => files.push(entry),
+            }
+        }
+    }
     Ok(files)
 }
 
@@ -215,7 +261,7 @@ fn parse_grep(out: &str, rev: Option<&str>) -> SearchResults {
 }
 
 /// Lines matching `query` in the repository's text files, at `rev` or in the working tree (tracked and untracked,
-/// not ignored). A plain string unless `regex`, which takes an extended regular expression. `paths` are git pathspecs
+/// and with `ignored` the ignored folders too). A plain string unless `regex`, which takes an extended regular expression. `paths` are git pathspecs
 /// limiting which files are searched (`:(glob)**/*.ts`, `:(glob,exclude)target/**`).
 #[tauri::command]
 pub async fn search_files(
@@ -225,6 +271,7 @@ pub async fn search_files(
     regex: bool,
     case_sensitive: bool,
     paths: Vec<String>,
+    ignored: bool,
 ) -> Result<SearchResults, String> {
     if query.is_empty() {
         return Ok(SearchResults {
@@ -246,8 +293,20 @@ pub async fn search_files(
     args.push("--");
     args.extend(paths.iter().map(String::as_str));
     // Exit code 1 is "nothing matched".
-    let out = git_with(&repo, &args, &[0, 1])?;
-    Ok(parse_grep(&out, rev.as_deref()))
+    let mut found = parse_grep(&git_with(&repo, &args, &[0, 1])?, rev.as_deref());
+    if rev.is_none() && ignored {
+        // Each ignored folder is searched from inside itself, so the pathspecs apply within it.
+        args.insert(1, "--no-exclude-standard");
+        for dir in ignored_entries(&repo).iter().filter(|p| p.ends_with('/')) {
+            let Ok(out) = git_with(&format!("{repo}/{dir}"), &args, &[0, 1]) else {
+                continue;
+            };
+            let more = parse_grep(&out, None);
+            found.truncated |= more.truncated;
+            found.hits.extend(more.hits);
+        }
+    }
+    Ok(found)
 }
 
 /// A path in the working tree for the file browser's create, rename and trash: relative, no `..`, and the folder it
@@ -537,6 +596,40 @@ mod tests {
     }
 
     #[test]
+    fn lists_and_searches_ignored_folders_on_request() {
+        let dir = std::env::temp_dir().join(format!("acantha-hidden-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join(".tool/deep")).unwrap();
+        std::fs::create_dir_all(dir.join("build")).unwrap();
+        let repo = dir.to_string_lossy().into_owned();
+        git(&repo, ["init", "-q"]).unwrap();
+        std::fs::write(dir.join(".gitignore"), ".tool\nbuild\n.env\n.DS_Store\n").unwrap();
+        std::fs::write(dir.join("build/.DS_Store"), "").unwrap();
+        std::fs::write(dir.join(".tool/deep/note.md"), "a needle\n").unwrap();
+        std::fs::write(dir.join("build/out.txt"), "a needle\n").unwrap();
+        std::fs::write(dir.join(".env"), "KEY=1\n").unwrap();
+
+        let list = |ignored| {
+            let mut files = tauri::async_runtime::block_on(list_files(repo.clone(), None, ignored)).unwrap();
+            files.sort();
+            files
+        };
+        assert_eq!(list(false), [".gitignore"]);
+        assert_eq!(list(true), [".env", ".gitignore", ".tool/deep/note.md", "build/out.txt"]);
+
+        let search = |paths: &[&str], ignored: bool| {
+            let paths = paths.iter().map(|p| p.to_string()).collect();
+            let found = tauri::async_runtime::block_on(search_files(repo.clone(), None, "needle".into(), false, false, paths, ignored)).unwrap();
+            found.hits.into_iter().map(|h| h.path).collect::<Vec<_>>()
+        };
+        assert!(search(&[], false).is_empty());
+        assert_eq!(search(&[], true), [".tool/deep/note.md", "build/out.txt"]);
+        assert_eq!(search(&[":(glob)**/*.md"], true), [".tool/deep/note.md"]);
+        assert_eq!(search(&[":(glob,exclude)**/*.md"], true), ["build/out.txt"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn searches_files() {
         let dir = std::env::temp_dir().join(format!("acantha-search-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -553,7 +646,7 @@ mod tests {
 
         let search_in = |rev: Option<&str>, q: &str, regex: bool, case: bool, paths: &[&str]| {
             let paths = paths.iter().map(|p| p.to_string()).collect();
-            tauri::async_runtime::block_on(search_files(repo.clone(), rev.map(String::from), q.into(), regex, case, paths)).unwrap()
+            tauri::async_runtime::block_on(search_files(repo.clone(), rev.map(String::from), q.into(), regex, case, paths, false)).unwrap()
         };
         let search = |rev: Option<&str>, q: &str, regex: bool, case: bool| search_in(rev, q, regex, case, &[]);
         let found = search(None, "needle", false, false);
