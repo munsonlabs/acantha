@@ -144,6 +144,12 @@ export const commands: Command[] = [
   },
   { id: 'go-to-file', label: 'Go to File', group: 'General', keys: '⌘P · ⌃⇧O · ⇧⌘O', run: () => openPalette('files') },
   { id: 'palette', label: 'Command Palette', group: 'General', keys: '⇧⌘P', run: () => openPalette('commands') },
+  {
+    id: 'format-json',
+    label: 'Format JSON File',
+    group: 'General',
+    run: withRepo((ws) => (ws.files.preview.value ? ws.ui.formatJson.value++ : showToast('Open a JSON file to format it', 'error'))),
+  },
   { id: 'checkout-branch', label: 'Check Out Branch…', group: 'Repository', run: withRepo(() => openPalette('branches')) },
   { id: 'clean-up-branches', label: 'Clean Up Branches…', group: 'Repository', run: withRepo((ws) => (ws.ui.branchCleanup.value = true)) },
   { id: 'settings', label: 'Settings', group: 'General', keys: '⌘,', run: () => (overlays.settings.value = true) },

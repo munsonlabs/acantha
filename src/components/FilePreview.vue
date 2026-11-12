@@ -10,6 +10,7 @@ import { overlays } from '@/composables/commands'
 import { openMenu, type MenuEntry } from '@/composables/useContextMenu'
 import { fileOpenItems } from '@/composables/openers'
 import { confirmAction } from '@/composables/useDialog'
+import { formatJson } from '@/lib/formatJson'
 import { showToast } from '@/composables/useToast'
 import { useWorkspace } from '@/composables/workspace'
 import CodeEditor from './CodeEditor.vue'
@@ -60,6 +61,21 @@ async function catchUp() {
   editor.value?.setDoc(file.text)
 }
 watch(diskChanged, () => void catchUp())
+
+/** The palette's Format JSON: in the editor the result is left unsaved, to look over; a previewed file is rewritten. */
+async function formatOpenJson() {
+  const p = preview.value
+  if (!p || p.rev !== null || !repo.value || content.value?.kind !== 'text')
+    return showToast('Only a JSON file in the working tree can be formatted', 'error')
+  try {
+    if (p.view === 'edit' && editor.value) return editor.value.setDoc(formatJson(editor.value.getDoc()))
+    await git.writeFile(repo.value, p.path, formatJson(content.value.text))
+    void load()
+  } catch (e) {
+    showToast(e instanceof SyntaxError ? `Not valid JSON: ${e.message}` : String(e), 'error')
+  }
+}
+watch(ws.ui.formatJson, () => void formatOpenJson())
 
 /** Takes the version on disk, dropping the edits made here. */
 function reloadFromDisk() {

@@ -7,6 +7,8 @@ export function createUi() {
     sidebarTab: ref<'files' | 'search' | 'scm' | 'agents'>('scm'),
     /** Bumped to put the cursor in the file search box. */
     focusFileSearch: ref(0),
+    /** Bumped to format the open JSON file. */
+    formatJson: ref(0),
     /** Interactive rebase of the commits after `base` (null: from the root). */
     rebase: shallowRef<{ base: string | null; label: string } | null>(null),
     conflict: shallowRef<StatusFile | null>(null),
