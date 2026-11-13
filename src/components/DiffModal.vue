@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { buildPatch, canPickLines } from '@/lib/diff'
+import { git } from '@/lib/git'
 import { useWorkspace } from '@/composables/workspace'
+import { confirmAction } from '@/composables/useDialog'
+import { showToast } from '@/composables/useToast'
 import FileIcon from './FileIcon.vue'
 import Icon from './Icon.vue'
+
+const CodeEditor = defineAsyncComponent(() => import('./CodeEditor.vue'))
 
 const ws = useWorkspace()
 const { diff, closeDiff, reloadDiff } = ws.diff
@@ -79,13 +84,90 @@ const editable = computed(() => {
   return ws.files.rev.value === null && ws.files.known.value.has(d.file.path)
 })
 
-/** Leaves the diff for the editor: at `line`, or at the first change. */
-function edit(line?: number | null) {
+/** The file being edited here in the diff: its text, what's saved on disk, and what it's compared with. */
+const editing = ref<{ text: string; saved: string; original: string; line?: number } | null>(null)
+const editor = ref<{ getDoc: () => string }>()
+const dirty = ref(false)
+/** A diff that can be edited in place opens that way; Done goes back to the plain diff, and it stays there. */
+let fresh = false
+watch(
+  () => diff.value && `${diff.value.file.path}|${diff.value.label}`,
+  () => {
+    editing.value = null
+    fresh = true
+  },
+)
+watch(diff, (d) => {
+  if (!fresh || !d?.result) return
+  fresh = false
+  if (d.base !== undefined) void edit(null, true)
+})
+
+/**
+ * Edits the file at `line`, or at the first change: here in the diff when it ends at the working tree, otherwise
+ * in the editor (unless only `here` will do).
+ */
+async function edit(line?: number | null, here = false) {
   const d = diff.value
-  if (!d || !editable.value) return
+  const root = ws.repo.repo.value
+  if (!d || !root || !editable.value) return
   line ??= d.result?.lines.find((l) => l.kind === 'add' || l.kind === 'del')?.newNo ?? undefined
-  closeDiff()
-  void ws.files.open(d.file.path, 'edit', null, line ?? undefined, { pin: true })
+  const file = d.base === undefined ? null : await git.readFile(root, null, d.file.path).catch(() => null)
+  if (file?.kind !== 'text' || diff.value !== d) {
+    if (here) return
+    closeDiff()
+    return void ws.files.open(d.file.path, 'edit', null, line ?? undefined, { pin: true })
+  }
+  const original = await git.readFile(root, d.base!, d.file.oldPath ?? d.file.path).catch(() => null)
+  if (diff.value !== d) return
+  const draft = ws.files.drafts.value.get(d.file.path)
+  dirty.value = !!draft
+  editing.value = {
+    text: draft?.text ?? file.text,
+    saved: draft?.base ?? file.text,
+    original: original?.kind === 'text' ? original.text : '',
+    line: line ?? undefined,
+  }
+}
+
+/** Unsaved edits are the file's draft, as in the editor, so closing the diff doesn't lose them. */
+function onEdit(doc: string) {
+  const d = diff.value
+  if (!d || !editing.value) return
+  dirty.value = doc !== editing.value.saved
+  ws.files.setDraft(d.file.path, dirty.value ? { text: doc, base: editing.value.saved } : null)
+}
+
+async function save() {
+  const d = diff.value
+  const root = ws.repo.repo.value
+  const e = editing.value
+  if (!d || !root || !e || !editor.value) return
+  const doc = editor.value.getDoc()
+  try {
+    const onDisk = await git.readFile(root, null, d.file.path).catch(() => null)
+    if (
+      onDisk?.kind === 'text' &&
+      onDisk.text !== e.saved &&
+      onDisk.text !== doc &&
+      !(await confirmAction(
+        'File Changed on Disk',
+        `\`${d.file.path}\` changed outside the app since you opened it. Overwrite it?`,
+        'Overwrite',
+        true,
+      ))
+    )
+      return
+    await git.writeFile(root, d.file.path, doc)
+    e.saved = doc
+    dirty.value = false
+    ws.files.setDraft(d.file.path, null)
+    void ws.status.refresh()
+    void reloadDiff()
+    showToast(`Saved ${d.file.path.split('/').pop()}`)
+  } catch (err) {
+    showToast(String(err), 'error')
+  }
 }
 
 const table = ref<HTMLTableElement>()
@@ -131,13 +213,27 @@ function onCopy(e: ClipboardEvent) {
             {{ diff.file.path }}<span v-if="diff.file.oldPath" class="muted"> ← {{ diff.file.oldPath }}</span>
             <span v-if="diff.label" class="label">{{ diff.label }}</span>
           </h2>
-          <button v-if="editable" class="ghost icon-btn" title="Open in Editor (or double-click a line)" @click="edit()">
+          <template v-if="editing">
+            <button class="primary mini-btn" :disabled="!dirty" title="Save (⌘S)" @click="save">Save</button>
+            <button class="ghost mini-btn" title="Back to the plain diff, to stage or discard lines" @click="editing = null">Done</button>
+          </template>
+          <button v-else-if="editable" class="ghost icon-btn" title="Edit (or double-click a line)" @click="edit()">
             <Icon name="pencil" />
           </button>
           <button class="ghost icon-btn" title="Close (Esc)" @click="closeDiff"><Icon name="x" /></button>
         </header>
         <div class="body" @copy="onCopy">
-          <p v-if="diff.error" class="note error">{{ diff.error }}</p>
+          <CodeEditor
+            v-if="editing"
+            ref="editor"
+            :path="diff.file.path"
+            :text="editing.text"
+            :line="editing.line"
+            :diff-base="editing.original"
+            @change="onEdit"
+            @save="save"
+          />
+          <p v-else-if="diff.error" class="note error">{{ diff.error }}</p>
           <p v-else-if="!diff.result" class="note">Loading…</p>
           <p v-else-if="diff.result.binary" class="note">Binary file, no text diff available.</p>
           <p v-else-if="!diff.result.lines.length" class="note">No content changes (mode or rename only).</p>
@@ -170,7 +266,7 @@ function onCopy(e: ClipboardEvent) {
           </table>
           <p v-if="diff.result?.truncated" class="note">Diff truncated, it is too large to show in full.</p>
         </div>
-        <footer v-if="side" class="pick-bar">
+        <footer v-if="side && !editing" class="pick-bar">
           <span v-if="count" class="picked">{{ count }} {{ count === 1 ? 'line' : 'lines' }} selected</span>
           <span v-else class="hint">Click a line number to pick a change, shift-click for a run of them</span>
           <div class="spacer" />
@@ -226,6 +322,7 @@ h2 {
 }
 .body {
   flex: 1;
+  min-height: 0;
   overflow: auto;
 }
 table {
@@ -249,6 +346,11 @@ td {
   white-space: pre;
   /* The code can be selected and copied; the line numbers next to it can't, so they stay out of what's copied. */
   user-select: text;
+}
+.mini-btn {
+  height: 24px;
+  padding: 0 10px;
+  font-size: 12px;
 }
 .add {
   background: var(--diff-add);

@@ -30,7 +30,7 @@ import { holdTypes } from '@/composables/typesInUse'
 import SymbolPicker from './SymbolPicker.vue'
 import EditAsk from './EditAsk.vue'
 
-const props = defineProps<{ path: string; text: string; line?: number }>()
+const props = defineProps<{ path: string; text: string; line?: number; diffBase?: string }>()
 const emit = defineEmits<{ change: [doc: string]; save: [] }>()
 
 /** A big file's edited plainly (see BIG_FILE): no TypeScript, words or change markers. */
@@ -137,7 +137,8 @@ onMounted(async () => {
     path: props.path,
     files: () => ws.files.list.value,
     words: () => words,
-    changeMarkers: isOn('changeMarkers'),
+    changeMarkers: isOn('changeMarkers') && props.diffBase === undefined,
+    diffBase: props.diffBase,
     types: root && typed ? { file: `${root}/${props.path}`, service: typeService(root, `${root}/${props.path}`) } : undefined,
     onJumpToSymbol: typed ? openSymbolPicker : undefined,
     onAsk: isOn('claude') ? () => void asker.value?.start() : undefined,

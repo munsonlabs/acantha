@@ -8,6 +8,7 @@ import { importCandidates, pathBeingTyped } from './importPaths'
 import { BIG_FILE, TYPED } from './typed'
 import { typeAware, typeCompletions, type TypeService } from './types'
 import { changeGutter, setChangeBase } from './changeGutter'
+import { unifiedMergeView } from '@codemirror/merge'
 import { Decoration, EditorView, WidgetType, keymap } from '@codemirror/view'
 import { Compartment, EditorState, Prec, StateEffect, StateField } from '@codemirror/state'
 import { indentWithTab } from '@codemirror/commands'
@@ -47,6 +48,15 @@ const theme = EditorView.theme({
   '.cm-tooltip': { backgroundColor: 'var(--popover)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--fg)' },
   '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--pill)', color: 'var(--fg)' },
   '.cm-blame': { marginLeft: '3em', color: 'var(--fg-faint)', fontStyle: 'italic', pointerEvents: 'none' },
+  '.cm-changedLine': { backgroundColor: 'var(--diff-add)' },
+  '.cm-deletedChunk': { backgroundColor: 'var(--diff-del)' },
+  '.cm-deletedChunk .cm-chunkButtons button': {
+    padding: '0 8px',
+    border: '1px solid var(--border)',
+    backgroundColor: 'var(--popover)',
+    color: 'var(--fg-muted)',
+    font: '500 11px var(--font)',
+  },
   '.cm-proposal': { backgroundColor: 'color-mix(in oklab, var(--add) 16%, transparent)' },
 })
 
@@ -128,6 +138,8 @@ export interface EditorOptions {
   words?: () => readonly string[]
   /** Show change markers in the margin, against the text given with `setBase`. */
   changeMarkers?: boolean
+  /** Show the file as a diff against this text: what was removed stays in view, and each change can be reverted. */
+  diffBase?: string
   /** TypeScript's view of the file (`file`, its absolute path), for a file it understands: types, errors, definitions. */
   types?: { file: string; service: TypeService }
   /** ⇧⌘O, for a file TypeScript understands: a list of this file's symbols to jump to. */
@@ -202,9 +214,19 @@ function otherWords(words: () => readonly string[]) {
   }
 }
 
+/** The merge view offers to accept or reject each change; only rejecting, as Revert, means anything for a file on disk. */
+function revertButton(type: 'accept' | 'reject', action: (e: MouseEvent) => void) {
+  const b = document.createElement('button')
+  b.textContent = 'Revert'
+  b.title = 'Put these lines back as they were'
+  b.hidden = type === 'accept'
+  b.onmousedown = action
+  return b
+}
+
 export function createEditor(
   parent: HTMLElement,
-  { doc, path, files, words, changeMarkers, types, onJumpToSymbol, onAsk, onChange, onSave }: EditorOptions,
+  { doc, path, files, words, changeMarkers, diffBase, types, onJumpToSymbol, onAsk, onChange, onSave }: EditorOptions,
 ) {
   const big = doc.length > BIG_FILE
   const typed = !big && !!types && TYPED.test(path)
@@ -271,6 +293,7 @@ export function createEditor(
         theme,
         syntaxHighlighting(highlight),
         ...(changeMarkers && !big ? [changeGutter()] : []),
+        ...(diffBase !== undefined ? [unifiedMergeView({ original: diffBase, mergeControls: revertButton })] : []),
         EditorView.updateListener.of((u) => {
           if (u.docChanged) onChange(u.state.doc.toString())
         }),

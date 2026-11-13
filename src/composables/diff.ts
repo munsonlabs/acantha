@@ -1,5 +1,5 @@
 import { shallowRef } from 'vue'
-import { git, type FileChange, type StatusFile } from '@/lib/git'
+import { git, UNCOMMITTED, type FileChange, type StatusFile } from '@/lib/git'
 import { parseDiff, type ParsedDiff } from '@/lib/diff'
 import type { Repo } from './repo'
 
@@ -10,6 +10,8 @@ interface DiffView {
   error: string | null
   /** For a file from the source control panel: which side, so its lines can be staged, unstaged or discarded. */
   status?: { file: StatusFile; staged: boolean }
+  /** When the diff ends at this repository's working tree: the revision it starts from ('' is the index), so the file can be edited in place. */
+  base?: string
 }
 
 export function createDiff({ repo }: Repo) {
@@ -38,12 +40,20 @@ export function createDiff({ repo }: Repo) {
 
   /** A file's changes between two commits (or a commit and the working tree), here or in another worktree (`at`). */
   const openDiff = (file: FileChange, from: string | null, to: string, at = repo.value!) =>
-    show({ file, label: '' }, () => git.fileDiff(at, { from, to, path: file.path, oldPath: file.oldPath, untracked: file.status === '?' }))
+    show({ file, label: '', base: to === UNCOMMITTED && at === repo.value && from ? from : undefined }, () =>
+      git.fileDiff(at, { from, to, path: file.path, oldPath: file.oldPath, untracked: file.status === '?' }),
+    )
 
   /** A file from the source control panel: its staged or its unstaged changes. */
   const openStatusDiff = (file: StatusFile, staged: boolean) =>
-    show({ file, label: staged ? 'Staged' : file.kind === 'untracked' ? 'Untracked' : 'Working tree', status: { file, staged } }, () =>
-      git.statusDiff(repo.value!, file, staged),
+    show(
+      {
+        file,
+        label: staged ? 'Staged' : file.kind === 'untracked' ? 'Untracked' : 'Working tree',
+        status: { file, staged },
+        base: !staged && file.kind === 'changed' ? '' : undefined,
+      },
+      () => git.statusDiff(repo.value!, file, staged),
     )
 
   function closeDiff() {
